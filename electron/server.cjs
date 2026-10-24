@@ -228,7 +228,7 @@ function column(m) {
     type: m.type,
     length: m.columnLength,
     scale: m.scale,
-    binary: m.collation?.index === 63 && /BLOB|STRING|GEOMETRY/.test(m.type),
+    binary: m.collation?.index === 63 && /BLOB|STRING|GEOMETRY|BIT/.test(m.type),
     notNull: !!(m.flags & FLAG_NOT_NULL),
     autoIncrement: !!(m.flags & FLAG_AUTO_INCREMENT),
   };
@@ -388,8 +388,30 @@ async function streamQuery(connId, db, sql, onColumns, onRow) {
   }
 }
 
+/** Runs fn on a new connection of its own (not pooled), with extra driver options; closed afterwards. */
+async function withDedicated(connId, extra, fn) {
+  const def = connections.get(connId);
+  pool(connId);
+  const c = await mariadb.createConnection({ ...(await driverOptions(def, await connections.secretsFor(def))), ...extra });
+  try {
+    return await fn(c);
+  } finally {
+    await c.end().catch(() => c.destroy());
+  }
+}
+
+/** Runs fn on one pool connection kept for the whole operation (backup, restore, import). */
+async function withConnection(connId, fn) {
+  const c = await pool(connId).getConnection();
+  try {
+    return await fn(c);
+  } finally {
+    c.release();
+  }
+}
+
 async function shutdown() {
   for (const id of [...pools.keys()]) await close(id);
 }
 
-module.exports = { test, open, close, info, meta, openSession, closeSession, useDb, exec, cancel, apply, runStatements, selectRows, streamQuery, shutdown, split };
+module.exports = { test, open, close, info, meta, openSession, closeSession, useDb, exec, cancel, apply, runStatements, selectRows, streamQuery, withConnection, withDedicated, cell, column, DbError, shutdown, split };

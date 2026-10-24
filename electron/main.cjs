@@ -6,6 +6,8 @@ const server = require('./server.cjs');
 const explorer = require('./explorer.cjs');
 const exporter = require('./export.cjs');
 const datacompare = require('./datacompare.cjs');
+const backup = require('./backup.cjs');
+const importer = require('./importer.cjs');
 
 app.commandLine.appendSwitch('no-sandbox');
 // Separate profile for tests and screenshots, so they never touch the user's saved connections.
@@ -144,6 +146,34 @@ handle('export:query', async (connId, db, sql, format, opts, suggested) => {
   }
 });
 handle('shell:showItem', (file) => shell.showItemInFolder(file));
+
+// ---- Backup, restore, import (progress on 'task:progress' with the task id) ----
+const progress = (id) => (p) => win.webContents.send('task:progress', { id, ...p });
+
+handle('backup:dump', async (id, connId, db, opts) => {
+  const ext = opts.gzip ? 'sql.gz' : 'sql';
+  const stamp = new Date().toISOString().slice(0, 16).replace(/[:T]/g, '-');
+  let file = process.env.MIBSQL_SAVE_AS ? `${process.env.MIBSQL_SAVE_AS}.${ext}` : null;
+  if (!file) {
+    const r = await dialog.showSaveDialog(win, { defaultPath: `${db}-${stamp}.${ext}`, filters: [{ name: opts.gzip ? 'SQL compresso' : 'Script SQL', extensions: opts.gzip ? ['gz'] : ['sql'] }] });
+    if (r.canceled) return null;
+    file = r.filePath.endsWith(`.${ext}`) ? r.filePath : `${r.filePath.replace(/\.sql$|\.gz$/, '')}.${ext}`;
+  }
+  return backup.dump(connId, db, file, opts, progress(id));
+});
+
+handle('file:pick', async (kind) => {
+  const filters = {
+    sql: [{ name: 'Script SQL', extensions: ['sql', 'gz'] }, { name: 'Tutti i file', extensions: ['*'] }],
+    data: [{ name: 'Dati (CSV, Excel, JSON)', extensions: ['csv', 'tsv', 'txt', 'xlsx', 'json', 'ndjson', 'jsonl'] }, { name: 'Tutti i file', extensions: ['*'] }],
+  }[kind];
+  if (process.env.MIBSQL_OPEN) return process.env.MIBSQL_OPEN;
+  const r = await dialog.showOpenDialog(win, { properties: ['openFile'], filters });
+  return r.canceled ? null : r.filePaths[0];
+});
+handle('backup:restore', (id, connId, db, file, opts) => backup.restore(connId, db, file, opts, progress(id)));
+handle('import:preview', (file, opts) => importer.preview(file, opts));
+handle('import:run', (id, connId, file, opts) => importer.importFile(connId, file, opts, progress(id)));
 
 const SQL_FILTERS = [{ name: 'Script SQL', extensions: ['sql'] }, { name: 'Tutti i file', extensions: ['*'] }];
 

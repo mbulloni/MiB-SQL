@@ -158,6 +158,7 @@ function DbChildren({ c, db, depth }: { c: string; db: string; depth: number }) 
                       { label: 'Conta righe', action: () => runDoc('all', newDoc({ connId: c, db, sql: `SELECT COUNT(*) FROM ${qn};\n` }).id) },
                       ...(F.kind === 'table' ? [
                         { label: 'Modifica tabella…', action: () => openDesigner(c, db, o.name) },
+                        { label: 'Importa dati…', action: () => useStore.getState().set({ task: { kind: 'import', connId: c, db, table: o.name } }) },
                         'sep' as const,
                         { label: 'Svuota tabella…', danger: true, action: () => destroy(c, db, o.name, 'truncate') },
                         { label: 'Elimina tabella…', danger: true, action: () => destroy(c, db, o.name, 'drop') },
@@ -206,6 +207,7 @@ function ConnNode({ conn }: { conn: ConnDef }) {
   const menu: MenuItem[] = [
     state === 'open' ? { label: 'Disconnetti', action: disconnect } : { label: 'Connetti', action: () => { connect().then((ok) => ok && toggle(conn.id, true)); } },
     { label: 'Nuovo SQL', action: () => newDoc({ connId: conn.id, db: conn.database || null }) },
+    { label: 'Esegui file SQL…', disabled: state !== 'open', action: () => s.set({ task: { kind: 'restore', connId: conn.id, db: null } }) },
     { label: 'Aggiorna', action: () => { refreshExplorer(conn.id); if (state === 'open') loadDatabases(conn.id, true); }, disabled: state !== 'open' },
     'sep',
     { label: 'Modifica connessione…', action: () => s.set({ connDialog: { def: conn } }) },
@@ -231,6 +233,11 @@ function ConnNode({ conn }: { conn: ConnDef }) {
             { label: 'Diagramma ER', action: () => openEr(conn.id, db) },
             { label: 'Query Builder', action: () => openQueryBuilder(conn.id, db) },
             { label: 'Confronta con…', action: () => openCompare(conn.id, db) },
+            'sep',
+            { label: 'Backup…', action: () => s.set({ task: { kind: 'backup', connId: conn.id, db } }) },
+            { label: 'Ripristina / esegui file SQL…', action: () => s.set({ task: { kind: 'restore', connId: conn.id, db } }) },
+            { label: 'Importa dati…', action: () => s.set({ task: { kind: 'import', connId: conn.id, db } }) },
+            'sep',
             { label: 'Aggiorna', action: () => { s.dropMeta(`${conn.id}/${db}/`); expandDb(db); } },
             { label: 'Copia nome', action: () => copy(db) },
           ]}>

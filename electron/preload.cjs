@@ -54,6 +54,18 @@ contextBridge.exposeInMainWorld('api', {
     },
   },
   showItem: (file) => call('shell:showItem', file),
+  pickFile: (kind) => call('file:pick', kind),
+  tasks: {
+    dump: (id, connId, db, opts) => call('backup:dump', id, connId, db, opts),
+    restore: (id, connId, db, file, opts) => call('backup:restore', id, connId, db, file, opts),
+    importPreview: (file, opts) => call('import:preview', file, opts),
+    importRun: (id, connId, file, opts) => call('import:run', id, connId, file, opts),
+    onProgress: (cb) => {
+      const fn = (_e, p) => cb(p);
+      ipcRenderer.on('task:progress', fn);
+      return () => ipcRenderer.removeListener('task:progress', fn);
+    },
+  },
   ddl: { run: (connId, sqls) => call('ddl:run', connId, sqls) },
   compareData: (src, tgt, table, key, columns) => call('compare:data', src, tgt, table, key, columns),
   file: {

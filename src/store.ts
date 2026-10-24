@@ -45,6 +45,7 @@ interface State {
   connDialog: { def: Partial<ConnDef> } | null;
   passwordPrompt: PasswordRequest | null;
   exportDialog: ExportRequest | null;
+  task: { kind: 'backup' | 'restore' | 'import'; connId: string; db: string | null; table?: string } | null;
   viewer: { title: string; value: string; isNull?: boolean; onSave?: (v: string | null) => void } | null;
 
   loadConns(): Promise<void>;
@@ -75,6 +76,7 @@ export const useStore = create<State>((set, get) => ({
   connDialog: null,
   passwordPrompt: null,
   exportDialog: null,
+  task: null,
   viewer: null,
 
   async loadConns() {

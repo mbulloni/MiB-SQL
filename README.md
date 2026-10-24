@@ -6,7 +6,7 @@ IDE educativo per **MariaDB e MySQL** su Linux, ispirato a [dbForge Studio](http
 
 ![Database Explorer ed editor SQL](docs/screenshot-1.png)
 
-## Funzioni (v0.5 — fasi 1-6)
+## Funzioni (v0.6 — fasi 1-7)
 
 **Connessioni**
 - Profili salvati con colore d'ambiente (sviluppo/test/produzione: tinge scheda e barra di stato)
@@ -67,6 +67,11 @@ IDE educativo per **MariaDB e MySQL** su Linux, ispirato a [dbForge Studio](http
 - Script di sincronizzazione minimo (ALTER per differenza, CREATE, DROP solo se scelti), apribile nell'editor o eseguito sulla destinazione dopo conferma
 - Dati: per ogni tabella con la stessa chiave primaria, righe uguali/diverse/solo in origine/solo in destinazione, dettaglio con le celle diverse evidenziate, script INSERT/UPDATE/DELETE eseguito in un'unica transazione (binari compresi)
 
+**Backup, ripristino, import**
+- «Backup…» sul database: dump SQL proprio (non serve mariadb-dump), in streaming, anche compresso .sql.gz: struttura, dati, viste (in ordine di dipendenza), funzioni, procedure, trigger (dopo i dati), eventi; UTC per i TIMESTAMP, DEFINER rimovibile, scelta delle tabelle
+- «Ripristina / esegui file SQL…»: file di qualsiasi dimensione letti a flusso (anche .gz e dump di mariadb-dump/mysqldump, con DELIMITER e commenti /*!…*/), byte per byte (i BLOB non vengono alterati), avanzamento, continua dopo gli errori con elenco
+- «Importa dati…»: CSV (separatore rilevato, virgolette, UTF-8/Latin-1), Excel .xlsx (scelta del foglio), JSON/NDJSON; anteprima con tipi dedotti, virgola decimale, date gg/mm/aaaa, valori NULL; nuova tabella (con id facoltativo) o esistente con mappatura delle colonne, INSERT/IGNORE/REPLACE, svuota prima; tutto in un'unica transazione
+
 **Tema chiaro e scuro**
 - Interruttore in fondo alla toolbar: Chiaro, Scuro o Sistema (segue il desktop); la scelta viene ricordata
 - Editor SQL, griglie, designer, diagrammi e finestre seguono il tema (gli export dei diagrammi restano chiari)
@@ -93,6 +98,8 @@ IDE educativo per **MariaDB e MySQL** su Linux, ispirato a [dbForge Studio](http
 ![Confronto schema](docs/screenshot-10.png)
 
 ![Confronto dati](docs/screenshot-11.png)
+
+![Import guidato](docs/screenshot-12.png)
 
 ![Piano di esecuzione](docs/screenshot-3.png)
 
@@ -127,7 +134,7 @@ Su Ubuntu 24.04 serve `libfuse2t64` per avviare le AppImage.
 ```bash
 npm install
 npm run dev        # Vite (porta 5174) + Electron
-npm test           # splitter, modifiche in griglia, export, designer, ER, query builder
+npm test           # splitter (anche a flusso), griglia, export, designer, ER, query builder, confronto, import
 npm run typecheck
 npm run dist       # AppImage in release/
 ```
@@ -140,7 +147,6 @@ mysql -u root -p < scripts/demo.sql
 
 ## Roadmap
 
-7. Backup/restore, import guidato
 8. Profiler query, utenti e privilegi, monitor sessioni
 
 ## Limiti noti (da implementare)

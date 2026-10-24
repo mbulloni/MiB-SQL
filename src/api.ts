@@ -50,6 +50,14 @@ interface Api {
     onProgress(cb: (p: { file: string; rows: number }) => void): () => void;
   };
   showItem(file: string): Promise<void>;
+  pickFile(kind: 'sql' | 'data'): Promise<string | null>;
+  tasks: {
+    dump(id: string, connId: string, db: string, opts: Record<string, unknown>): Promise<{ file: string; size: number } | null>;
+    restore(id: string, connId: string, db: string | null, file: string, opts: { continueOnError: boolean }): Promise<{ statements: number; errors: { statement: number; message: string; sql: string }[] }>;
+    importPreview(file: string, opts: Record<string, unknown>): Promise<{ format: string; delimiter?: string; sheets: string[]; columns: string[]; types: string[]; rows: Cell[][]; size: number }>;
+    importRun(id: string, connId: string, file: string, opts: Record<string, unknown>): Promise<{ rows: number }>;
+    onProgress(cb: (p: { id: string } & Record<string, number | string>) => void): () => void;
+  };
   ddl: { run(connId: string, sqls: string[]): Promise<number> };
   compareData(src: { connId: string; db: string }, tgt: { connId: string; db: string }, table: string, key: string[], columns: string[]): Promise<{
     table: string; equal: number; diff: number; source: number; target: number;
