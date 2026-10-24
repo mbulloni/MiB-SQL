@@ -9,7 +9,7 @@ npm run dev         # Vite :5174 + Electron (VITE_DEV=1)
 npm run build       # renderer in dist/
 npm test            # node --test tests/*.test.cjs
 npm run typecheck   # tsc --noEmit (solo src/)
-npm run dist        # AppImage
+npm run dist        # AppImage + .deb
 ```
 
 ## Architettura
@@ -36,6 +36,7 @@ npm run dist        # AppImage
 - Assistente AI: `electron/assistant.cjs` (SDK `@anthropic-ai/sdk` 1.x, `client.beta.messages.stream`, `claude-opus-5-5` predefinito, effort esplicito, `fallbacks: "default"` + beta `server-side-fallback-2026-07-01` per Opus/Sonnet 5.5, errori per classe SDK, chiave in safeStorage o credenziali di sistema) + `src/assistant.ts` (SYSTEM_PROMPT, `schemaText`, `userMessage`, `parseBlocks`) + `components/AssistantPanel.tsx`. Conversazione append-only per documento (contenuto completo dell'assistente, blocchi thinking compresi), system con lo schema congelato a inizio chat (cache_control sullo schema): non modificare mai i turni già inviati. Test senza credenziali: server finto SSE su `ANTHROPIC_BASE_URL` (l'SDK 1.x manda la chiave d'ambiente come `Authorization: Bearer`).
 - Partizioni nel designer: `Partitioning` in TableDef, `partitionStatements` (PARTITION BY / REMOVE / DROP+ADD in coda / REORGANIZE), ognuna in un ALTER separato; sottopartizioni mai alterate.
 - Pacchetto: `npm run dist` produce AppImage e .deb (StartupWMClass `mib-sql`); il .deb è verificato con apt in un container ubuntu:24.04 + xvfb.
+- v1.2: `src/format.ts` (formattatore a token, puro: `tokenize`, `formatSql`, `signature`; mai cambiare le maiuscole di parole in posizione di nome tabella/alias; test di invarianza dei token e idempotenza in `tests/format.test.mjs`), opzioni in localStorage e provider Monaco in `editor.ts`. `electron/library.cjs`: cronologia (`history.jsonl`, append, compattata oltre 5.000) e snippet (`snippets.json`, assente = predefiniti; sintassi snippet Monaco, `\$` letterale); registrazione in `recordHistory` (actions.ts) con `maskPasswords`. Editor oggetti = documento SQL con `doc.obj` (`openObject`/`applyObject`/`dropObject`, ObjectBar): `electron/objects.cjs` (`header`, `statementOf`, OR REPLACE su MariaDB e viste, altrimenti DROP+CREATE con ripristino; connessione dedicata sul database). `src/routines.ts` (`callScript`) + CallDialog. `electron/maint.cjs` (stats da TABLES, operazioni una tabella alla volta, progress `task:progress`) + `Maint.tsx`. Le connessioni hanno `rowsAsArray: true` di default: per leggere per nome colonna passare `rowsAsArray: false`.
 - `src/theme.ts` — tema: `<html data-theme>` + variabili in `styles.css` (`:root` chiaro, `:root[data-theme="dark"]` scuro), temi Monaco `mibsql`/`mibsql-dark`, preferenza light/dark/system in localStorage; nei componenti usare sempre le variabili (`--panel`, `--input`, `--subtle`, `--line`…), mai colori fissi.
 - `src/components/ResultView.tsx` — barra filtri/modifiche/export sopra `ResultGrid`; modifiche in sospeso in `editsBySet` (WeakMap per ResultSet, store.ts). `runDoc`/`closeDoc` chiedono conferma se ci sono modifiche non applicate.
 - `src/actions.ts` — azioni documento (run, cancel, save, DDL, select top), persistenza schede in localStorage.
@@ -50,6 +51,7 @@ npm run dist        # AppImage
 - `MIBSQL_USERDATA=<dir>` usa un profilo separato (mai il profilo reale nei test).
 - `MIBSQL_SHOT=out.png MIBSQL_SCRIPT=script.js [MIBSQL_WAIT=ms]`: esegue lo script nel renderer, salva il valore restituito in `out.json`, cattura e chiude. Lo script usa `window.__mib = { useStore, actions, monaco }`.
 - `MIBSQL_SAVE_AS=<path senza estensione>` salta il dialog di salvataggio degli export.
+- `MIBSQL_CONFIRM=0,1,…` risponde alle conferme native in ordine (indice del pulsante) e le stampa su stdout.
 - Nei test UI: React 19 applica lo stato in un microtask, quindi tra eventi sintetici consecutivi (mousedown → contextmenu) serve un `await sleep()`.
 - DB di prova: `scripts/demo.sql` → `mibsql_demo` + utente `mibsql`/`mibsql` limitato a quel db. Non usare i db `r_lab_*` per i test.
 - Tunnel SSH verificato con container `mariadb:11.4` + `linuxserver/openssh-server` sulla stessa rete Docker.

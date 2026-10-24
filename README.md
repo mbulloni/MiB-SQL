@@ -8,7 +8,7 @@ IDE educativo per **MariaDB e MySQL** su Linux, ispirato a [dbForge Studio](http
 
 ![Database Explorer ed editor SQL](docs/screenshot-1.png)
 
-## Funzioni (v1.1)
+## Funzioni (v1.2)
 
 **Connessioni**
 - Profili salvati con colore d'ambiente (sviluppo/test/produzione: tinge scheda e barra di stato)
@@ -29,6 +29,22 @@ IDE educativo per **MariaDB e MySQL** su Linux, ispirato a [dbForge Studio](http
 - Splitter compatibile con il client `mariadb`: stringhe, commenti, `DELIMITER` per procedure e trigger
 - Errori sottolineati nell'editor alla riga indicata dal server; warning anche per le SELECT
 - Schede ripristinate al riavvio, apri/salva `.sql`, `mib-sql script.sql` da terminale
+
+**Formattatore, cronologia e snippet**
+- **Formatta** (Ctrl+Maiusc+F, pulsante in toolbar o menu del tasto destro) sullo script o sulla selezione, annullabile: clausole a capo, una colonna per riga, AND/OR rientrati, subquery e CTE indentate, definizioni di CREATE TABLE e specifiche di ALTER TABLE una per riga; opzioni (▾): parole chiave maiuscole/minuscole/invariate, rientro 2 o 4, elenchi su una riga
+- Lavora sui token: stringhe, identificatori tra backtick, commenti e `COUNT (*)`/`x'0A'` restano identici; i nomi di tabelle e alias non cambiano maiuscole (su Linux contano); i corpi di procedure, funzioni, trigger ed eventi mantengono la loro impaginazione
+- **Cronologia query** (toolbar, Strumenti o pagina iniziale): ogni istruzione eseguita con data, durata, righe o errore, connessione e database; ricerca per parole, filtri per connessione ed esito, riapri o riesegui, elimina e svuota; password di CREATE/ALTER USER mascherate, registrazione disattivabile; resta sul computer (ultime 5.000)
+- **Snippet SQL**: prefisso + Tab nell'editor (sel, ins, upd, del, gb, dup, cte, ct, fk, proc, func, trig…) con segnaposti da compilare; gestore per crearne e modificarne, «Salva selezione come snippet…» dal tasto destro
+
+**Viste, routine, trigger ed eventi**
+- Doppio clic (o «Modifica…») nell'Explorer apre la definizione in un editor: **Applica** (F5 o Ctrl+S) la salva sul server con CREATE OR REPLACE (MariaDB, viste MySQL) oppure DROP + CREATE con ripristino automatico della versione precedente se la nuova non compila (MySQL)
+- «Nuova vista/procedura/funzione/trigger/evento…» dalle cartelle dell'Explorer (trigger anche dal tasto destro sulla tabella), rinomina con proposta di eliminare l'oggetto col vecchio nome, Ricarica, Elimina; errori sottolineati alla riga giusta
+- Avvisi: DEFINER di un altro account (con «Usa il mio utente»), scheduler degli eventi spento; viste mostrate formattate
+- **Esegui con parametri…** per procedure e funzioni: valori per i parametri IN/INOUT (NULL, espressioni), variabili per gli OUT, script CALL/SELECT in un nuovo documento
+
+**Manutenzione tabelle**
+- Strumenti › Manutenzione tabelle o tasto destro su database/tabella: dimensioni di dati e indici, spazio libero e frammentazione, ordinabili
+- **Analizza** (anche con istogrammi su MariaDB), **Ottimizza**, **Controlla** (QUICK, EXTENDED, CHANGED…), **Ripara** (solo MyISAM/Aria/ARCHIVE/CSV), **Checksum**, una tabella alla volta con avanzamento e interruzione, NO_WRITE_TO_BINLOG facoltativo; messaggi del server spiegati
 
 **Risultati**
 - Griglia virtualizzata: le SELECT arrivano in streaming, fino a 50.000 righe in memoria con il totale esatto anche oltre; più resultset per script e per `CALL`
@@ -127,6 +143,16 @@ IDE educativo per **MariaDB e MySQL** su Linux, ispirato a [dbForge Studio](http
 
 ![Partizioni nel designer](docs/screenshot-18.png)
 
+![Formattatore SQL](docs/screenshot-19.png)
+
+![Editor di procedure](docs/screenshot-20.png)
+
+![Cronologia query](docs/screenshot-21.png)
+
+![Manutenzione tabelle](docs/screenshot-22.png)
+
+![Snippet SQL](docs/screenshot-23.png)
+
 ![Piano di esecuzione](docs/screenshot-3.png)
 
 ## Installazione
@@ -157,6 +183,9 @@ Su Ubuntu 24.04 serve `libfuse2t64` per avviare le AppImage.
 | Ctrl+E | Piano di esecuzione (`EXPLAIN EXTENDED`) |
 | Ctrl+Maiusc+P | Profila l'istruzione corrente |
 | Maiusc+F5 | Interrompi |
+| Ctrl+Maiusc+F | Formatta script o selezione |
+| prefisso + Tab | Inserisci uno snippet |
+| F5 / Ctrl+S (editor oggetti) | Applica la definizione al server |
 | Ctrl+N / Ctrl+O / Ctrl+S / Ctrl+W | Nuovo, apri, salva, chiudi documento |
 | Ctrl+Maiusc+N | Nuova connessione (fuori dalla griglia) |
 | Ctrl+Tab | Documento successivo |
@@ -169,7 +198,7 @@ Su Ubuntu 24.04 serve `libfuse2t64` per avviare le AppImage.
 ```bash
 npm install
 npm run dev        # Vite (porta 5174) + Electron
-npm test           # splitter (anche a flusso), griglia, export, designer (partizioni comprese), ER, query builder, confronto, import, assistente
+npm test           # splitter (anche a flusso), formattatore, griglia, export, designer (partizioni comprese), ER, query builder, confronto, import, assistente, editor oggetti
 npm run typecheck
 npm run dist       # AppImage e .deb in release/ (npm run dist:deb solo .deb)
 ```
@@ -182,7 +211,7 @@ mysql -u root -p < scripts/demo.sql
 
 ## Roadmap
 
-Completata: le otto fasi previste (connessioni ed editor, griglia e modifica dati, designer, ER, confronto, backup/import, profiler/monitor/utenti) più Query Builder, tema scuro, partizioni, confronto dati a memoria costante, pacchetto .deb e assistente AI.
+Completata: le otto fasi previste (connessioni ed editor, griglia e modifica dati, designer, ER, confronto, backup/import, profiler/monitor/utenti) più Query Builder, tema scuro, partizioni, confronto dati a memoria costante, pacchetto .deb e assistente AI; in v1.2 formattatore, cronologia, snippet, editor di oggetti e manutenzione tabelle.
 
 
 ## Limiti noti
@@ -192,6 +221,8 @@ Completata: le otto fasi previste (connessioni ed editor, griglia e modifica dat
 - Routine e trigger di altri utenti risultano illeggibili senza privilegi sul definer: confronto e backup li segnalano ma non possono copiarli
 - Le istruzioni DDL non sono transazionali: se una fallisce a metà, quelle precedenti restano applicate (designer e confronto lo segnalano e ricaricano lo stato dal server)
 - Designer: sottopartizioni solo in lettura; colonne spaziali in sola lettura nella griglia
+- Formattatore: i corpi di routine, trigger ed eventi ricevono solo le maiuscole delle parole chiave; le espressioni CASE e le liste tra parentesi restano su una riga
+- Editor oggetti su MySQL: senza CREATE OR REPLACE la modifica è DROP + CREATE (ripristinata in caso di errore), quindi i privilegi EXECUTE dati alla singola routine vanno riassegnati; con un DEFINER diverso dal proprio servono i privilegi SET USER/SET_USER_ID
 - Assistente AI: richiede una chiave API Anthropic (a pagamento); la conversazione resta solo per la sessione
 
 ## Licenza
