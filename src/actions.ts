@@ -44,6 +44,16 @@ export function openEr(connId: string, db: string) {
   return doc;
 }
 
+/** Server-wide tools of a connection (session monitor, users): one tab per connection and kind. */
+export function openServerTool(connId: string, kind: 'monitor' | 'users') {
+  const existing = st().docs.find((d) => d.kind === kind && d.connId === connId);
+  if (existing) { st().set({ activeDoc: existing.id }); return existing; }
+  const name = st().conns.find((c) => c.id === connId)?.name ?? '';
+  const doc = st().addDoc({ kind, connId, db: null, title: `${kind === 'monitor' ? 'Monitor' : 'Utenti'} ${name}` });
+  persist();
+  return doc;
+}
+
 /** Schema/data compare, the database as source. */
 export function openCompare(connId: string, db: string) {
   const doc = st().addDoc({ kind: 'compare', connId, db, title: `Confronto ${db}`, cmp: { src: { connId, db }, tgt: { connId, db: null } } });
@@ -83,7 +93,7 @@ export async function closeDoc(id = st().activeDoc) {
   const doc = id ? docById(id) : undefined;
   if (!doc) return;
   if (!(await discardEdits(doc, 'Chiudere il documento'))) return;
-  if (doc.kind === 'er' || doc.kind === 'compare') {
+  if (doc.kind === 'er' || doc.kind === 'compare' || doc.kind === 'monitor' || doc.kind === 'users') {
     st().removeDoc(doc.id);
     persist();
     return;
@@ -204,6 +214,34 @@ export async function runDoc(mode: ExecMode, id = st().activeDoc) {
   }
 }
 
+/** Profiles the statement under the cursor: result, stages, counters and real plan in the "Profilo" tab. */
+export async function profileDoc(id = st().activeDoc) {
+  const doc = id ? docById(id) : undefined;
+  if (!doc || doc.running || doc.kind !== 'sql') return;
+  if (!(await discardEdits(doc, 'Profilare'))) return;
+  const model = modelOf(doc.id);
+  const ed = editorOf(doc.id);
+  const cursor = ed?.getPosition() ? model.getOffsetAt(ed.getPosition()!) : 0;
+  clearMarkers(model);
+  st().updateDoc(doc.id, { running: true, startedAt: Date.now() });
+  try {
+    const sid = await ensureSession(doc);
+    const p = await api.sess.profile(sid, model.getValue(), cursor);
+    const result: StmtResult = {
+      sql: p.sql, start: p.start, end: p.end, sets: p.sets, affectedRows: p.affectedRows, insertId: null, warnings: [], ms: Math.round(p.ms),
+      error: p.error ? { message: p.error.message, fatal: false } : null,
+    };
+    markErrors(model, [result]);
+    logMessage(doc.id, p.error ? 'error' : 'ok', p.error ? p.error.message : `Profilo: ${p.ms} ms, ${p.rows ? `${p.rows} righe` : `${p.affectedRows ?? 0} righe interessate`}`, { sql: p.sql, offset: p.start });
+    st().updateDoc(doc.id, { run: { results: [result], explain: false, ms: Math.round(p.ms), profile: p }, db: p.db, view: p.error ? 'messages' : 'profile' });
+  } catch (err) {
+    logMessage(doc.id, 'error', (err as Error).message);
+    st().updateDoc(doc.id, { view: 'messages' });
+  } finally {
+    st().updateDoc(doc.id, { running: false });
+  }
+}
+
 export async function cancelDoc(id = st().activeDoc) {
   const doc = id ? docById(id) : undefined;
   if (doc?.running && doc.sessionId) await api.sess.cancel(doc.sessionId);
@@ -274,7 +312,7 @@ export function restore() {
   const known = new Set(st().conns.map((c) => c.id));
   for (const d of saved.docs) {
     if (d.kind && d.kind !== 'sql') {
-      if (d.connId && known.has(d.connId) && d.db) st().addDoc({ id: d.id, kind: d.kind, design: d.design, qb: d.qb, cmp: d.cmp, title: d.title, connId: d.connId, db: d.db });
+      if (d.connId && known.has(d.connId) && (d.db || d.kind === 'monitor' || d.kind === 'users')) st().addDoc({ id: d.id, kind: d.kind, design: d.design, qb: d.qb, cmp: d.cmp, title: d.title, connId: d.connId, db: d.db });
       continue;
     }
     const m = /^SQL(\d+)\.sql$/.exec(d.title);

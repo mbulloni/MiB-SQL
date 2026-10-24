@@ -1,6 +1,6 @@
 import { useEffect, useRef, useState, useSyncExternalStore } from 'react';
 import { api } from './api';
-import { cancelDoc, closeDoc, newDoc, openFiles, openSql, restore, runDoc, saveDoc, setDocTarget } from './actions';
+import { cancelDoc, closeDoc, profileDoc, newDoc, openFiles, openSql, restore, runDoc, saveDoc, setDocTarget } from './actions';
 import { loadDatabases, metaKey, useStore, type MetaEntry } from './store';
 import ContextMenu, { openMenu } from './components/ContextMenu';
 import { ConnectionDialog, PasswordPrompt, ValueViewer } from './components/Dialogs';
@@ -14,6 +14,8 @@ import TableDesigner from './components/TableDesigner';
 import ErDiagram from './components/ErDiagram';
 import QueryBuilder from './components/QueryBuilder';
 import CompareView from './components/CompareView';
+import Monitor from './components/Monitor';
+import Users from './components/Users';
 import logo from '../build/icons/128x128.png';
 import { onThemeChange, resolvedTheme, setThemePref, themePref, type ThemePref } from './theme';
 
@@ -106,6 +108,7 @@ function Toolbar() {
       <button title="Esegui istruzione corrente (Ctrl+Invio)" disabled={!runnable || running} onClick={() => runDoc('current')}><Icon name="playLine" /></button>
       <button title="Interrompi (Maiusc+F5)" disabled={!running} onClick={() => cancelDoc()}><Icon name="stop" /></button>
       <button title="Piano di esecuzione (Ctrl+E)" disabled={!runnable || running} onClick={() => runDoc('explain')}><Icon name="plan" /><span>Piano</span></button>
+      <button title="Profila l'istruzione corrente (Ctrl+Maiusc+P)" disabled={!sql || running} onClick={() => profileDoc()}><Icon name="profile" /><span>Profila</span></button>
       <div className="sep" />
       {sql && <TargetPicker />}
       <div className="spacer" />
@@ -230,6 +233,7 @@ export default function App() {
       else if (e.key === 'F5' || (ctrl && e.shiftKey && k === 'enter')) run(() => runDoc('all'));
       else if (ctrl && k === 'enter') run(() => runDoc('current'));
       else if (ctrl && k === 'e') run(() => runDoc('explain'));
+      else if (ctrl && e.shiftKey && k === 'p') run(() => profileDoc());
       else if (ctrl && e.shiftKey && k === 'n') run(() => useStore.getState().set({ connDialog: { def: {} } }));
       else if (ctrl && k === 'n') run(() => newDoc());
       else if (ctrl && k === 'o') run(openFiles);
@@ -263,6 +267,8 @@ export default function App() {
           {active?.kind === 'er' && <ErDiagram key={active.id} doc={active} />}
           {active?.kind === 'query' && <QueryBuilder key={active.id} doc={active} />}
           {active?.kind === 'compare' && <CompareView key={active.id} doc={active} />}
+          {active?.kind === 'monitor' && <Monitor key={active.id} doc={active} />}
+          {active?.kind === 'users' && <Users key={active.id} doc={active} />}
           {!docs.length && <StartPage />}
         </div>
       </div>

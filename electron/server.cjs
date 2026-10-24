@@ -62,6 +62,9 @@ async function driverOptions(def, sec, { tunnel = true } = {}) {
     rowsAsArray: true,
     multipleStatements: false,
     permitLocalInfile: false,
+    // MySQL 8 caching_sha2_password without TLS needs the server's RSA key for the first login of an account;
+    // with SSL the password already travels encrypted and the key is not needed
+    allowPublicKeyRetrieval: !def.ssl,
   };
   if (def.ssl) {
     base.ssl = { rejectUnauthorized: !!def.sslVerify };
@@ -410,8 +413,113 @@ async function withConnection(connId, fn) {
   }
 }
 
+const PROFILE_VARS = ['Handler_read_first', 'Handler_read_key', 'Handler_read_next', 'Handler_read_rnd', 'Handler_read_rnd_next', 'Handler_write',
+  'Handler_update', 'Handler_delete', 'Sort_rows', 'Sort_merge_passes', 'Sort_scan', 'Sort_range', 'Created_tmp_tables', 'Created_tmp_disk_tables',
+  'Select_scan', 'Select_full_join', 'Select_range', 'Select_full_range_join', 'Rows_read', 'Rows_sent', 'Rows_tmp_read', 'Bytes_sent',
+  'Innodb_rows_read', 'Innodb_buffer_pool_read_requests', 'Innodb_buffer_pool_reads'];
+
+/**
+ * Profiles the statement under the cursor on the document's session: wall time, SHOW PROFILE stages,
+ * session status deltas (minus the cost of reading the status itself) and, for reads, the real plan
+ * (ANALYZE FORMAT=JSON on MariaDB, EXPLAIN ANALYZE on MySQL; the query runs a second time for it).
+ */
+async function profile(sid, text, cursor) {
+  const s = sessions.get(sid);
+  if (!s) throw new Error('Sessione chiusa.');
+  if (s.busy) throw new Error('Una query è già in esecuzione in questo documento.');
+  const st = statementAt(text, cursor);
+  if (!st) throw new Error('Nessuna istruzione sotto il cursore.');
+  s.busy = true;
+  try {
+    await revive(s);
+    const c = s.conn;
+    const statusSql = `SHOW SESSION STATUS WHERE Variable_name IN (${PROFILE_VARS.map(() => '?').join(', ')})`;
+    const read = async () => Object.fromEntries(Array.from(await c.query({ sql: statusSql, rowsAsArray: false }, PROFILE_VARS)).map((r) => [r.Variable_name, Number(r.Value)]));
+    const [ver] = await c.query({ sql: 'SELECT VERSION() AS v', rowsAsArray: false });
+    const mariadb = /mariadb/i.test(ver.v);
+    const b1 = await read();
+    const b2 = await read();
+    let profiling = true;
+    await c.query('SET profiling = 1').catch(() => { profiling = false; });
+    const t0 = performance.now();
+    let res = null;
+    let error = null;
+    try { res = await c.query({ sql: st.sql }); } catch (err) { error = errorInfo(err); }
+    const ms = performance.now() - t0;
+    const after = await read();
+    let stages = [];
+    if (profiling) {
+      try {
+        const list = Array.from(await c.query({ sql: 'SHOW PROFILES', rowsAsArray: false }));
+        const mine = [...list].reverse().find((p) => String(p.Query).trim().startsWith(st.sql.slice(0, 40).trim()));
+        if (mine) stages = Array.from(await c.query({ sql: `SHOW PROFILE FOR QUERY ${Number(mine.Query_ID)}`, rowsAsArray: false })).map((r) => ({ stage: r.Status, ms: Number(r.Duration) * 1000 }));
+      } catch { /* profiling unavailable */ }
+      await c.query('SET profiling = 0').catch(() => {});
+    }
+    // each SHOW STATUS bumps some counters itself: subtract one read's worth
+    const status = PROFILE_VARS.filter((k) => k in after).map((k) => ({ name: k, value: Math.max(0, (after[k] - b2[k]) - (b2[k] - b1[k])), global: k.startsWith('Innodb_') }))
+      .filter((x) => x.value > 0);
+    const { sets, ok } = res ? resultSets(res) : { sets: [], ok: null };
+    let plan = null;
+    if (!error && /^\s*(\(\s*)?(select|with)\b/i.test(st.sql)) {
+      try {
+        if (mariadb) plan = { format: 'json', data: JSON.parse((await c.query({ sql: `ANALYZE FORMAT=JSON ${st.sql}`, rowsAsArray: true }))[0][0]) };
+        else plan = { format: 'tree', data: String((await c.query({ sql: `EXPLAIN ANALYZE ${st.sql}`, rowsAsArray: true }))[0][0]) };
+      } catch (err) { plan = { format: 'error', data: err.sqlMessage || err.message }; }
+    }
+    if (c.isValid()) s.db = (await c.query('SELECT DATABASE()'))[0][0];
+    return {
+      sql: st.sql, start: st.start, end: st.end, ms: Math.round(ms * 10) / 10, error, stages, status, plan,
+      rows: sets.reduce((n, x) => n + x.length, 0), affectedRows: ok?.affectedRows ?? null, db: s.db,
+      sets: sets.map((rs) => ({ columns: rs.meta.map(column), rows: rs.slice(0, MAX_ROWS).map((r) => r.map((v) => cell(v))), total: rs.length, truncated: rs.length > MAX_ROWS })),
+    };
+  } finally {
+    s.busy = false;
+  }
+}
+
+const MONITOR_TAG = '/* mibsql-monitor */';
+const STATUS_VARS = ['Uptime', 'Questions', 'Threads_connected', 'Threads_running', 'Connections', 'Aborted_connects', 'Slow_queries',
+  'Bytes_received', 'Bytes_sent', 'Innodb_buffer_pool_read_requests', 'Innodb_buffer_pool_reads', 'Com_select', 'Com_insert', 'Com_update', 'Com_delete',
+  'Created_tmp_disk_tables', 'Max_used_connections'];
+
+/** One poll of the session monitor: processes (without the monitor's own queries), global status, limits. */
+async function monitorSnapshot(connId) {
+  const p = pool(connId);
+  try {
+    const [procs, status, vars] = await Promise.all([
+      p.query({ sql: `${MONITOR_TAG} SELECT * FROM information_schema.PROCESSLIST ORDER BY TIME DESC`, rowsAsArray: false }),
+      p.query({ sql: `${MONITOR_TAG} SHOW GLOBAL STATUS WHERE Variable_name IN (${STATUS_VARS.map(() => '?').join(', ')})`, rowsAsArray: false }, STATUS_VARS),
+      p.query({ sql: `${MONITOR_TAG} SHOW GLOBAL VARIABLES WHERE Variable_name IN ('max_connections', 'version', 'long_query_time')`, rowsAsArray: false }),
+    ]);
+    const get = (r, k) => r[k] ?? r[k.toLowerCase()];
+    return {
+      at: Date.now(),
+      processes: Array.from(procs).filter((r) => !String(get(r, 'INFO') ?? '').startsWith(MONITOR_TAG)).map((r) => ({
+        id: Number(get(r, 'ID')),
+        user: get(r, 'USER'),
+        host: get(r, 'HOST'),
+        db: get(r, 'DB'),
+        command: get(r, 'COMMAND'),
+        time: Number(get(r, 'TIME')),
+        timeMs: r.TIME_MS !== undefined ? Number(r.TIME_MS) : null,
+        state: get(r, 'STATE'),
+        info: get(r, 'INFO'),
+        progress: r.PROGRESS !== undefined ? Number(r.PROGRESS) : null,
+      })),
+      status: Object.fromEntries(Array.from(status).map((r) => [r.Variable_name, Number(r.Value)])),
+      variables: Object.fromEntries(Array.from(vars).map((r) => [r.Variable_name, r.Value])),
+    };
+  } catch (err) { throw new DbError(err); }
+}
+
+/** KILL [QUERY] of a thread from the monitor. */
+async function kill(connId, id, queryOnly) {
+  try { await pool(connId).query(`KILL ${queryOnly ? 'QUERY ' : ''}${Number(id)}`); } catch (err) { throw new DbError(err); }
+}
+
 async function shutdown() {
   for (const id of [...pools.keys()]) await close(id);
 }
 
-module.exports = { test, open, close, info, meta, openSession, closeSession, useDb, exec, cancel, apply, runStatements, selectRows, streamQuery, withConnection, withDedicated, cell, column, DbError, shutdown, split };
+module.exports = { test, open, close, info, meta, openSession, closeSession, useDb, exec, cancel, apply, runStatements, selectRows, streamQuery, withConnection, withDedicated, monitorSnapshot, kill, profile, cell, column, DbError, shutdown, split };

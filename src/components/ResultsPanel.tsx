@@ -3,6 +3,7 @@ import { reveal } from '../actions';
 import { useStore } from '../store';
 import type { Doc, ResultSet } from '../types';
 import ResultView from './ResultView';
+import ProfileView from './ProfileView';
 
 const elapsed = (ms: number) => (ms < 1000 ? `${ms} ms` : `${(ms / 1000).toFixed(2)} s`);
 
@@ -21,8 +22,9 @@ export default function ResultsPanel({ doc }: { doc: Doc }) {
   doc.run?.results.forEach((r, i) => r.sets.forEach((set, j) => {
     sets.push({ set, label: doc.run!.explain ? `Piano ${sets.length + 1}` : `Risultato ${sets.length + 1}`, sql: r.sql, at: [i, j] });
   }));
-  const view = doc.view === 'messages' || !sets[doc.view] ? 'messages' : doc.view;
-  const current = view === 'messages' ? null : sets[view];
+  const profile = doc.run?.profile;
+  const view = doc.view === 'profile' && profile ? 'profile' : doc.view === 'messages' || doc.view === 'profile' || !sets[doc.view] ? 'messages' : doc.view;
+  const current = view === 'messages' || view === 'profile' ? null : sets[view];
   const errors = doc.messages.filter((m) => m.level === 'error').length;
   const msgBox = useRef<HTMLDivElement>(null);
   useEffect(() => { if (view === 'messages') msgBox.current?.scrollTo(0, msgBox.current.scrollHeight); }, [view, doc.messages.length]);
@@ -35,6 +37,7 @@ export default function ResultsPanel({ doc }: { doc: Doc }) {
             {s.label} <span className="count">{s.set.total.toLocaleString('it-IT')}</span>
           </button>
         ))}
+        {profile && <button className={view === 'profile' ? 'active' : ''} onClick={() => update(doc.id, { view: 'profile' })}>Profilo</button>}
         <button className={view === 'messages' ? 'active' : ''} onClick={() => update(doc.id, { view: 'messages' })}>
           Messaggi {errors > 0 && <span className="count err">{errors}</span>}
         </button>
@@ -45,7 +48,7 @@ export default function ResultsPanel({ doc }: { doc: Doc }) {
               : doc.run ? elapsed(doc.run.ms) : ''}
         </div>
       </div>
-      {current ? (
+      {view === 'profile' && profile ? <ProfileView profile={profile} /> : current ? (
         current.set.columns.length ? <ResultView key={`${doc.id}/${view}`} doc={doc} set={current.set} sql={current.sql} at={current.at} /> : <div className="empty">Nessuna colonna.</div>
       ) : (
         <div className="messages" ref={msgBox}>

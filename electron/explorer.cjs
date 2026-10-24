@@ -257,4 +257,29 @@ async function erModel(connId, db) {
   return { tables: [...byTable.values()], fks: [...fkMap.values()] };
 }
 
-module.exports = { schemaSnapshot, normalizeDdl, tableDefinitions, erModel, tableDefinition, serverOptions, databases, objects, columns, indexes, foreignKeys, ddl, schema };
+/**
+ * Accounts of the server. Reading mysql.user needs privileges on it: without them only the current
+ * account is listed (and limited is true).
+ */
+async function users(connId) {
+  try {
+    const rows = await server.meta(connId, "SELECT User AS user, Host AS host, IF(COALESCE(is_role, 'N') = 'Y', 1, 0) AS role FROM mysql.user ORDER BY User, Host");
+    return { limited: false, users: rows.map((r) => ({ user: r.user, host: r.host, role: Number(r.role) === 1 })) };
+  } catch {
+    try {
+      const rows = await server.meta(connId, 'SELECT User AS user, Host AS host, 0 AS role FROM mysql.user ORDER BY User, Host'); // MySQL: no is_role column
+      return { limited: false, users: rows.map((r) => ({ user: r.user, host: r.host, role: false })) };
+    } catch {
+      const [me] = await server.meta(connId, 'SELECT CURRENT_USER() AS u');
+      const at = me.u.lastIndexOf('@');
+      return { limited: true, users: [{ user: me.u.slice(0, at), host: me.u.slice(at + 1), role: false }] };
+    }
+  }
+}
+
+async function grants(connId, user, host) {
+  const rows = await server.meta(connId, 'SHOW GRANTS FOR ?@?', [user, host]);
+  return rows.map((r) => String(Object.values(r)[0]));
+}
+
+module.exports = { users, grants, schemaSnapshot, normalizeDdl, tableDefinitions, erModel, tableDefinition, serverOptions, databases, objects, columns, indexes, foreignKeys, ddl, schema };

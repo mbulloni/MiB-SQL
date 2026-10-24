@@ -1,6 +1,6 @@
 import { createContext, useContext, useState, type ReactNode } from 'react';
 import { api } from '../api';
-import { closeDoc, insertText, newDoc, openCompare, openDesigner, openEr, openQueryBuilder, qi, refreshExplorer, runDoc, selectTop, showDdl } from '../actions';
+import { closeDoc, insertText, newDoc, openCompare, openServerTool, openDesigner, openEr, openQueryBuilder, qi, refreshExplorer, runDoc, selectTop, showDdl } from '../actions';
 import { loadDatabases, metaKey, useStore, type MetaEntry } from '../store';
 import type { ColumnInfo, ConnDef, DbObjects, ForeignKeyInfo, IndexInfo, ObjectKind } from '../types';
 import { openMenu, type MenuItem } from './ContextMenu';
@@ -207,6 +207,8 @@ function ConnNode({ conn }: { conn: ConnDef }) {
   const menu: MenuItem[] = [
     state === 'open' ? { label: 'Disconnetti', action: disconnect } : { label: 'Connetti', action: () => { connect().then((ok) => ok && toggle(conn.id, true)); } },
     { label: 'Nuovo SQL', action: () => newDoc({ connId: conn.id, db: conn.database || null }) },
+    { label: 'Monitor sessioni', disabled: state !== 'open', action: () => openServerTool(conn.id, 'monitor') },
+    { label: 'Utenti e privilegi', disabled: state !== 'open', action: () => openServerTool(conn.id, 'users') },
     { label: 'Esegui file SQL…', disabled: state !== 'open', action: () => s.set({ task: { kind: 'restore', connId: conn.id, db: null } }) },
     { label: 'Aggiorna', action: () => { refreshExplorer(conn.id); if (state === 'open') loadDatabases(conn.id, true); }, disabled: state !== 'open' },
     'sep',

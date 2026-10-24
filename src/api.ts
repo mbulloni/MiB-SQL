@@ -1,6 +1,8 @@
 import type { ServerTable } from './design';
 import type { ErModel } from './er';
 import type { Snapshot } from './compare';
+import type { Snapshot as MonitorSnapshot } from './monitor';
+import type { Profile } from './profile';
 import type {
   ServerOptions, ApplyStmt, Cell, Column, ExportFormat, ExportOptions, ColumnInfo, ConnDef, DbObjects, ExecMode, ExecResult, ForeignKeyInfo, IndexInfo, ObjectKind, Schema, Secrets, ServerInfo,
 } from './types';
@@ -31,6 +33,8 @@ interface Api {
     serverOptions(id: string, db: string): Promise<ServerOptions>;
     erModel(id: string, db: string): Promise<ErModel>;
     schemaSnapshot(id: string, db: string): Promise<Snapshot>;
+    users(id: string): Promise<{ limited: boolean; users: { user: string; host: string; role: boolean }[] }>;
+    grants(id: string, user: string, host: string): Promise<string[]>;
   };
   sess: {
     open(connId: string, db: string | null): Promise<{ id: string; db: string | null }>;
@@ -38,6 +42,7 @@ interface Api {
     use(sid: string, db: string): Promise<string>;
     exec(sid: string, text: string, opts: { mode: ExecMode; cursor?: number; selStart?: number; selEnd?: number; continueOnError?: boolean }): Promise<ExecResult>;
     cancel(sid: string): Promise<boolean>;
+    profile(sid: string, text: string, cursor: number): Promise<Profile & { sets: import('./types').ResultSet[] }>;
   };
   split(text: string): Promise<{ sql: string; start: number; end: number }[]>;
   data: {
@@ -51,6 +56,7 @@ interface Api {
   };
   showItem(file: string): Promise<void>;
   pickFile(kind: 'sql' | 'data'): Promise<string | null>;
+  monitor: { snapshot(connId: string): Promise<MonitorSnapshot>; kill(connId: string, id: number, queryOnly: boolean): Promise<void> };
   tasks: {
     dump(id: string, connId: string, db: string, opts: Record<string, unknown>): Promise<{ file: string; size: number } | null>;
     restore(id: string, connId: string, db: string | null, file: string, opts: { continueOnError: boolean }): Promise<{ statements: number; errors: { statement: number; message: string; sql: string }[] }>;

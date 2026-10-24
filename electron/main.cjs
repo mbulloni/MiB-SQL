@@ -88,6 +88,8 @@ handle('meta:tableDefinition', (id, db, t) => explorer.tableDefinition(id, db, t
 handle('meta:serverOptions', (id, db) => explorer.serverOptions(id, db));
 handle('meta:erModel', (id, db) => explorer.erModel(id, db));
 handle('meta:schemaSnapshot', (id, db) => explorer.schemaSnapshot(id, db));
+handle('meta:users', (id) => explorer.users(id));
+handle('meta:grants', (id, user, host) => explorer.grants(id, user, host));
 handle('compare:data', (src, tgt, table, key, columns) => datacompare.compareTable(src, tgt, table, key, columns));
 
 // Generic save of generated content (diagram images, reports): text or base64 data.
@@ -108,6 +110,7 @@ handle('sess:close', (sid) => server.closeSession(sid));
 handle('sess:use', (sid, db) => server.useDb(sid, db));
 handle('sess:exec', (sid, text, opts) => server.exec(sid, text, opts));
 handle('sess:cancel', (sid) => server.cancel(sid));
+handle('sess:profile', (sid, text, cursor) => server.profile(sid, text, cursor));
 handle('sql:split', (text) => server.split(text));
 handle('data:apply', (connId, stmts) => server.apply(connId, stmts));
 handle('data:select', (connId, sql, params) => server.selectRows(connId, sql, params));
@@ -146,6 +149,8 @@ handle('export:query', async (connId, db, sql, format, opts, suggested) => {
   }
 });
 handle('shell:showItem', (file) => shell.showItemInFolder(file));
+handle('monitor:snapshot', (connId) => server.monitorSnapshot(connId));
+handle('monitor:kill', (connId, id, queryOnly) => server.kill(connId, id, queryOnly));
 
 // ---- Backup, restore, import (progress on 'task:progress' with the task id) ----
 const progress = (id) => (p) => win.webContents.send('task:progress', { id, ...p });

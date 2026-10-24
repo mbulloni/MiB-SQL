@@ -6,7 +6,7 @@ IDE educativo per **MariaDB e MySQL** su Linux, ispirato a [dbForge Studio](http
 
 ![Database Explorer ed editor SQL](docs/screenshot-1.png)
 
-## Funzioni (v0.6 — fasi 1-7)
+## Funzioni (v0.7 — fasi 1-8)
 
 **Connessioni**
 - Profili salvati con colore d'ambiente (sviluppo/test/produzione: tinge scheda e barra di stato)
@@ -72,6 +72,11 @@ IDE educativo per **MariaDB e MySQL** su Linux, ispirato a [dbForge Studio](http
 - «Ripristina / esegui file SQL…»: file di qualsiasi dimensione letti a flusso (anche .gz e dump di mariadb-dump/mysqldump, con DELIMITER e commenti /*!…*/), byte per byte (i BLOB non vengono alterati), avanzamento, continua dopo gli errori con elenco
 - «Importa dati…»: CSV (separatore rilevato, virgolette, UTF-8/Latin-1), Excel .xlsx (scelta del foglio), JSON/NDJSON; anteprima con tipi dedotti, virgola decimale, date gg/mm/aaaa, valori NULL; nuova tabella (con id facoltativo) o esistente con mappatura delle colonne, INSERT/IGNORE/REPLACE, svuota prima; tutto in un'unica transazione
 
+**Profiler, monitor, utenti**
+- **Profila** (Ctrl+Maiusc+P) l'istruzione sotto il cursore: tempo, fasi di esecuzione (SHOW PROFILE), contatori di sessione con spiegazione, piano reale (ANALYZE FORMAT=JSON su MariaDB, EXPLAIN ANALYZE su MySQL) con righe stimate/reali e tempi per tabella, consigli (join senza indice, scansioni complete, tabelle temporanee su disco, statistiche vecchie)
+- **Monitor sessioni** (tasto destro sulla connessione): processi in tempo reale con durata, stato e query, termina query o connessione; indicatori e grafici di query/s, thread, connessioni, scritture, rete, hit ratio del buffer pool, query lente; aggiornamento 1-10 s, pausa
+- **Utenti e privilegi**: account, nuova password, crea/elimina, privilegi per livello (globali, database, tabella, routine) a caselle, GRANT OPTION, anteprima GRANT/REVOKE minimi (password mascherate)
+
 **Tema chiaro e scuro**
 - Interruttore in fondo alla toolbar: Chiaro, Scuro o Sistema (segue il desktop); la scelta viene ricordata
 - Editor SQL, griglie, designer, diagrammi e finestre seguono il tema (gli export dei diagrammi restano chiari)
@@ -101,6 +106,12 @@ IDE educativo per **MariaDB e MySQL** su Linux, ispirato a [dbForge Studio](http
 
 ![Import guidato](docs/screenshot-12.png)
 
+![Monitor sessioni](docs/screenshot-13.png)
+
+![Profiler](docs/screenshot-14.png)
+
+![Utenti e privilegi](docs/screenshot-15.png)
+
 ![Piano di esecuzione](docs/screenshot-3.png)
 
 ## Installazione
@@ -121,6 +132,7 @@ Su Ubuntu 24.04 serve `libfuse2t64` per avviare le AppImage.
 | F5 / Ctrl+Maiusc+Invio | Esegui script o selezione |
 | Ctrl+Invio | Esegui istruzione corrente |
 | Ctrl+E | Piano di esecuzione (`EXPLAIN EXTENDED`) |
+| Ctrl+Maiusc+P | Profila l'istruzione corrente |
 | Maiusc+F5 | Interrompi |
 | Ctrl+N / Ctrl+O / Ctrl+S / Ctrl+W | Nuovo, apri, salva, chiudi documento |
 | Ctrl+Maiusc+N | Nuova connessione (fuori dalla griglia) |
@@ -147,7 +159,6 @@ mysql -u root -p < scripts/demo.sql
 
 ## Roadmap
 
-8. Profiler query, utenti e privilegi, monitor sessioni
 
 ## Limiti noti (da implementare)
 

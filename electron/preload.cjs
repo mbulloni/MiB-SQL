@@ -31,6 +31,8 @@ contextBridge.exposeInMainWorld('api', {
     serverOptions: (id, db) => call('meta:serverOptions', id, db),
     erModel: (id, db) => call('meta:erModel', id, db),
     schemaSnapshot: (id, db) => call('meta:schemaSnapshot', id, db),
+    users: (id) => call('meta:users', id),
+    grants: (id, user, host) => call('meta:grants', id, user, host),
   },
   sess: {
     open: (connId, db) => call('sess:open', connId, db),
@@ -38,6 +40,7 @@ contextBridge.exposeInMainWorld('api', {
     use: (sid, db) => call('sess:use', sid, db),
     exec: (sid, text, opts) => call('sess:exec', sid, text, opts),
     cancel: (sid) => call('sess:cancel', sid),
+    profile: (sid, text, cursor) => call('sess:profile', sid, text, cursor),
   },
   split: (text) => call('sql:split', text),
   data: {
@@ -55,6 +58,10 @@ contextBridge.exposeInMainWorld('api', {
   },
   showItem: (file) => call('shell:showItem', file),
   pickFile: (kind) => call('file:pick', kind),
+  monitor: {
+    snapshot: (connId) => call('monitor:snapshot', connId),
+    kill: (connId, id, queryOnly) => call('monitor:kill', connId, id, queryOnly),
+  },
   tasks: {
     dump: (id, connId, db, opts) => call('backup:dump', id, connId, db, opts),
     restore: (id, connId, db, file, opts) => call('backup:restore', id, connId, db, file, opts),
