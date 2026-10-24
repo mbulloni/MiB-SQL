@@ -6,7 +6,7 @@ IDE educativo per **MariaDB e MySQL** su Linux, ispirato a [dbForge Studio](http
 
 ![Database Explorer ed editor SQL](docs/screenshot-1.png)
 
-## Funzioni (v0.4 — fasi 1-5)
+## Funzioni (v0.5 — fasi 1-6)
 
 **Connessioni**
 - Profili salvati con colore d'ambiente (sviluppo/test/produzione: tinge scheda e barra di stato)
@@ -61,6 +61,12 @@ IDE educativo per **MariaDB e MySQL** su Linux, ispirato a [dbForge Studio](http
 - Colonne spuntate, alias, aggregati con GROUP BY automatico, ordinamento, filtri WHERE/HAVING (IN, BETWEEN, LIKE, IS NULL…), DISTINCT, LIMIT
 - SQL in tempo reale, esecuzione nel documento (F5), apertura nell'editor SQL
 
+**Confronto schema e dati**
+- Tasto destro sul database › «Confronta con…»: origine e destinazione su qualsiasi connessione/database (⇄ per invertirle)
+- Schema: tabelle (colonne, indici, chiavi esterne, opzioni), viste, funzioni, procedure, trigger, eventi; stato Uguale/Diverso/Solo in origine/Solo in destinazione, diff riga per riga, istruzioni per oggetto
+- Script di sincronizzazione minimo (ALTER per differenza, CREATE, DROP solo se scelti), apribile nell'editor o eseguito sulla destinazione dopo conferma
+- Dati: per ogni tabella con la stessa chiave primaria, righe uguali/diverse/solo in origine/solo in destinazione, dettaglio con le celle diverse evidenziate, script INSERT/UPDATE/DELETE eseguito in un'unica transazione (binari compresi)
+
 **Tema chiaro e scuro**
 - Interruttore in fondo alla toolbar: Chiaro, Scuro o Sistema (segue il desktop); la scelta viene ricordata
 - Editor SQL, griglie, designer, diagrammi e finestre seguono il tema (gli export dei diagrammi restano chiari)
@@ -83,6 +89,10 @@ IDE educativo per **MariaDB e MySQL** su Linux, ispirato a [dbForge Studio](http
 ![Query Builder](docs/screenshot-8.png)
 
 ![Tema scuro](docs/screenshot-9.png)
+
+![Confronto schema](docs/screenshot-10.png)
+
+![Confronto dati](docs/screenshot-11.png)
 
 ![Piano di esecuzione](docs/screenshot-3.png)
 
@@ -122,7 +132,7 @@ npm run typecheck
 npm run dist       # AppImage in release/
 ```
 
-Database di prova: `scripts/demo.sql` crea `mibsql_demo` (clienti, prodotti, 20.000 ordini, vista, funzione, procedura, trigger, evento) e l'utente `mibsql`/`mibsql` con permessi solo su quel database.
+Database di prova: `scripts/demo.sql` crea `mibsql_demo` (e `mibsql_demo2`, che `scripts/demo2.sql` riempie come copia modificata per i confronti) (clienti, prodotti, 20.000 ordini, vista, funzione, procedura, trigger, evento) e l'utente `mibsql`/`mibsql` con permessi solo su quel database.
 
 ```bash
 mysql -u root -p < scripts/demo.sql
@@ -130,7 +140,6 @@ mysql -u root -p < scripts/demo.sql
 
 ## Roadmap
 
-6. Schema compare e data compare con script di sincronizzazione
 7. Backup/restore, import guidato
 8. Profiler query, utenti e privilegi, monitor sessioni
 
@@ -142,6 +151,8 @@ mysql -u root -p < scripts/demo.sql
 - Alla chiusura della finestra non c'è conferma per i documenti modificati (il testo però viene ripristinato al riavvio)
 - Blocchi `BEGIN … END` senza `DELIMITER` vengono divisi ai `;` interni, come nel client `mariadb`
 - Designer: niente CHECK, partizioni, ordine DESC negli indici, indici invisibili; trigger e viste si modificano ancora come SQL
+- Confronto dati: la destinazione viene tenuta in memoria (fino a 1.000.000 di righe per tabella), oltre 200.000 differenze lo script non viene generato
+- Routine e trigger di altri utenti risultano illeggibili senza privilegi sul definer: il confronto li segnala ma non può sincronizzarli
 - Le istruzioni DDL non sono transazionali: se una fallisce a metà, quelle precedenti restano applicate (il designer lo segnala e ricarica la struttura dal server)
 
 ## Licenza

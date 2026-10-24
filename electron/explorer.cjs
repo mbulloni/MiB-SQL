@@ -100,23 +100,29 @@ async function schema(connId, db) {
 }
 
 /**
- * Everything the table designer edits. COLUMN_DEFAULT is an SQL expression on MariaDB ('text', 0,
- * current_timestamp()); MySQL reports bare values, quoted here unless numeric or an expression.
+ * Everything the table designer edits, for one table or (only = null) every base table of a database in
+ * five queries. COLUMN_DEFAULT is an SQL expression on MariaDB ('text', 0, current_timestamp()); MySQL
+ * reports bare values, quoted here unless numeric or an expression.
  */
-async function tableDefinition(connId, db, table) {
-  const [[t], cols, stats, fks, [ver]] = await Promise.all([
-    server.meta(connId, `SELECT ENGINE AS engine, TABLE_COLLATION AS collation, TABLE_COMMENT AS comment, TABLE_TYPE AS type
-      FROM information_schema.TABLES WHERE TABLE_SCHEMA = ? AND TABLE_NAME = ?`, [db, table]),
-    server.meta(connId, `SELECT COLUMN_NAME AS name, COLUMN_TYPE AS type, IS_NULLABLE AS nullable, COLUMN_DEFAULT AS def, EXTRA AS extra,
+async function tableDefinitions(connId, db, only = null) {
+  const one = only === null ? '' : ' AND TABLE_NAME = ?';
+  const args = only === null ? [db] : [db, only];
+  const [tables, cols, stats, fks, [ver]] = await Promise.all([
+    server.meta(connId, `SELECT TABLE_NAME AS name, ENGINE AS engine, TABLE_COLLATION AS collation, TABLE_COMMENT AS comment, TABLE_TYPE AS type
+      FROM information_schema.TABLES WHERE TABLE_SCHEMA = ?${one} ORDER BY TABLE_NAME`, args),
+    server.meta(connId, `SELECT TABLE_NAME AS t, COLUMN_NAME AS name, COLUMN_TYPE AS type, IS_NULLABLE AS nullable, COLUMN_DEFAULT AS def, EXTRA AS extra,
         COLLATION_NAME AS collation, GENERATION_EXPRESSION AS genExpr, COLUMN_COMMENT AS comment, DATA_TYPE AS dataType
-      FROM information_schema.COLUMNS WHERE TABLE_SCHEMA = ? AND TABLE_NAME = ? ORDER BY ORDINAL_POSITION`, [db, table]),
-    server.meta(connId, `SELECT INDEX_NAME AS name, NON_UNIQUE AS nonUnique, COLUMN_NAME AS col, SUB_PART AS len, INDEX_TYPE AS type, INDEX_COMMENT AS comment
-      FROM information_schema.STATISTICS WHERE TABLE_SCHEMA = ? AND TABLE_NAME = ? ORDER BY INDEX_NAME = 'PRIMARY' DESC, INDEX_NAME, SEQ_IN_INDEX`, [db, table]),
-    foreignKeys(connId, db, table),
+      FROM information_schema.COLUMNS WHERE TABLE_SCHEMA = ?${one} ORDER BY TABLE_NAME, ORDINAL_POSITION`, args),
+    server.meta(connId, `SELECT TABLE_NAME AS t, INDEX_NAME AS name, NON_UNIQUE AS nonUnique, COLUMN_NAME AS col, SUB_PART AS len, INDEX_TYPE AS type, INDEX_COMMENT AS comment
+      FROM information_schema.STATISTICS WHERE TABLE_SCHEMA = ?${one} ORDER BY TABLE_NAME, INDEX_NAME = 'PRIMARY' DESC, INDEX_NAME, SEQ_IN_INDEX`, args),
+    server.meta(connId, `SELECT k.TABLE_NAME AS t, k.CONSTRAINT_NAME AS name, k.COLUMN_NAME AS col, k.REFERENCED_TABLE_SCHEMA AS refDb,
+        k.REFERENCED_TABLE_NAME AS refTable, k.REFERENCED_COLUMN_NAME AS refCol, r.UPDATE_RULE AS onUpdate, r.DELETE_RULE AS onDelete
+      FROM information_schema.KEY_COLUMN_USAGE k
+      JOIN information_schema.REFERENTIAL_CONSTRAINTS r ON r.CONSTRAINT_SCHEMA = k.CONSTRAINT_SCHEMA AND r.CONSTRAINT_NAME = k.CONSTRAINT_NAME AND r.TABLE_NAME = k.TABLE_NAME
+      WHERE k.TABLE_SCHEMA = ?${one.replace('TABLE_NAME', 'k.TABLE_NAME')} AND k.REFERENCED_TABLE_NAME IS NOT NULL
+      ORDER BY k.TABLE_NAME, k.CONSTRAINT_NAME, k.ORDINAL_POSITION`, args),
     server.meta(connId, 'SELECT VERSION() AS v'),
   ]);
-  if (!t) throw new Error(`Tabella ${db}.${table} non trovata.`);
-  if (t.type === 'VIEW') throw new Error(`${table} è una vista: il designer modifica solo tabelle.`);
   const mariadb = /mariadb/i.test(ver.v);
   const defaultOf = (c) => {
     if (c.def === null || c.def === undefined) return null;
@@ -125,37 +131,89 @@ async function tableDefinition(connId, db, table) {
     if (/int|dec|float|double|bit|year/i.test(c.dataType) && /^-?\d+(\.\d+)?$/.test(c.def)) return c.def;
     return "'" + c.def.replace(/\\/g, '\\\\').replace(/'/g, "''") + "'";
   };
-  const indexes = new Map();
-  for (const r of stats) {
-    if (!indexes.has(r.name)) {
-      const kind = r.name === 'PRIMARY' ? 'PRIMARY' : r.type === 'FULLTEXT' ? 'FULLTEXT' : r.type === 'SPATIAL' ? 'SPATIAL' : Number(r.nonUnique) === 0 ? 'UNIQUE' : 'INDEX';
-      indexes.set(r.name, { name: r.name, kind, columns: [], comment: r.comment || '' });
-    }
-    indexes.get(r.name).columns.push({ name: r.col, len: r.len === null ? null : Number(r.len) });
+  const out = new Map();
+  for (const t of tables) {
+    if (t.type !== 'BASE TABLE' && t.type !== 'SYSTEM VERSIONED') continue;
+    out.set(t.name, { name: t.name, engine: t.engine, collation: t.collation, comment: t.comment, columns: [], indexes: [], foreignKeys: [], _ix: new Map(), _fk: new Map() });
   }
-  return {
-    name: table,
-    engine: t.engine,
-    collation: t.collation,
-    comment: t.comment,
-    columns: cols.map((c) => {
-      const gen = c.genExpr ? { expr: c.genExpr, stored: /STORED/i.test(c.extra) } : null;
-      const onUpdate = /on update (\S+)/i.exec(c.extra)?.[1] ?? '';
-      return {
-        name: c.name,
-        type: c.type,
-        nullable: c.nullable === 'YES',
-        default: gen ? null : defaultOf(c),
-        autoIncrement: /auto_increment/i.test(c.extra),
-        onUpdate,
-        collation: c.collation && c.collation !== t.collation ? c.collation : '',
-        comment: c.comment,
-        generated: gen,
-      };
-    }),
-    indexes: [...indexes.values()],
-    foreignKeys: fks,
-  };
+  for (const c of cols) {
+    const t = out.get(c.t);
+    if (!t) continue;
+    const gen = c.genExpr ? { expr: c.genExpr, stored: /STORED/i.test(c.extra) } : null;
+    t.columns.push({
+      name: c.name,
+      type: c.type,
+      nullable: c.nullable === 'YES',
+      default: gen ? null : defaultOf(c),
+      autoIncrement: /auto_increment/i.test(c.extra),
+      onUpdate: /on update (\S+)/i.exec(c.extra)?.[1] ?? '',
+      collation: c.collation && c.collation !== t.collation ? c.collation : '',
+      comment: c.comment,
+      generated: gen,
+    });
+  }
+  for (const r of stats) {
+    const t = out.get(r.t);
+    if (!t) continue;
+    if (!t._ix.has(r.name)) {
+      const kind = r.name === 'PRIMARY' ? 'PRIMARY' : r.type === 'FULLTEXT' ? 'FULLTEXT' : r.type === 'SPATIAL' ? 'SPATIAL' : Number(r.nonUnique) === 0 ? 'UNIQUE' : 'INDEX';
+      const ix = { name: r.name, kind, columns: [], comment: r.comment || '' };
+      t._ix.set(r.name, ix);
+      t.indexes.push(ix);
+    }
+    t._ix.get(r.name).columns.push({ name: r.col, len: r.len === null ? null : Number(r.len) });
+  }
+  for (const r of fks) {
+    const t = out.get(r.t);
+    if (!t) continue;
+    if (!t._fk.has(r.name)) {
+      const fk = { name: r.name, refDb: r.refDb, refTable: r.refTable, onUpdate: r.onUpdate, onDelete: r.onDelete, columns: [], refColumns: [] };
+      t._fk.set(r.name, fk);
+      t.foreignKeys.push(fk);
+    }
+    t._fk.get(r.name).columns.push(r.col);
+    t._fk.get(r.name).refColumns.push(r.refCol);
+  }
+  for (const t of out.values()) { delete t._ix; delete t._fk; }
+  return out;
+}
+
+async function tableDefinition(connId, db, table) {
+  const all = await tableDefinitions(connId, db, table);
+  if (!all.has(table)) {
+    const [t] = await server.meta(connId, 'SELECT TABLE_TYPE AS type FROM information_schema.TABLES WHERE TABLE_SCHEMA = ? AND TABLE_NAME = ?', [db, table]);
+    throw new Error(t?.type === 'VIEW' ? `${table} è una vista: il designer modifica solo tabelle.` : `Tabella ${db}.${table} non trovata.`);
+  }
+  return all.get(table);
+}
+
+const ROUTINE_KINDS = [['view', 'VIEW'], ['procedure', 'PROCEDURE'], ['function', 'FUNCTION'], ['trigger', 'TRIGGER'], ['event', 'EVENT']];
+
+/** Normalized CREATE of views, routines, triggers and events: no DEFINER, no schema qualifier, so two databases compare. */
+function normalizeDdl(sql, db) {
+  const q = '`' + db.replace(/`/g, '``') + '`.';
+  return sql
+    .replace(/\s+DEFINER\s*=\s*(`[^`]*`|'[^']*'|\S+)@(`[^`]*`|'[^']*'|\S+)/i, '')
+    .split(q).join('')
+    .replace(/\s+ALGORITHM=UNDEFINED/i, '')
+    .replace(/\s+SQL SECURITY DEFINER/i, '')
+    .trim();
+}
+
+/** Whole database for schema compare: table definitions plus the CREATE text of every other object. */
+async function schemaSnapshot(connId, db) {
+  const [tables, objs] = await Promise.all([tableDefinitions(connId, db), objects(connId, db)]);
+  const lists = { view: objs.views, procedure: objs.procedures, function: objs.functions, trigger: objs.triggers, event: objs.events };
+  const others = [];
+  for (const [kind, word] of ROUTINE_KINDS) {
+    for (const o of lists[kind]) {
+      const col = kind === 'view' ? 1 : kind === 'event' ? 3 : 2;
+      const rows = await server.meta(connId, `SHOW CREATE ${word} ${qi(db)}.${qi(o.name)}`);
+      const text = Object.values(rows[0])[col];
+      others.push({ kind, name: o.name, ddl: text === null || text === undefined ? null : normalizeDdl(String(text), db) });
+    }
+  }
+  return { tables: Object.fromEntries(tables), others };
 }
 
 /** Engines, collations and the database defaults for the designer's selects. */
@@ -199,4 +257,4 @@ async function erModel(connId, db) {
   return { tables: [...byTable.values()], fks: [...fkMap.values()] };
 }
 
-module.exports = { erModel, tableDefinition, serverOptions, databases, objects, columns, indexes, foreignKeys, ddl, schema };
+module.exports = { schemaSnapshot, normalizeDdl, tableDefinitions, erModel, tableDefinition, serverOptions, databases, objects, columns, indexes, foreignKeys, ddl, schema };

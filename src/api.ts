@@ -1,5 +1,6 @@
 import type { ServerTable } from './design';
 import type { ErModel } from './er';
+import type { Snapshot } from './compare';
 import type {
   ServerOptions, ApplyStmt, Cell, Column, ExportFormat, ExportOptions, ColumnInfo, ConnDef, DbObjects, ExecMode, ExecResult, ForeignKeyInfo, IndexInfo, ObjectKind, Schema, Secrets, ServerInfo,
 } from './types';
@@ -29,6 +30,7 @@ interface Api {
     tableDefinition(id: string, db: string, table: string): Promise<ServerTable>;
     serverOptions(id: string, db: string): Promise<ServerOptions>;
     erModel(id: string, db: string): Promise<ErModel>;
+    schemaSnapshot(id: string, db: string): Promise<Snapshot>;
   };
   sess: {
     open(connId: string, db: string | null): Promise<{ id: string; db: string | null }>;
@@ -49,6 +51,11 @@ interface Api {
   };
   showItem(file: string): Promise<void>;
   ddl: { run(connId: string, sqls: string[]): Promise<number> };
+  compareData(src: { connId: string; db: string }, tgt: { connId: string; db: string }, table: string, key: string[], columns: string[]): Promise<{
+    table: string; equal: number; diff: number; source: number; target: number;
+    details: { status: 'diff' | 'source' | 'target'; row: Cell[]; old?: Cell[]; diff: number[] }[];
+    statements: ApplyStmt[]; scriptTooLarge: boolean;
+  }>;
   file: {
     open(): Promise<SqlFile[]>;
     save(content: string, path: string | null, suggested?: string): Promise<string | null>;

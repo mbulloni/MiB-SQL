@@ -12,6 +12,7 @@ import SqlEditor from './components/SqlEditor';
 import TableDesigner from './components/TableDesigner';
 import ErDiagram from './components/ErDiagram';
 import QueryBuilder from './components/QueryBuilder';
+import CompareView from './components/CompareView';
 import logo from '../build/icons/128x128.png';
 import { onThemeChange, resolvedTheme, setThemePref, themePref, type ThemePref } from './theme';
 
@@ -259,6 +260,7 @@ export default function App() {
           {active?.kind === 'table' && <TableDesigner key={active.id} doc={active} />}
           {active?.kind === 'er' && <ErDiagram key={active.id} doc={active} />}
           {active?.kind === 'query' && <QueryBuilder key={active.id} doc={active} />}
+          {active?.kind === 'compare' && <CompareView key={active.id} doc={active} />}
           {!docs.length && <StartPage />}
         </div>
       </div>

@@ -95,8 +95,9 @@ export interface Message {
 
 export interface Doc {
   id: string;
-  kind: 'sql' | 'table' | 'er' | 'query';
+  kind: 'sql' | 'table' | 'er' | 'query' | 'compare';
   qb?: import('./qb').QbModel;
+  cmp?: { src: { connId: string | null; db: string | null }; tgt: { connId: string | null; db: string | null } };
   design?: { table: string | null }; // table designer: existing table or null for a new one
   title: string;
   connId: string | null;

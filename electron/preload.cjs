@@ -30,6 +30,7 @@ contextBridge.exposeInMainWorld('api', {
     tableDefinition: (id, db, t) => call('meta:tableDefinition', id, db, t),
     serverOptions: (id, db) => call('meta:serverOptions', id, db),
     erModel: (id, db) => call('meta:erModel', id, db),
+    schemaSnapshot: (id, db) => call('meta:schemaSnapshot', id, db),
   },
   sess: {
     open: (connId, db) => call('sess:open', connId, db),
@@ -54,6 +55,7 @@ contextBridge.exposeInMainWorld('api', {
   },
   showItem: (file) => call('shell:showItem', file),
   ddl: { run: (connId, sqls) => call('ddl:run', connId, sqls) },
+  compareData: (src, tgt, table, key, columns) => call('compare:data', src, tgt, table, key, columns),
   file: {
     open: () => call('file:open'),
     save: (content, path, suggested) => call('file:save', content, path, suggested),

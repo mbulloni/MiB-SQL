@@ -105,3 +105,8 @@ CREATE OR REPLACE USER 'mibsql'@'localhost' IDENTIFIED BY 'mibsql';
 CREATE OR REPLACE USER 'mibsql'@'127.0.0.1' IDENTIFIED BY 'mibsql';
 GRANT ALL PRIVILEGES ON mibsql_demo.* TO 'mibsql'@'localhost';
 GRANT ALL PRIVILEGES ON mibsql_demo.* TO 'mibsql'@'127.0.0.1';
+
+-- Second database for schema/data compare tests (filled by scripts/demo2.sql).
+CREATE DATABASE IF NOT EXISTS mibsql_demo2 CHARACTER SET utf8mb4 COLLATE utf8mb4_unicode_ci;
+GRANT ALL PRIVILEGES ON mibsql_demo2.* TO 'mibsql'@'localhost';
+GRANT ALL PRIVILEGES ON mibsql_demo2.* TO 'mibsql'@'127.0.0.1';

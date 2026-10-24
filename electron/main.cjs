@@ -5,6 +5,7 @@ const connections = require('./connections.cjs');
 const server = require('./server.cjs');
 const explorer = require('./explorer.cjs');
 const exporter = require('./export.cjs');
+const datacompare = require('./datacompare.cjs');
 
 app.commandLine.appendSwitch('no-sandbox');
 // Separate profile for tests and screenshots, so they never touch the user's saved connections.
@@ -84,6 +85,8 @@ handle('meta:schema', (id, db) => explorer.schema(id, db));
 handle('meta:tableDefinition', (id, db, t) => explorer.tableDefinition(id, db, t));
 handle('meta:serverOptions', (id, db) => explorer.serverOptions(id, db));
 handle('meta:erModel', (id, db) => explorer.erModel(id, db));
+handle('meta:schemaSnapshot', (id, db) => explorer.schemaSnapshot(id, db));
+handle('compare:data', (src, tgt, table, key, columns) => datacompare.compareTable(src, tgt, table, key, columns));
 
 // Generic save of generated content (diagram images, reports): text or base64 data.
 handle('file:saveData', async (data, base64, suggested, filters) => {

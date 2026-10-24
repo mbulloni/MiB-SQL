@@ -1,6 +1,6 @@
 import { createContext, useContext, useState, type ReactNode } from 'react';
 import { api } from '../api';
-import { closeDoc, insertText, newDoc, openDesigner, openEr, openQueryBuilder, qi, refreshExplorer, runDoc, selectTop, showDdl } from '../actions';
+import { closeDoc, insertText, newDoc, openCompare, openDesigner, openEr, openQueryBuilder, qi, refreshExplorer, runDoc, selectTop, showDdl } from '../actions';
 import { loadDatabases, metaKey, useStore, type MetaEntry } from '../store';
 import type { ColumnInfo, ConnDef, DbObjects, ForeignKeyInfo, IndexInfo, ObjectKind } from '../types';
 import { openMenu, type MenuItem } from './ContextMenu';
@@ -230,6 +230,7 @@ function ConnNode({ conn }: { conn: ConnDef }) {
             { label: 'Nuova tabella…', action: () => openDesigner(conn.id, db, null) },
             { label: 'Diagramma ER', action: () => openEr(conn.id, db) },
             { label: 'Query Builder', action: () => openQueryBuilder(conn.id, db) },
+            { label: 'Confronta con…', action: () => openCompare(conn.id, db) },
             { label: 'Aggiorna', action: () => { s.dropMeta(`${conn.id}/${db}/`); expandDb(db); } },
             { label: 'Copia nome', action: () => copy(db) },
           ]}>
