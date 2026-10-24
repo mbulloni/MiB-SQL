@@ -29,6 +29,7 @@ const P: Record<string, ReactElement> = {
   profile: <><circle cx="8" cy="9" r="5.5" fill="none" stroke="#3a7bd5" strokeWidth="1.4" /><path d="M8 9V6M6.5 1.5h3M8 1.5v2" stroke="#3a7bd5" strokeWidth="1.4" strokeLinecap="round" /><path d="M8 9l2.5 1.5" stroke="#d64545" strokeWidth="1.4" strokeLinecap="round" /></>,
   er: <><rect x="1" y="1.5" width="6" height="5" rx="1" fill="#3a7bd5" /><rect x="9" y="9.5" width="6" height="5" rx="1" fill="#2a9d8f" /><path d="M7 4h2.5v8H9" stroke="#6a7685" strokeWidth="1.3" fill="none" /></>,
   qb: <><rect x="1" y="2" width="5.5" height="7" rx="1" fill="none" stroke="#3a7bd5" strokeWidth="1.3" /><rect x="9.5" y="2" width="5.5" height="7" rx="1" fill="none" stroke="#3a7bd5" strokeWidth="1.3" /><path d="M6.5 5.5h3" stroke="#3a7bd5" strokeWidth="1.3" /><path d="M3 12.5h10M3 14.5h7" stroke="#2e9e44" strokeWidth="1.3" /></>,
+  ai: <><path d="M8 1.5l1.6 3.9 3.9 1.6-3.9 1.6L8 12.5 6.4 8.6 2.5 7l3.9-1.6z" fill="#8e5cc4" /><path d="M13 10.5l.7 1.6 1.6.7-1.6.7L13 15.1l-.7-1.6-1.6-.7 1.6-.7z" fill="#3a7bd5" /></>,
   sun: <><circle cx="8" cy="8" r="3.2" fill="#e0a800" /><path d="M8 1v2M8 13v2M1 8h2M13 8h2M3 3l1.4 1.4M11.6 11.6L13 13M3 13l1.4-1.4M11.6 4.4L13 3" stroke="#e0a800" strokeWidth="1.4" strokeLinecap="round" /></>,
   moon: <path d="M12.5 10.5A5.5 5.5 0 015.5 3.5a5.5 5.5 0 107 7z" fill="#9db8ff" />,
   close: <path d="M4 4l8 8M12 4l-8 8" stroke="currentColor" strokeWidth="1.5" />,

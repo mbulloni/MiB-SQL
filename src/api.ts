@@ -56,6 +56,13 @@ interface Api {
   };
   showItem(file: string): Promise<void>;
   pickFile(kind: 'sql' | 'data'): Promise<string | null>;
+  ai: {
+    settings(): Promise<{ source: 'key' | 'env' | 'system'; model: string; effort: string; consent: boolean; models: string[]; efforts: string[]; keyring: boolean }>;
+    saveSettings(s: { model?: string; effort?: string; key?: string | null; consent?: boolean }): Promise<{ source: 'key' | 'env' | 'system'; model: string; effort: string; consent: boolean; models: string[]; efforts: string[]; keyring: boolean }>;
+    chat(id: string, req: { system: unknown; messages: unknown[] }): Promise<{ content: unknown; stopReason: string | null; stopDetails: { category?: string | null } | null; model: string; usage: unknown }>;
+    cancel(id: string): Promise<void>;
+    onDelta(cb: (p: { id: string; text: string }) => void): () => void;
+  };
   monitor: { snapshot(connId: string): Promise<MonitorSnapshot>; kill(connId: string, id: number, queryOnly: boolean): Promise<void> };
   tasks: {
     dump(id: string, connId: string, db: string, opts: Record<string, unknown>): Promise<{ file: string; size: number } | null>;

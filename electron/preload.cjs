@@ -58,6 +58,17 @@ contextBridge.exposeInMainWorld('api', {
   },
   showItem: (file) => call('shell:showItem', file),
   pickFile: (kind) => call('file:pick', kind),
+  ai: {
+    settings: () => call('ai:settings'),
+    saveSettings: (s) => call('ai:saveSettings', s),
+    chat: (id, req) => call('ai:chat', id, req),
+    cancel: (id) => call('ai:cancel', id),
+    onDelta: (cb) => {
+      const fn = (_e, p) => cb(p);
+      ipcRenderer.on('ai:delta', fn);
+      return () => ipcRenderer.removeListener('ai:delta', fn);
+    },
+  },
   monitor: {
     snapshot: (connId) => call('monitor:snapshot', connId),
     kill: (connId, id, queryOnly) => call('monitor:kill', connId, id, queryOnly),

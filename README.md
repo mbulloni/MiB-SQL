@@ -8,7 +8,7 @@ IDE educativo per **MariaDB e MySQL** su Linux, ispirato a [dbForge Studio](http
 
 ![Database Explorer ed editor SQL](docs/screenshot-1.png)
 
-## Funzioni (v1.0)
+## Funzioni (v1.1)
 
 **Connessioni**
 - Profili salvati con colore d'ambiente (sviluppo/test/produzione: tinge scheda e barra di stato)
@@ -81,6 +81,13 @@ IDE educativo per **MariaDB e MySQL** su Linux, ispirato a [dbForge Studio](http
 - **Monitor sessioni** (tasto destro sulla connessione): processi in tempo reale con durata, stato e query, termina query o connessione; indicatori e grafici di query/s, thread, connessioni, scritture, rete, hit ratio del buffer pool, query lente; aggiornamento 1-10 s, pausa
 - **Utenti e privilegi**: account, nuova password, crea/elimina, privilegi per livello (globali, database, tabella, routine) a caselle, GRANT OPTION, anteprima GRANT/REVOKE minimi (password mascherate)
 
+**Assistente AI (Claude)**
+- Pulsante «Assistente AI» nella toolbar o nella pagina iniziale: pannello accanto all'editor SQL
+- Domande in linguaggio naturale → SQL sul database del documento (lo schema è incluso), azioni rapide Spiega la query, Correggi l'errore (con l'errore del server), Ottimizza (con piano/profilo)
+- Blocchi SQL con Inserisci, Sostituisci (annullabile) e Copia: nulla viene eseguito senza di te
+- Contesto scelto da te: script dell'editor, prime righe del risultato solo se attivate; consenso esplicito al primo uso
+- Chiave API nel portachiavi di sistema, oppure le credenziali di sistema (ANTHROPIC_API_KEY, `ant auth login`); modello (Claude Opus 5.5 predefinito, Sonnet 5.5, Haiku 5.5) ed effort configurabili; risposte in streaming interrompibili
+
 **Tema chiaro e scuro**
 - Interruttore in fondo alla toolbar: Chiaro, Scuro o Sistema (segue il desktop); la scelta viene ricordata
 - Editor SQL, griglie, designer, diagrammi e finestre seguono il tema (gli export dei diagrammi restano chiari)
@@ -115,6 +122,10 @@ IDE educativo per **MariaDB e MySQL** su Linux, ispirato a [dbForge Studio](http
 ![Profiler](docs/screenshot-14.png)
 
 ![Utenti e privilegi](docs/screenshot-15.png)
+
+![Assistente AI](docs/screenshot-17.png)
+
+![Partizioni nel designer](docs/screenshot-18.png)
 
 ![Piano di esecuzione](docs/screenshot-3.png)
 
@@ -158,7 +169,7 @@ Su Ubuntu 24.04 serve `libfuse2t64` per avviare le AppImage.
 ```bash
 npm install
 npm run dev        # Vite (porta 5174) + Electron
-npm test           # splitter (anche a flusso), griglia, export, designer, ER, query builder, confronto, import
+npm test           # splitter (anche a flusso), griglia, export, designer (partizioni comprese), ER, query builder, confronto, import, assistente
 npm run typecheck
 npm run dist       # AppImage e .deb in release/ (npm run dist:deb solo .deb)
 ```
@@ -171,7 +182,7 @@ mysql -u root -p < scripts/demo.sql
 
 ## Roadmap
 
-Completata: le otto fasi previste (connessioni ed editor, griglia e modifica dati, designer, ER, confronto, backup/import, profiler/monitor/utenti) più Query Builder e tema scuro.
+Completata: le otto fasi previste (connessioni ed editor, griglia e modifica dati, designer, ER, confronto, backup/import, profiler/monitor/utenti) più Query Builder, tema scuro, partizioni, confronto dati a memoria costante, pacchetto .deb e assistente AI.
 
 
 ## Limiti noti
@@ -181,6 +192,7 @@ Completata: le otto fasi previste (connessioni ed editor, griglia e modifica dat
 - Routine e trigger di altri utenti risultano illeggibili senza privilegi sul definer: confronto e backup li segnalano ma non possono copiarli
 - Le istruzioni DDL non sono transazionali: se una fallisce a metà, quelle precedenti restano applicate (designer e confronto lo segnalano e ricaricano lo stato dal server)
 - Designer: sottopartizioni solo in lettura; colonne spaziali in sola lettura nella griglia
+- Assistente AI: richiede una chiave API Anthropic (a pagamento); la conversazione resta solo per la sessione
 
 ## Licenza
 

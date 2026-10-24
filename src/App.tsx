@@ -1,6 +1,6 @@
 import { useEffect, useRef, useState, useSyncExternalStore } from 'react';
 import { api } from './api';
-import { cancelDoc, closeDoc, openVisual, profileDoc, requestQuit, newDoc, openFiles, openSql, restore, runDoc, saveDoc, setDocTarget } from './actions';
+import { cancelDoc, closeDoc, openAssistant, openVisual, profileDoc, requestQuit, newDoc, openFiles, openSql, restore, runDoc, saveDoc, setDocTarget } from './actions';
 import { loadDatabases, metaKey, useStore, type MetaEntry } from './store';
 import ContextMenu, { openMenu } from './components/ContextMenu';
 import { ConnectionDialog, PasswordPrompt, ValueViewer } from './components/Dialogs';
@@ -16,11 +16,13 @@ import QueryBuilder from './components/QueryBuilder';
 import CompareView from './components/CompareView';
 import Monitor from './components/Monitor';
 import TargetDialog from './components/TargetDialog';
+import AssistantPanel from './components/AssistantPanel';
 import Users from './components/Users';
 import logo from '../build/icons/128x128.png';
 import { onThemeChange, resolvedTheme, setThemePref, themePref, type ThemePref } from './theme';
 
-function useDrag(initial: number, axis: 'x' | 'y', min: number, key: string) {
+/** Splitter drag; `invert` for panels on the right, which grow when dragged left. */
+function useDrag(initial: number, axis: 'x' | 'y', min: number, key: string, invert = false) {
   const [size, setSize] = useState(() => Number(localStorage.getItem(key)) || initial);
   const start = (e: React.MouseEvent) => {
     e.preventDefault();
@@ -29,7 +31,7 @@ function useDrag(initial: number, axis: 'x' | 'y', min: number, key: string) {
     document.body.classList.add(axis === 'x' ? 'resizing-x' : 'resizing-y');
     const move = (ev: MouseEvent) => {
       const d = (axis === 'x' ? ev.clientX : ev.clientY) - p0;
-      setSize(Math.max(min, axis === 'x' ? s0 + d : s0 - d));
+      setSize(Math.max(min, axis === 'x' ? (invert ? s0 - d : s0 + d) : s0 - d));
     };
     const up = () => {
       window.removeEventListener('mousemove', move);
@@ -96,6 +98,7 @@ function Toolbar() {
   const set = useStore((s) => s.set);
   const running = !!doc?.running;
   const sql = doc?.kind === 'sql';
+  const assistantOpen = useStore((s) => s.assistantOpen);
   const runnable = sql || doc?.kind === 'query';
   return (
     <div className="toolbar">
@@ -111,9 +114,11 @@ function Toolbar() {
       <button title="Piano di esecuzione (Ctrl+E)" disabled={!runnable || running} onClick={() => runDoc('explain')}><Icon name="plan" /><span>Piano</span></button>
       <button title="Profila l'istruzione corrente (Ctrl+Maiusc+P)" disabled={!sql || running} onClick={() => profileDoc()}><Icon name="profile" /><span>Profila</span></button>
       <div className="sep" />
-      <button title="Diagramma ER del database (editor visuale: tabelle e relazioni)" onClick={() => openVisual('er')}><Icon name="er" /><span>Diagramma ER</span></button>
-      <button title="Query Builder visuale" onClick={() => openVisual('query')}><Icon name="qb" /><span>Query Builder</span></button>
+      <button title="Diagramma ER del database (editor visuale: tabelle e relazioni)" onClick={() => openVisual('er')}><Icon name="er" /><span className="keep">Diagramma ER</span></button>
+      <button title="Query Builder visuale" onClick={() => openVisual('query')}><Icon name="qb" /><span className="keep">Query Builder</span></button>
       <button title="Nuova tabella nel designer visuale" onClick={() => openVisual('table')}><Icon name="table" /><span>Nuova tabella</span></button>
+      <div className="sep" />
+      <button className={assistantOpen && sql ? 'on' : ''} title="Assistente AI (Claude): genera, spiega, correggi e ottimizza SQL" onClick={() => (assistantOpen && sql ? useStore.getState().setAssistantOpen(false) : openAssistant())}><Icon name="ai" /><span className="keep">Assistente AI</span></button>
       <div className="sep" />
       {sql && <TargetPicker />}
       <div className="spacer" />
@@ -172,6 +177,7 @@ function StartPage() {
         <button onClick={() => openVisual('query')}><Icon name="qb" size={28} /><b>Query Builder</b><span>Componi una SELECT trascinando tabelle e colonne, join, filtri e raggruppamenti senza scrivere SQL</span></button>
         <button onClick={() => openVisual('table')}><Icon name="table" size={28} /><b>Designer tabelle</b><span>Colonne, indici, chiavi esterne e vincoli in una griglia; genera CREATE/ALTER</span></button>
         <button onClick={() => openVisual('compare')}><Icon name="plan" size={28} /><b>Confronto</b><span>Differenze di schema e dati tra due database, con script di sincronizzazione</span></button>
+        <button onClick={openAssistant}><Icon name="ai" size={28} /><b>Assistente AI</b><span>Chiedi query in linguaggio naturale; fai spiegare, correggere e ottimizzare SQL (Claude)</span></button>
       </div>
       {conns.length > 0 && <>
         <h2>Connessioni</h2>
@@ -218,6 +224,8 @@ export default function App() {
   const [cursor, setCursor] = useState<[number, number]>([1, 1]);
   const [side, startSide] = useDrag(300, 'x', 180, 'mibsql.side');
   const [bottom, startBottom] = useDrag(320, 'y', 80, 'mibsql.bottom');
+  const [aiWidth, startAi] = useDrag(420, 'x', 300, 'mibsql.aiWidth', true);
+  const assistantOpen = useStore((s) => s.assistantOpen);
   const ready = useRef(false);
 
   useEffect(() => {
@@ -272,10 +280,13 @@ export default function App() {
         <div className="vsplit" onMouseDown={startSide} />
         <div className="work">
           <DocTabs />
-          <div className="doc-area" style={{ display: active?.kind === 'sql' ? 'flex' : 'none' }}>
-            <div className="editor-wrap"><SqlEditor onCursor={(l, c) => setCursor([l, c])} /></div>
-            <div className="hsplit" onMouseDown={startBottom} />
-            <div style={{ height: bottom }} className="bottom">{active?.kind === 'sql' && <ResultsPanel doc={active} />}</div>
+          <div className="doc-row" style={{ display: active?.kind === 'sql' ? 'flex' : 'none' }}>
+            <div className="doc-area" style={{ display: 'flex' }}>
+              <div className="editor-wrap"><SqlEditor onCursor={(l, c) => setCursor([l, c])} /></div>
+              <div className="hsplit" onMouseDown={startBottom} />
+              <div style={{ height: bottom }} className="bottom">{active?.kind === 'sql' && <ResultsPanel doc={active} />}</div>
+            </div>
+            {active?.kind === 'sql' && assistantOpen && <><div className="vsplit" onMouseDown={startAi} /><div style={{ width: aiWidth }} className="ai-side"><AssistantPanel key={active.id} doc={active} /></div></>}
           </div>
           {active?.kind === 'table' && <TableDesigner key={active.id} doc={active} />}
           {active?.kind === 'er' && <ErDiagram key={active.id} doc={active} />}

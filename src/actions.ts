@@ -322,6 +322,24 @@ export function reveal(docId: string, offset: number) {
   ed.focus();
 }
 
+/** Replaces the whole document text as one undoable edit. */
+export function replaceDocText(docId: string, text: string) {
+  const ed = editorOf(docId);
+  const model = modelOf(docId);
+  if (ed) { ed.executeEdits('mibsql', [{ range: model.getFullModelRange(), text, forceMoveMarkers: true }]); ed.focus(); }
+  else model.setValue(text);
+}
+
+/** Opens the AI assistant beside the active SQL document (a new one if none is active). */
+export function openAssistant() {
+  const d = activeDoc();
+  if (!d || d.kind !== 'sql') {
+    const t = visualTarget();
+    newDoc(t ? { connId: t.connId, db: t.db } : {});
+  }
+  st().setAssistantOpen(true);
+}
+
 export const refreshExplorer = (connId: string) => st().dropMeta(`${connId}/`);
 export const invalidateSchema = (connId: string, db: string) => st().dropMeta(metaKey.schema(connId, db));
 

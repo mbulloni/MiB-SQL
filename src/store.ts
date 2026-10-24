@@ -47,6 +47,8 @@ interface State {
   selectedDb: { connId: string; db: string } | null;
   selectedNode: string | null;
   pickTarget: { kind: VisualKind } | null;
+  assistantOpen: boolean;
+  setAssistantOpen(v: boolean): void;
   connDialog: { def: Partial<ConnDef> } | null;
   passwordPrompt: PasswordRequest | null;
   exportDialog: ExportRequest | null;
@@ -81,6 +83,8 @@ export const useStore = create<State>((set, get) => ({
   selectedDb: null,
   selectedNode: null,
   pickTarget: null,
+  assistantOpen: (() => { try { return localStorage.getItem('mibsql.assistant') === '1'; } catch { return false; } })(),
+  setAssistantOpen(v) { try { localStorage.setItem('mibsql.assistant', v ? '1' : '0'); } catch { /* ignore */ } set({ assistantOpen: v }); },
   connDialog: null,
   passwordPrompt: null,
   exportDialog: null,

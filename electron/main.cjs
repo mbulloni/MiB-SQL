@@ -8,6 +8,7 @@ const exporter = require('./export.cjs');
 const datacompare = require('./datacompare.cjs');
 const backup = require('./backup.cjs');
 const importer = require('./importer.cjs');
+const assistant = require('./assistant.cjs');
 
 app.commandLine.appendSwitch('no-sandbox');
 // Separate profile for tests and screenshots, so they never touch the user's saved connections.
@@ -178,6 +179,10 @@ handle('file:writeHex', async (hex, suggested) => {
   fs.writeFileSync(file, Buffer.from(String(hex).replace(/^0x/i, ''), 'hex'));
   return file;
 });
+handle('ai:settings', () => assistant.settings());
+handle('ai:saveSettings', (s) => assistant.saveSettings(s));
+handle('ai:chat', (id, req) => assistant.chat(id, req, (text) => win.webContents.send('ai:delta', { id, text })));
+handle('ai:cancel', (id) => assistant.cancel(id));
 handle('monitor:snapshot', (connId) => server.monitorSnapshot(connId));
 handle('monitor:kill', (connId, id, queryOnly) => server.kill(connId, id, queryOnly));
 
