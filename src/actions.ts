@@ -1,0 +1,219 @@
+// Document actions shared by toolbar, shortcuts and explorer: they need both the store and the editor models.
+import { api, type SqlFile } from './api';
+import { clearMarkers, disposeModel, markErrors, markSaved, modelOf, monaco } from './editor';
+import { metaKey, setUntitled, useStore } from './store';
+import type { Doc, ExecMode, Message, ObjectKind, StmtResult } from './types';
+
+const st = () => useStore.getState();
+const docById = (id: string) => st().docs.find((d) => d.id === id);
+export const activeDoc = () => docById(st().activeDoc ?? '');
+
+let editorOf: (docId: string) => monaco.editor.IStandaloneCodeEditor | null = () => null;
+export const bindEditor = (fn: typeof editorOf) => { editorOf = fn; };
+
+export const qi = (s: string) => '`' + s.replace(/`/g, '``') + '`';
+
+export function newDoc(opts: { connId?: string | null; db?: string | null; sql?: string; title?: string; file?: string | null } = {}) {
+  const s = st();
+  const connId = opts.connId !== undefined ? opts.connId : (activeDoc()?.connId ?? s.selectedConn ?? s.conns[0]?.id ?? null);
+  const db = opts.db !== undefined ? opts.db : connId === activeDoc()?.connId ? (activeDoc()?.db ?? null) : (s.conns.find((c) => c.id === connId)?.database || null);
+  const id = crypto.randomUUID();
+  modelOf(id, opts.sql ?? ''); // model first: the editor shows it as soon as the document becomes active
+  const doc = s.addDoc({ id, connId, db, file: opts.file ?? null, ...(opts.title ? { title: opts.title } : {}) });
+  persist();
+  return doc;
+}
+
+export function openSql(f: SqlFile) {
+  const existing = st().docs.find((d) => d.file === f.path);
+  if (existing) { st().set({ activeDoc: existing.id }); return existing; }
+  return newDoc({ sql: f.content, file: f.path, title: f.path.split('/').pop() });
+}
+
+export async function openFiles() {
+  for (const f of await api.file.open()) openSql(f);
+}
+
+export async function saveDoc(id = st().activeDoc, as = false) {
+  const doc = id ? docById(id) : undefined;
+  if (!doc) return false;
+  const file = await api.file.save(modelOf(doc.id).getValue(), as ? null : doc.file, doc.file ?? doc.title);
+  if (!file) return false;
+  markSaved(doc.id);
+  st().updateDoc(doc.id, { file, title: file.split('/').pop()!, dirty: false });
+  persist();
+  return true;
+}
+
+export async function closeDoc(id = st().activeDoc) {
+  const doc = id ? docById(id) : undefined;
+  if (!doc) return;
+  if (doc.dirty) {
+    const r = await api.confirm(`Salvare le modifiche a ${doc.title}?`, 'Le modifiche non salvate andranno perse.', ['Salva', 'Non salvare', 'Annulla']);
+    if (r === 2) return;
+    if (r === 0 && !(await saveDoc(doc.id))) return;
+  }
+  if (doc.running && doc.sessionId) await api.sess.cancel(doc.sessionId).catch(() => {});
+  if (doc.sessionId) api.sess.close(doc.sessionId).catch(() => {});
+  st().removeDoc(doc.id);
+  disposeModel(doc.id);
+  persist();
+}
+
+/** Binds a document to a connection/database; the session is (re)opened on the next execution. */
+export async function setDocTarget(id: string, connId: string | null, db: string | null) {
+  const doc = docById(id);
+  if (!doc) return;
+  if (doc.connId !== connId && doc.sessionId) {
+    api.sess.close(doc.sessionId).catch(() => {});
+    st().updateDoc(id, { sessionId: null });
+  }
+  st().updateDoc(id, { connId, db });
+  const sid = docById(id)?.sessionId;
+  if (sid && db) {
+    try { await api.sess.use(sid, db); } catch (err) { log(id, 'error', (err as Error).message); }
+  }
+  persist();
+}
+
+const now = () => new Date().toLocaleTimeString('it-IT');
+
+function log(id: string, level: Message['level'], text: string, extra: Partial<Message> = {}) {
+  st().updateDoc(id, (d) => ({ messages: [...d.messages, { at: now(), level, text, ...extra }].slice(-1000) }));
+}
+
+async function ensureSession(doc: Doc) {
+  if (!doc.connId) throw new Error('Nessuna connessione selezionata per questo documento.');
+  if (st().connState[doc.connId]?.status !== 'open' && !(await st().openConn(doc.connId))) {
+    throw new Error(st().connState[doc.connId]?.error ?? 'Connessione non aperta.');
+  }
+  const fresh = docById(doc.id)!;
+  if (fresh.sessionId) return fresh.sessionId;
+  const s = await api.sess.open(doc.connId, doc.db);
+  st().updateDoc(doc.id, { sessionId: s.id, db: s.db });
+  return s.id;
+}
+
+const plural = (n: number, one: string, many: string) => `${n.toLocaleString('it-IT')} ${n === 1 ? one : many}`;
+const DDL_RE = /^\s*(create|alter|drop|rename|truncate)\b/i;
+
+function describe(r: StmtResult) {
+  if (r.error) return `Errore ${r.error.errno ?? ''} (${r.error.sqlState ?? r.error.code ?? ''}): ${r.error.message}`;
+  if (r.sets.length) return r.sets.map((s) => plural(s.total, 'riga restituita', 'righe restituite') + (s.truncated ? ` (mostrate ${s.rows.length.toLocaleString('it-IT')})` : '')).join(', ') + ` in ${r.ms} ms`;
+  return `${plural(r.affectedRows ?? 0, 'riga interessata', 'righe interessate')}${r.insertId ? `, ultimo id ${r.insertId}` : ''} in ${r.ms} ms`;
+}
+
+/** Executes the document: selection or whole script (all), statement under cursor (current) or its plan. */
+export async function runDoc(mode: ExecMode, id = st().activeDoc) {
+  const doc = id ? docById(id) : undefined;
+  if (!doc || doc.running) return;
+  const model = modelOf(doc.id);
+  const ed = editorOf(doc.id);
+  const text = model.getValue();
+  const sel = ed?.getSelection();
+  const opts: Parameters<typeof api.sess.exec>[2] = { mode };
+  if (mode === 'all' && sel && !sel.isEmpty()) {
+    opts.mode = 'selection';
+    opts.selStart = model.getOffsetAt(sel.getStartPosition());
+    opts.selEnd = model.getOffsetAt(sel.getEndPosition());
+  }
+  opts.cursor = ed?.getPosition() ? model.getOffsetAt(ed.getPosition()!) : 0;
+  clearMarkers(model);
+  st().updateDoc(doc.id, { running: true, startedAt: Date.now() });
+  const t0 = performance.now();
+  try {
+    const sid = await ensureSession(doc);
+    const r = await api.sess.exec(sid, text, opts);
+    const ms = Math.round(performance.now() - t0);
+    for (const x of r.results) {
+      log(doc.id, x.error ? 'error' : 'ok', describe(x), { sql: x.sql, offset: x.start });
+      for (const w of x.warnings) if (mode !== 'explain') log(doc.id, 'warning', `${w.level} ${w.code}: ${w.message}`, { offset: x.start });
+    }
+    if (!r.results.length) log(doc.id, 'info', 'Nessuna istruzione da eseguire.');
+    if (r.cancelled) log(doc.id, 'warning', 'Esecuzione annullata.');
+    markErrors(model, r.results);
+    const firstSet = r.results.some((x) => x.sets.length) ? 0 : 'messages';
+    const failed = r.results.some((x) => x.error);
+    st().updateDoc(doc.id, { run: { results: r.results, explain: mode === 'explain', ms }, db: r.db, view: failed ? 'messages' : firstSet });
+    if (r.results.some((x) => !x.error && DDL_RE.test(x.sql))) refreshAfterDdl(doc.connId!);
+  } catch (err) {
+    log(doc.id, 'error', (err as Error).message);
+    st().updateDoc(doc.id, { view: 'messages' });
+  } finally {
+    st().updateDoc(doc.id, { running: false });
+    persist();
+  }
+}
+
+export async function cancelDoc(id = st().activeDoc) {
+  const doc = id ? docById(id) : undefined;
+  if (doc?.running && doc.sessionId) await api.sess.cancel(doc.sessionId);
+}
+
+function refreshAfterDdl(connId: string) {
+  st().dropMeta(`${connId}/`);
+}
+
+export async function selectTop(connId: string, db: string, table: string, limit = 1000) {
+  const doc = newDoc({ connId, db, sql: `SELECT *\nFROM ${qi(db)}.${qi(table)}\nLIMIT ${limit};\n`, title: `${table}.sql` });
+  await runDoc('all', doc.id);
+}
+
+export async function showDdl(connId: string, db: string, kind: ObjectKind, name: string) {
+  try {
+    const sql = await api.meta.ddl(connId, db, kind, name);
+    newDoc({ connId, db, sql, title: `${name}.sql` });
+  } catch (err) {
+    const doc = newDoc({ connId, db, title: `${name}.sql` });
+    log(doc.id, 'error', (err as Error).message);
+  }
+}
+
+export function insertText(text: string) {
+  const doc = activeDoc();
+  const ed = doc ? editorOf(doc.id) : null;
+  if (!ed) return;
+  ed.executeEdits('mibsql', [{ range: ed.getSelection()!, text, forceMoveMarkers: true }]);
+  ed.focus();
+}
+
+/** Moves the cursor to a script offset (double click on a message). */
+export function reveal(docId: string, offset: number) {
+  const ed = editorOf(docId);
+  if (!ed) return;
+  const pos = modelOf(docId).getPositionAt(offset);
+  ed.setPosition(pos);
+  ed.revealPositionInCenter(pos);
+  ed.focus();
+}
+
+export const refreshExplorer = (connId: string) => st().dropMeta(`${connId}/`);
+export const invalidateSchema = (connId: string, db: string) => st().dropMeta(metaKey.schema(connId, db));
+
+// ---- Tabs survive restarts (text, binding, file), like dbForge's "restore documents" ----
+
+const KEY = 'mibsql.docs';
+let timer: number | undefined;
+
+export function persist() {
+  clearTimeout(timer);
+  timer = window.setTimeout(() => {
+    const { docs, activeDoc: active } = st();
+    const data = docs.map((d) => ({ id: d.id, title: d.title, connId: d.connId, db: d.db, file: d.file, dirty: d.dirty, sql: modelOf(d.id).getValue() }));
+    try { localStorage.setItem(KEY, JSON.stringify({ docs: data, active })); } catch { /* storage unavailable */ }
+  }, 400);
+}
+
+export function restore() {
+  let saved: { docs: { id: string; title: string; connId: string | null; db: string | null; file: string | null; dirty: boolean; sql: string }[]; active: string | null } | null = null;
+  try { saved = JSON.parse(localStorage.getItem(KEY) ?? 'null'); } catch { saved = null; }
+  if (!saved?.docs?.length) return;
+  const known = new Set(st().conns.map((c) => c.id));
+  for (const d of saved.docs) {
+    const m = /^SQL(\d+)\.sql$/.exec(d.title);
+    if (m) setUntitled(Number(m[1]));
+    modelOf(d.id, d.sql, d.dirty);
+    st().addDoc({ id: d.id, title: d.title, connId: d.connId && known.has(d.connId) ? d.connId : null, db: d.db, file: d.file, dirty: d.dirty });
+  }
+  if (saved.active && st().docs.some((d) => d.id === saved!.active)) st().set({ activeDoc: saved.active });
+}

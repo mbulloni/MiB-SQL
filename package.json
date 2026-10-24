@@ -1,0 +1,66 @@
+{
+  "name": "mib-sql",
+  "version": "0.1.0",
+  "description": "MiB-SQL - IDE educativo per MariaDB/MySQL su Linux, ispirato a dbForge Studio",
+  "main": "electron/main.cjs",
+  "type": "commonjs",
+  "scripts": {
+    "dev": "concurrently -k \"vite\" \"wait-on tcp:5174 && cross-env VITE_DEV=1 electron . --no-sandbox\"",
+    "build": "vite build",
+    "start": "vite build && electron . --no-sandbox",
+    "typecheck": "tsc --noEmit",
+    "test": "node --test tests/*.test.cjs",
+    "dist": "vite build && electron-builder --linux AppImage"
+  },
+  "author": {
+    "name": "Michele",
+    "email": "m.bulloni@gmail.com"
+  },
+  "license": "MIT",
+  "build": {
+    "appId": "it.michele.mibsql",
+    "productName": "MiB-SQL",
+    "files": [
+      "dist/**",
+      "electron/**",
+      "package.json"
+    ],
+    "linux": {
+      "category": "Development",
+      "target": [
+        "AppImage"
+      ],
+      "executableName": "mib-sql",
+      "synopsis": "IDE per MariaDB/MySQL",
+      "desktop": {
+        "entry": {
+          "StartupWMClass": "MiB-SQL"
+        }
+      }
+    },
+    "directories": {
+      "buildResources": "build",
+      "output": "release"
+    }
+  },
+  "dependencies": {
+    "mariadb": "^3.5.4",
+    "ssh2": "^1.17.0"
+  },
+  "devDependencies": {
+    "@types/react": "^19.3.0",
+    "@types/react-dom": "^19.3.0",
+    "@vitejs/plugin-react": "^6.1.2",
+    "concurrently": "^10.0.6",
+    "cross-env": "^10.1.0",
+    "electron": "^45.0.0",
+    "electron-builder": "^26.18.0",
+    "monaco-editor": "^0.57.0",
+    "react": "^19.3.1",
+    "react-dom": "^19.3.1",
+    "typescript": "^7.0.2",
+    "vite": "^8.3.5",
+    "wait-on": "^9.5.1",
+    "zustand": "^5.0.16"
+  }
+}
