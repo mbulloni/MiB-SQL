@@ -1,5 +1,5 @@
 import { useEffect, useRef } from 'react';
-import { bindEditor, persist } from '../actions';
+import { bindEditor, formatDoc, persist } from '../actions';
 import { isDirty, modelOf, monaco } from '../editor';
 import { resolvedTheme } from '../theme';
 import { useStore } from '../store';
@@ -28,6 +28,18 @@ export default function SqlEditor({ onCursor }: { onCursor: (ln: number, col: nu
       suggest: { showWords: false, preview: true },
       quickSuggestions: { other: true, comments: false, strings: false },
       fixedOverflowWidgets: true,
+      tabCompletion: 'onlySnippets', // snippet prefix + Tab
+      snippetSuggestions: 'top',
+    });
+    editor.addAction({
+      id: 'mibsql.format', label: 'Formatta SQL', contextMenuGroupId: '1_modification', contextMenuOrder: 0,
+      keybindings: [monaco.KeyMod.CtrlCmd | monaco.KeyMod.Shift | monaco.KeyCode.KeyF],
+      run: () => formatDoc(shown.current ?? undefined),
+    });
+    editor.addAction({
+      id: 'mibsql.snippet', label: 'Salva selezione come snippet…', contextMenuGroupId: '1_modification', contextMenuOrder: 1,
+      precondition: 'editorHasSelection',
+      run: (ed) => { const sel = ed.getSelection(); const m = ed.getModel(); if (sel && m) useStore.getState().set({ snippetDialog: { body: m.getValueInRange(sel) } }); },
     });
     ed.current = editor;
     bindEditor((id) => (id === shown.current ? editor : null));

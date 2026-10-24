@@ -3,8 +3,9 @@ import * as monaco from 'monaco-editor';
 import EditorWorker from 'monaco-editor/editor/editor.worker?worker';
 import { language as mysql } from 'monaco-editor/languages/definitions/mysql/mysql';
 import { api } from './api';
+import { DEFAULT_FORMAT, formatSql, type FormatOptions } from './format';
 import { loadDatabases, loadSchema, useStore } from './store';
-import type { Schema, StmtResult } from './types';
+import type { Schema, Snippet, StmtResult } from './types';
 
 self.MonacoEnvironment = { getWorker: () => new EditorWorker() };
 
@@ -68,6 +69,7 @@ monaco.editor.defineTheme('mibsql-dark', {
 const KEYWORDS = [...new Set(mysql.keywords.map((k) => k.toUpperCase()))];
 const FUNCTIONS = [...new Set(mysql.builtinFunctions.map((k) => k.toUpperCase()))];
 const RESERVED = new Set(KEYWORDS);
+const FUNCTION_SET = new Set(FUNCTIONS);
 const NOT_ALIAS = new Set(['WHERE', 'ON', 'USING', 'JOIN', 'LEFT', 'RIGHT', 'INNER', 'OUTER', 'CROSS', 'NATURAL', 'STRAIGHT_JOIN', 'SET',
   'GROUP', 'ORDER', 'LIMIT', 'HAVING', 'VALUES', 'VALUE', 'SELECT', 'UNION', 'WINDOW', 'FOR', 'LOCK', 'PARTITION', 'USE', 'FORCE', 'IGNORE', 'AS']);
 
@@ -100,6 +102,15 @@ async function statementBefore(text: string, offset: number) {
 }
 
 const K = monaco.languages.CompletionItemKind;
+
+// ---- Snippets: offered by prefix in the completion list, Tab expands them ----
+
+let snippets: Snippet[] = [];
+export const setSnippets = (list: Snippet[]) => { snippets = list; };
+export const loadSnippets = async () => { snippets = (await api.snippets.list()).list; return snippets; };
+/** Snippet body as plain text: placeholders shown with their default. */
+export const snippetPreview = (body: string) => body
+  .replace(/\$\{\d+:([^}]*)\}/g, '$1').replace(/\$\{\d+\|([^,|]*)[^}]*\|\}/g, '$1').replace(/\$\d+/g, '').replace(/\\\$/g, '$');
 
 monaco.languages.registerCompletionItemProvider('mysql', {
   triggerCharacters: ['.'],
@@ -150,12 +161,37 @@ monaco.languages.registerCompletionItemProvider('mysql', {
     for (const r of current?.routines ?? []) add(r.name, K.Function, '2', r.type, quote(r.name));
     if (open) for (const d of (await loadDatabases(connId)) ?? []) add(d, K.Module, '3', 'database', quote(d));
     if (!afterTableKeyword) {
+      for (const sn of snippets) {
+        items.push({
+          label: { label: sn.prefix, description: sn.name }, kind: K.Snippet, detail: sn.name, range, sortText: '00' + sn.prefix,
+          insertText: sn.body, insertTextRules: monaco.languages.CompletionItemInsertTextRule.InsertAsSnippet,
+          documentation: { value: '```sql\n' + snippetPreview(sn.body) + '\n```' },
+        });
+      }
       for (const k of KEYWORDS) add(k, K.Keyword, '4');
       for (const f of FUNCTIONS) add(f, K.Function, '5', 'funzione', `${f}($0)`);
       items.forEach((i) => { if (i.kind === K.Function && i.sortText?.startsWith('5')) i.insertTextRules = monaco.languages.CompletionItemInsertTextRule.InsertAsSnippet; });
     }
     return { suggestions: items };
   },
+});
+
+// ---- Formatting (Ctrl+Maiusc+F, Maiusc+Alt+F, context menu) ----
+
+const FORMAT_KEY = 'mibsql.format';
+export function formatOptions(): FormatOptions {
+  try { return { ...DEFAULT_FORMAT, ...JSON.parse(localStorage.getItem(FORMAT_KEY) ?? '{}') }; } catch { return DEFAULT_FORMAT; }
+}
+export function setFormatOptions(patch: Partial<FormatOptions>) {
+  try { localStorage.setItem(FORMAT_KEY, JSON.stringify({ ...formatOptions(), ...patch })); } catch { /* storage unavailable */ }
+}
+export const formatText = (text: string) => formatSql(text, formatOptions(), FUNCTION_SET);
+
+monaco.languages.registerDocumentFormattingEditProvider('mysql', {
+  provideDocumentFormattingEdits: (model) => [{ range: model.getFullModelRange(), text: formatText(model.getValue()) }],
+});
+monaco.languages.registerDocumentRangeFormattingEditProvider('mysql', {
+  provideDocumentRangeFormattingEdits: (model, range) => [{ range, text: formatText(model.getValueInRange(range)) }],
 });
 
 // ---- Error markers ----

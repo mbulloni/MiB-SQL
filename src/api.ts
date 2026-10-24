@@ -4,7 +4,7 @@ import type { Snapshot } from './compare';
 import type { Snapshot as MonitorSnapshot } from './monitor';
 import type { Profile } from './profile';
 import type {
-  ServerOptions, ApplyStmt, Cell, Column, ExportFormat, ExportOptions, ColumnInfo, ConnDef, DbObjects, ExecMode, ExecResult, ForeignKeyInfo, IndexInfo, ObjectKind, Schema, Secrets, ServerInfo,
+  EditableKind, HistoryEntry, MaintOp, MaintResult, Snippet, TableStat, ServerOptions, ApplyStmt, Cell, Column, ExportFormat, ExportOptions, ColumnInfo, ConnDef, DbObjects, ExecMode, ExecResult, ForeignKeyInfo, IndexInfo, ObjectKind, Schema, Secrets, ServerInfo,
 } from './types';
 
 export interface SqlFile {
@@ -62,6 +62,26 @@ interface Api {
     chat(id: string, req: { system: unknown; messages: unknown[] }): Promise<{ content: unknown; stopReason: string | null; stopDetails: { category?: string | null } | null; model: string; usage: unknown }>;
     cancel(id: string): Promise<void>;
     onDelta(cb: (p: { id: string; text: string }) => void): () => void;
+  };
+  history: {
+    add(list: Omit<HistoryEntry, 'id' | 'truncated'>[]): Promise<number>;
+    list(opts: { q?: string; connId?: string | null; status?: 'all' | 'ok' | 'error'; limit?: number }): Promise<{ entries: HistoryEntry[]; total: number; all: number }>;
+    remove(ids: string[]): Promise<void>;
+    clear(): Promise<void>;
+  };
+  snippets: {
+    list(): Promise<{ list: Snippet[]; custom: boolean }>;
+    save(list: Snippet[] | null): Promise<{ list: Snippet[]; custom: boolean }>;
+  };
+  objects: {
+    apply(connId: string, db: string, kind: EditableKind, orig: string | null, text: string): Promise<{ name: string; created: boolean; renamed: boolean; method: 'create' | 'replace' | 'drop-create' }>;
+    params(connId: string, db: string, kind: 'procedure' | 'function', name: string): Promise<{ params: { mode: string; name: string; type: string }[]; returns: string | null }>;
+    currentUser(connId: string): Promise<string>;
+  };
+  maint: {
+    stats(connId: string, db: string): Promise<TableStat[]>;
+    run(id: string, connId: string, db: string, tables: string[], op: MaintOp, opts: { option?: string; local?: boolean }): Promise<{ results: MaintResult[]; stopped: boolean }>;
+    stop(id: string): Promise<void>;
   };
   monitor: { snapshot(connId: string): Promise<MonitorSnapshot>; kill(connId: string, id: number, queryOnly: boolean): Promise<void> };
   tasks: {

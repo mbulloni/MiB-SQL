@@ -69,6 +69,26 @@ contextBridge.exposeInMainWorld('api', {
       return () => ipcRenderer.removeListener('ai:delta', fn);
     },
   },
+  history: {
+    add: (list) => call('history:add', list),
+    list: (opts) => call('history:list', opts),
+    remove: (ids) => call('history:remove', ids),
+    clear: () => call('history:clear'),
+  },
+  snippets: {
+    list: () => call('snippets:list'),
+    save: (list) => call('snippets:save', list),
+  },
+  objects: {
+    apply: (connId, db, kind, orig, text) => call('object:apply', connId, db, kind, orig, text),
+    params: (connId, db, kind, name) => call('object:params', connId, db, kind, name),
+    currentUser: (connId) => call('object:currentUser', connId),
+  },
+  maint: {
+    stats: (connId, db) => call('maint:stats', connId, db),
+    run: (id, connId, db, tables, op, opts) => call('maint:run', id, connId, db, tables, op, opts),
+    stop: (id) => call('maint:stop', id),
+  },
   monitor: {
     snapshot: (connId) => call('monitor:snapshot', connId),
     kill: (connId, id, queryOnly) => call('monitor:kill', connId, id, queryOnly),

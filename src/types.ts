@@ -93,9 +93,37 @@ export interface Message {
   offset?: number;
 }
 
+export interface HistoryEntry {
+  id: string;
+  at: string;
+  connId: string | null;
+  conn: string;
+  db: string | null;
+  sql: string;
+  truncated?: boolean;
+  ms: number | null;
+  rows: number | null;
+  affected: number | null;
+  error: string | null;
+}
+
+export interface Snippet { id: string; prefix: string; name: string; body: string }
+
+export type EditableKind = 'view' | 'procedure' | 'function' | 'trigger' | 'event';
+
+export interface TableStat {
+  name: string; engine: string | null; rowFormat: string | null; rows: number | null; data: number | null; idx: number | null; free: number | null;
+  autoInc: number | null; collation: string | null; created: string | null; updated: string | null; checked: string | null; comment: string;
+}
+
+export type MaintOp = 'analyze' | 'optimize' | 'check' | 'repair' | 'checksum';
+export interface MaintResult { table: string; op: string; type: string; text: string; ms: number }
+
 export interface Doc {
   id: string;
-  kind: 'sql' | 'table' | 'er' | 'query' | 'compare' | 'monitor' | 'users';
+  kind: 'sql' | 'table' | 'er' | 'query' | 'compare' | 'monitor' | 'users' | 'history' | 'maint';
+  obj?: { kind: EditableKind; name: string | null }; // SQL document editing a view/routine/trigger/event (name null = new)
+  maint?: { tables: string[] }; // table maintenance: tables preselected when opened
   qb?: import('./qb').QbModel;
   cmp?: { src: { connId: string | null; db: string | null }; tgt: { connId: string | null; db: string | null } };
   design?: { table: string | null }; // table designer: existing table or null for a new one

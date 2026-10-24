@@ -9,6 +9,9 @@ const datacompare = require('./datacompare.cjs');
 const backup = require('./backup.cjs');
 const importer = require('./importer.cjs');
 const assistant = require('./assistant.cjs');
+const library = require('./library.cjs');
+const objects = require('./objects.cjs');
+const maint = require('./maint.cjs');
 
 app.commandLine.appendSwitch('no-sandbox');
 // Separate profile for tests and screenshots, so they never touch the user's saved connections.
@@ -183,6 +186,18 @@ handle('ai:settings', () => assistant.settings());
 handle('ai:saveSettings', (s) => assistant.saveSettings(s));
 handle('ai:chat', (id, req) => assistant.chat(id, req, (text) => win.webContents.send('ai:delta', { id, text })));
 handle('ai:cancel', (id) => assistant.cancel(id));
+handle('history:add', (list) => library.addHistory(list));
+handle('history:list', (opts) => library.listHistory(opts));
+handle('history:remove', (ids) => library.removeHistory(ids));
+handle('history:clear', () => library.clearHistory());
+handle('snippets:list', () => library.snippets());
+handle('snippets:save', (list) => library.saveSnippets(list));
+handle('object:apply', (connId, db, kind, orig, text) => objects.apply(connId, db, kind, orig, text));
+handle('object:params', (connId, db, kind, name) => objects.routineParams(connId, db, kind, name));
+handle('object:currentUser', (connId) => objects.currentUser(connId));
+handle('maint:stats', (connId, db) => maint.tableStats(connId, db));
+handle('maint:run', (id, connId, db, tables, op, opts) => maint.run(id, connId, db, tables, op, opts, progress(id)));
+handle('maint:stop', (id) => maint.stop(id));
 handle('monitor:snapshot', (connId) => server.monitorSnapshot(connId));
 handle('monitor:kill', (connId, id, queryOnly) => server.kill(connId, id, queryOnly));
 
@@ -230,7 +245,14 @@ handle('file:save', async (content, file, suggested) => {
   fs.writeFileSync(target, content);
   return target;
 });
+// tests: MIBSQL_CONFIRM=0,1,… answers the confirmations in order (button index) instead of showing them
+const confirmAnswers = process.env.MIBSQL_CONFIRM ? process.env.MIBSQL_CONFIRM.split(',').map(Number) : null;
 handle('app:confirm', async (message, detail, buttons) => {
+  if (confirmAnswers?.length) {
+    const r = confirmAnswers.shift();
+    console.log(`[confirm] ${message} -> ${buttons[r]}`);
+    return r;
+  }
   const r = await dialog.showMessageBox(win, { type: 'question', message, detail, buttons, defaultId: 0, cancelId: buttons.length - 1 });
   return r.response;
 });

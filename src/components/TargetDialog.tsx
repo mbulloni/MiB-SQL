@@ -2,7 +2,7 @@ import { useEffect, useState } from 'react';
 import { openVisual } from '../actions';
 import { loadDatabases, metaKey, useStore, type MetaEntry, type VisualKind } from '../store';
 
-const TITLE: Record<VisualKind, string> = { er: 'Diagramma ER', query: 'Query Builder', table: 'Nuova tabella', compare: 'Confronto schema e dati' };
+const TITLE: Record<VisualKind, string> = { er: 'Diagramma ER', query: 'Query Builder', table: 'Nuova tabella', compare: 'Confronto schema e dati', maint: 'Manutenzione tabelle' };
 
 /** Which database to open a visual tool on, when none is selected in the explorer or active document. */
 export default function TargetDialog({ kind }: { kind: VisualKind }) {

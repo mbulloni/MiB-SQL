@@ -544,3 +544,69 @@ details summary { cursor: pointer; color: var(--muted); font-size: 12px; }
 .ai-send button:disabled { opacity: .5; }
 .ai-consent { margin: 0; padding-left: 18px; font-size: 13px; line-height: 1.5; }
 .toolbar button.on { background: var(--accent-soft); border-color: var(--accent); }
+
+/* formatter split button */
+.split-btn { display: flex; align-items: center; }
+.split-btn button.arrow { padding: 0 3px; font-size: 10px; color: var(--muted); }
+
+/* query history */
+.history .er-bar select { height: 26px; border: 1px solid var(--border); border-radius: 3px; background: var(--input); }
+.history .er-bar .search { width: 320px; }
+.er-bar button.danger, .obj-bar button.danger { color: var(--err); }
+.hist-body { flex: 1; display: flex; flex-direction: column; min-height: 0; }
+.hist-list { flex: 1 1 55%; min-height: 120px; border-bottom: 1px solid var(--border); }
+.hist-list tr { cursor: default; }
+.hist-list td.num, .maint-table td.num, .maint-table th.num, .maint-results th.num, .maint-results td.num { text-align: right; font-variant-numeric: tabular-nums; }
+.procs-table td.err, .maint-results td.err { color: var(--err); font-weight: 600; }
+.maint-results td.warn, .maint-table td.warn { color: var(--warn); font-weight: 600; }
+.hist-detail { flex: 1 1 45%; min-height: 120px; display: flex; flex-direction: column; overflow: hidden; }
+.hist-detail .procs-bar { flex: none; }
+.hist-sql { flex: 1; margin: 0; padding: 10px 14px; overflow: auto; background: var(--pre); font-family: 'JetBrains Mono', 'DejaVu Sans Mono', monospace; font-size: 12.5px; white-space: pre; user-select: text; }
+.hist-error { margin: 8px 12px 0; flex: none; }
+
+/* snippets */
+.modal.snippets { width: 980px; height: 640px; }
+.snip-body { flex: 1; display: flex; min-height: 0; border-top: 1px solid var(--border); border-bottom: 1px solid var(--border); }
+.snip-list { width: 280px; flex: none; display: flex; flex-direction: column; border-right: 1px solid var(--border); }
+.snip-list .filter { margin: 8px; }
+.snip-items { flex: 1; overflow: auto; }
+.snip-items code { font-family: 'JetBrains Mono', 'DejaVu Sans Mono', monospace; font-size: 12px; color: var(--accent); min-width: 54px; }
+.snip-actions { display: flex; gap: 6px; padding: 8px; border-top: 1px solid var(--border); }
+.snip-actions button { padding: 3px 10px; border: 1px solid var(--border); border-radius: 3px; background: var(--input); cursor: pointer; }
+.snip-edit { flex: 1; min-width: 0; overflow: auto; display: flex; flex-direction: column; }
+.snip-edit label.grow { display: flex; flex-direction: column; }
+.snip-text { min-height: 170px; resize: vertical; font-family: 'JetBrains Mono', 'DejaVu Sans Mono', monospace; font-size: 12.5px; border: 1px solid var(--border); border-radius: 3px; padding: 8px; background: var(--input); white-space: pre; }
+.snip-preview { flex: none; max-height: 180px; border-radius: 3px; }
+.note code { font-family: 'JetBrains Mono', 'DejaVu Sans Mono', monospace; background: var(--chip); padding: 0 3px; border-radius: 3px; }
+
+/* routine call */
+.modal.call { width: 760px; }
+.modal.call .hist-sql { flex: none; max-height: 200px; border-radius: 3px; }
+.modal.call .dtable td input:not([type=checkbox]) { border-color: var(--border); background: var(--input); }
+
+/* object editor bar */
+.obj-bar { display: flex; align-items: center; gap: 8px; padding: 4px 8px; border-bottom: 1px solid var(--border); background: var(--subtle); flex: none; flex-wrap: wrap; min-height: 32px; }
+.obj-bar .obj-kind { text-transform: uppercase; font-size: 11px; letter-spacing: .04em; color: var(--muted); }
+.obj-bar .muted { color: var(--muted); }
+.obj-bar button { height: 24px; padding: 0 10px; border: 1px solid var(--border); border-radius: 3px; background: var(--input); cursor: pointer; }
+.obj-bar button.primary { background: var(--accent); border-color: var(--accent); color: #fff; }
+.obj-bar button:disabled { opacity: .5; }
+.obj-warn { display: inline-flex; align-items: center; gap: 6px; background: var(--edited); border-radius: 3px; padding: 2px 8px; font-size: 12px; }
+.obj-warn button { height: 20px; padding: 0 8px; font-size: 12px; }
+
+/* table maintenance */
+.maint-actions { display: flex; align-items: center; gap: 6px; padding: 5px 8px; border-bottom: 1px solid var(--border); background: var(--subtle); flex-wrap: wrap; }
+.maint-actions button { height: 26px; padding: 0 10px; border: 1px solid var(--border); border-radius: 3px; background: var(--input); cursor: pointer; }
+.maint-actions button:disabled { opacity: .45; cursor: default; }
+.maint-actions select { height: 26px; border: 1px solid var(--border); border-radius: 3px; background: var(--input); }
+.maint-actions .check { display: flex; align-items: center; gap: 4px; font-size: 12px; }
+.maint-actions .muted { color: var(--muted); min-width: 90px; }
+.maint-actions .sep { width: 1px; height: 18px; background: var(--border); margin: 0 4px; }
+.maint-progress { display: flex; align-items: center; gap: 10px; padding: 6px 10px; border-bottom: 1px solid var(--border); font-size: 12px; }
+.maint-progress .progress { flex: 1; max-width: 420px; }
+.maint-progress button { height: 22px; padding: 0 10px; border: 1px solid var(--border); border-radius: 3px; background: var(--input); cursor: pointer; }
+.maint-body { flex: 1; display: flex; flex-direction: column; min-height: 0; padding: 8px 10px; gap: 10px; }
+.maint-body > .procs-table { flex: 1 1 60%; min-height: 140px; border: 1px solid var(--border); border-radius: 5px; }
+.maint-table th { cursor: pointer; user-select: none; }
+.maint-table td { white-space: nowrap; }
+.maint-results { flex: 1 1 40%; min-height: 140px; }

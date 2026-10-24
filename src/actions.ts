@@ -1,10 +1,11 @@
 // Document actions shared by toolbar, shortcuts and explorer: they need both the store and the editor models.
 import { api, type SqlFile } from './api';
-import { clearMarkers, disposeModel, markErrors, markSaved, modelOf, monaco } from './editor';
+import { clearMarkers, disposeModel, formatText, markErrors, markSaved, modelOf, monaco } from './editor';
 import { editCount } from './edits';
 import { emptyQuery, toSql } from './qb';
 import { designByDoc, editsBySet, metaKey, setUntitled, useStore } from './store';
-import type { Doc, ExecMode, Message, ObjectKind, StmtResult } from './types';
+import { maskPasswords } from './users';
+import type { Doc, EditableKind, ExecMode, Message, ObjectKind, StmtResult } from './types';
 
 const st = () => useStore.getState();
 const docById = (id: string) => st().docs.find((d) => d.id === id);
@@ -15,13 +16,13 @@ export const bindEditor = (fn: typeof editorOf) => { editorOf = fn; };
 
 export const qi = (s: string) => '`' + s.replace(/`/g, '``') + '`';
 
-export function newDoc(opts: { connId?: string | null; db?: string | null; sql?: string; title?: string; file?: string | null } = {}) {
+export function newDoc(opts: { connId?: string | null; db?: string | null; sql?: string; title?: string; file?: string | null; obj?: Doc['obj'] } = {}) {
   const s = st();
   const connId = opts.connId !== undefined ? opts.connId : (activeDoc()?.connId ?? s.selectedConn ?? s.conns[0]?.id ?? null);
   const db = opts.db !== undefined ? opts.db : connId === activeDoc()?.connId ? (activeDoc()?.db ?? null) : (s.conns.find((c) => c.id === connId)?.database || null);
   const id = crypto.randomUUID();
   modelOf(id, opts.sql ?? ''); // model first: the editor shows it as soon as the document becomes active
-  const doc = s.addDoc({ id, connId, db, file: opts.file ?? null, ...(opts.title ? { title: opts.title } : {}) });
+  const doc = s.addDoc({ id, connId, db, file: opts.file ?? null, ...(opts.title ? { title: opts.title } : {}), ...(opts.obj ? { obj: opts.obj } : {}) });
   persist();
   return doc;
 }
@@ -68,7 +69,26 @@ export function openVisual(kind: import('./store').VisualKind, target = visualTa
   if (kind === 'er') openEr(connId, db);
   else if (kind === 'query') openQueryBuilder(connId, db);
   else if (kind === 'table') openDesigner(connId, db, null);
+  else if (kind === 'maint') openMaint(connId, db);
   else openCompare(connId, db);
+}
+
+/** Query history: one tab for all connections. */
+export function openHistory() {
+  const existing = st().docs.find((d) => d.kind === 'history');
+  if (existing) { st().set({ activeDoc: existing.id }); return existing; }
+  const doc = st().addDoc({ kind: 'history', title: 'Cronologia query' });
+  persist();
+  return doc;
+}
+
+/** Table maintenance of a database (one tab per connection/database), optionally with tables preselected. */
+export function openMaint(connId: string, db: string, tables: string[] = []) {
+  const existing = st().docs.find((d) => d.kind === 'maint' && d.connId === connId && d.db === db);
+  if (existing) { st().updateDoc(existing.id, { maint: { tables } }); st().set({ activeDoc: existing.id }); return existing; }
+  const doc = st().addDoc({ kind: 'maint', connId, db, title: `Manutenzione ${db}`, maint: { tables } });
+  persist();
+  return doc;
 }
 
 /** Schema/data compare, the database as source. */
@@ -98,6 +118,11 @@ export async function openFiles() {
 export async function saveDoc(id = st().activeDoc, as = false) {
   const doc = id ? docById(id) : undefined;
   if (!doc || doc.kind !== 'sql') return false;
+  if (doc.obj) {
+    // object editors: Save applies to the server; Save as exports the script without changing the tab
+    if (!as) return applyObject(doc.id);
+    return !!(await api.file.save(modelOf(doc.id).getValue(), null, `${doc.obj.name ?? doc.title}.sql`));
+  }
   const file = await api.file.save(modelOf(doc.id).getValue(), as ? null : doc.file, doc.file ?? doc.title);
   if (!file) return false;
   markSaved(doc.id);
@@ -110,7 +135,7 @@ export async function closeDoc(id = st().activeDoc) {
   const doc = id ? docById(id) : undefined;
   if (!doc) return;
   if (!(await discardEdits(doc, 'Chiudere il documento'))) return;
-  if (doc.kind === 'er' || doc.kind === 'compare' || doc.kind === 'monitor' || doc.kind === 'users') {
+  if (doc.kind === 'er' || doc.kind === 'compare' || doc.kind === 'monitor' || doc.kind === 'users' || doc.kind === 'history' || doc.kind === 'maint') {
     st().removeDoc(doc.id);
     persist();
     return;
@@ -122,7 +147,11 @@ export async function closeDoc(id = st().activeDoc) {
     persist();
     return;
   }
-  if (doc.dirty) {
+  if (doc.dirty && doc.obj) {
+    const r = await api.confirm(`Applicare le modifiche a ${doc.title}?`, `La definizione modificata non è stata applicata al server.`, ['Applica', 'Scarta', 'Annulla']);
+    if (r === 2) return;
+    if (r === 0 && !(await applyObject(doc.id))) return;
+  } else if (doc.dirty) {
     const r = await api.confirm(`Salvare le modifiche a ${doc.title}?`, 'Le modifiche non salvate andranno perse.', ['Salva', 'Non salvare', 'Annulla']);
     if (r === 2) return;
     if (r === 0 && !(await saveDoc(doc.id))) return;
@@ -180,8 +209,8 @@ function describe(r: StmtResult) {
 /** Before quitting: what would be lost, and the choice to save files, quit anyway or stay. */
 export async function requestQuit() {
   const docs = st().docs;
-  const files = docs.filter((d) => d.kind === 'sql' && d.dirty && d.file);
-  const designs = docs.filter((d) => d.kind === 'table' && d.dirty);
+  const files = docs.filter((d) => d.kind === 'sql' && d.dirty && d.file && !d.obj);
+  const designs = docs.filter((d) => (d.kind === 'table' || d.obj) && d.dirty);
   const edits = docs.reduce((n, d) => n + pendingEdits(d), 0);
   if (!files.length && !designs.length && !edits) { api.confirmClose(); return; }
   const lines = [
@@ -212,6 +241,7 @@ async function discardEdits(doc: Doc, action: string) {
 export async function runDoc(mode: ExecMode, id = st().activeDoc) {
   const doc = id ? docById(id) : undefined;
   if (!doc || doc.running || (doc.kind !== 'sql' && doc.kind !== 'query')) return;
+  if (doc.obj) { if (mode !== 'explain') await applyObject(doc.id); return; }
   if (doc.kind === 'query') modelOf(doc.id).setValue(toSql(doc.qb ?? emptyQuery(), doc.db ?? ''));
   if (!(await discardEdits(doc, 'Eseguire di nuovo'))) return;
   const model = modelOf(doc.id);
@@ -239,6 +269,7 @@ export async function runDoc(mode: ExecMode, id = st().activeDoc) {
     if (!r.results.length) logMessage(doc.id, 'info', 'Nessuna istruzione da eseguire.');
     if (r.cancelled) logMessage(doc.id, 'warning', 'Esecuzione annullata.');
     markErrors(model, r.results);
+    if (mode !== 'explain') recordHistory(doc, r.results);
     const firstSet = r.results.some((x) => x.sets.length) ? 0 : 'messages';
     const failed = r.results.some((x) => x.error);
     st().updateDoc(doc.id, { run: { results: r.results, explain: mode === 'explain', ms }, db: r.db, view: failed ? 'messages' : firstSet });
@@ -270,6 +301,7 @@ export async function profileDoc(id = st().activeDoc) {
       error: p.error ? { message: p.error.message, fatal: false } : null,
     };
     markErrors(model, [result]);
+    recordHistory(doc, [result]);
     logMessage(doc.id, p.error ? 'error' : 'ok', p.error ? p.error.message : `Profilo: ${p.ms} ms, ${p.rows ? `${p.rows} righe` : `${p.affectedRows ?? 0} righe interessate`}`, { sql: p.sql, offset: p.start });
     st().updateDoc(doc.id, { run: { results: [result], explain: false, ms: Math.round(p.ms), profile: p }, db: p.db, view: p.error ? 'messages' : 'profile' });
   } catch (err) {
@@ -340,6 +372,142 @@ export function openAssistant() {
   st().setAssistantOpen(true);
 }
 
+// ---- Query history ----
+
+const HISTORY_KEY = 'mibsql.history';
+export const historyEnabled = () => { try { return localStorage.getItem(HISTORY_KEY) !== '0'; } catch { return true; } };
+export const setHistoryEnabled = (on: boolean) => { try { localStorage.setItem(HISTORY_KEY, on ? '1' : '0'); } catch { /* ignore */ } };
+
+/** Executed statements go to the history (passwords in CREATE/ALTER USER masked); scripts: the first 200. */
+function recordHistory(doc: Doc, results: StmtResult[]) {
+  if (!historyEnabled() || !results.length) return;
+  const conn = st().conns.find((c) => c.id === doc.connId)?.name ?? '';
+  const at = new Date().toISOString();
+  api.history.add(results.slice(0, 200).map((x) => ({
+    at, connId: doc.connId, conn, db: doc.db, sql: maskPasswords(x.sql), ms: x.ms,
+    rows: x.sets.length ? x.sets.reduce((n, s) => n + s.total, 0) : null,
+    affected: x.sets.length || x.error ? null : x.affectedRows,
+    error: x.error?.message ?? null,
+  }))).then(() => st().set({ historyTick: st().historyTick + 1 })).catch(() => {});
+}
+
+// ---- Formatting ----
+
+/** Formats the selection, or the whole document, as one undoable edit. */
+export function formatDoc(id = st().activeDoc) {
+  const doc = id ? docById(id) : undefined;
+  const ed = doc?.kind === 'sql' ? editorOf(doc.id) : null;
+  if (!doc || !ed) return;
+  const model = modelOf(doc.id);
+  const sel = ed.getSelection();
+  const range = sel && !sel.isEmpty() ? sel : model.getFullModelRange();
+  const text = model.getValueInRange(range);
+  let out: string;
+  try { out = formatText(text); } catch (err) { logMessage(doc.id, 'error', `Formattazione non riuscita: ${(err as Error).message}`); return; }
+  if (out === text) return;
+  ed.pushUndoStop();
+  ed.executeEdits('mibsql.format', [{ range, text: out, forceMoveMarkers: true }]);
+  ed.pushUndoStop();
+  ed.focus();
+}
+
+// ---- Views, routines, triggers, events edited as SQL documents ----
+
+export const OBJECT_WORD: Record<EditableKind, string> = { view: 'VIEW', procedure: 'PROCEDURE', function: 'FUNCTION', trigger: 'TRIGGER', event: 'EVENT' };
+export const OBJECT_LABEL: Record<EditableKind, string> = { view: 'vista', procedure: 'procedura', function: 'funzione', trigger: 'trigger', event: 'evento' };
+const FEMININE = new Set<EditableKind>(['view', 'procedure', 'function']);
+const g = (kind: EditableKind, f: string, m: string) => (FEMININE.has(kind) ? f : m);
+const objectTitle = (kind: EditableKind, name: string | null) => name ?? `${g(kind, 'Nuova', 'Nuovo')} ${OBJECT_LABEL[kind]}`;
+
+const TEMPLATES: Record<EditableKind, (table?: string) => string> = {
+  view: () => 'CREATE VIEW nuova_vista AS\nSELECT\n  1 AS colonna;\n',
+  procedure: () => 'DELIMITER $$\nCREATE PROCEDURE nuova_procedura(IN p_id INT)\nBEGIN\n  SELECT p_id;\nEND$$\nDELIMITER ;\n',
+  function: () => 'DELIMITER $$\nCREATE FUNCTION nuova_funzione(p INT) RETURNS INT\nDETERMINISTIC\nBEGIN\n  RETURN p * 2;\nEND$$\nDELIMITER ;\n',
+  trigger: (table) => `DELIMITER $$\nCREATE TRIGGER ${table ? `${table}_before_insert` : 'nuovo_trigger'} BEFORE INSERT ON ${table ? qi(table) : 'tabella'}\nFOR EACH ROW\nBEGIN\n  -- SET NEW.colonna = …;\nEND$$\nDELIMITER ;\n`,
+  event: () => 'DELIMITER $$\nCREATE EVENT nuovo_evento\nON SCHEDULE EVERY 1 DAY STARTS CURRENT_TIMESTAMP + INTERVAL 1 HOUR\nDO\nBEGIN\n  -- …\nEND$$\nDELIMITER ;\n',
+};
+
+/** Opens a view/routine/trigger/event in an editor tab with its CREATE statement (views formatted). */
+export async function openObject(connId: string, db: string, kind: EditableKind, name: string) {
+  const existing = st().docs.find((d) => d.obj?.kind === kind && d.obj.name === name && d.connId === connId && d.db === db);
+  if (existing) { st().set({ activeDoc: existing.id }); return existing; }
+  let sql: string;
+  try {
+    sql = await api.meta.ddl(connId, db, kind, name);
+    if (kind === 'view') sql = formatText(sql);
+  } catch (err) {
+    const doc = newDoc({ connId, db, title: `${name}.sql` });
+    logMessage(doc.id, 'error', (err as Error).message);
+    return doc;
+  }
+  return newDoc({ connId, db, sql, title: name, obj: { kind, name } });
+}
+
+export function openNewObject(connId: string, db: string, kind: EditableKind, table?: string) {
+  const doc = newDoc({ connId, db, sql: TEMPLATES[kind](table), title: objectTitle(kind, null), obj: { kind, name: null } });
+  st().updateDoc(doc.id, { dirty: true });
+  return doc;
+}
+
+/** Applies an object editor to the server (CREATE, CREATE OR REPLACE or DROP + CREATE: see objects.cjs). */
+export async function applyObject(id = st().activeDoc) {
+  const doc = id ? docById(id) : undefined;
+  if (!doc?.obj || doc.running) return false;
+  if (!doc.connId || !doc.db) { logMessage(doc.id, 'error', 'Scegli connessione e database dell\'oggetto.'); return false; }
+  const { kind, name: orig } = doc.obj;
+  const model = modelOf(doc.id);
+  const text = model.getValue();
+  clearMarkers(model);
+  st().updateDoc(doc.id, { running: true, startedAt: Date.now() });
+  const t0 = performance.now();
+  try {
+    if (st().connState[doc.connId]?.status !== 'open' && !(await st().openConn(doc.connId))) throw new Error(st().connState[doc.connId]?.error ?? 'Connessione non aperta.');
+    const r = await api.objects.apply(doc.connId, doc.db, kind, orig, text);
+    const ms = Math.round(performance.now() - t0);
+    markSaved(doc.id);
+    st().updateDoc(doc.id, { obj: { kind, name: r.name }, title: r.name, dirty: false });
+    const grants = kind === 'procedure' || kind === 'function' ? '; i privilegi EXECUTE dati sulla routine vanno riassegnati' : '';
+    const how = r.method === 'drop-create' ? ` (${g(kind, 'eliminata e ricreata', 'eliminato e ricreato')}: il server non ha CREATE OR REPLACE per questo oggetto${grants})` : '';
+    const label = OBJECT_LABEL[kind][0].toUpperCase() + OBJECT_LABEL[kind].slice(1);
+    logMessage(doc.id, 'ok', `${label} ${r.name} ${r.created ? g(kind, 'creata', 'creato') : g(kind, 'aggiornata', 'aggiornato')} in ${ms} ms${how}.`);
+    recordHistory(doc, [{ sql: text.trim(), start: 0, end: text.length, sets: [], affectedRows: 0, insertId: null, warnings: [], ms, error: null }]);
+    if (r.renamed && orig) {
+      const drop = await api.confirm(`Eliminare ${orig}?`, `È stato creato ${r.name}; l'oggetto con il vecchio nome ${orig} esiste ancora.`, [`Elimina ${orig}`, 'Mantieni entrambi']);
+      if (drop === 0) {
+        await api.ddl.run(doc.connId, [`DROP ${OBJECT_WORD[kind]} ${qi(doc.db)}.${qi(orig)}`]);
+        logMessage(doc.id, 'ok', `${orig} ${g(kind, 'eliminata', 'eliminato')}.`);
+      }
+    }
+    st().dropMeta(`${doc.connId}/${doc.db}/`);
+    st().updateDoc(doc.id, { view: 'messages' });
+    return true;
+  } catch (err) {
+    const message = (err as Error).message;
+    logMessage(doc.id, 'error', message);
+    // the server's "at line N" is relative to the CREATE statement
+    const stmt = (await api.split(text).catch(() => []))[0];
+    if (stmt) markErrors(model, [{ sql: stmt.sql, start: stmt.start, end: stmt.end, sets: [], affectedRows: null, insertId: null, warnings: [], ms: 0, error: { message, fatal: false } }]);
+    st().updateDoc(doc.id, { view: 'messages' });
+    return false;
+  } finally {
+    st().updateDoc(doc.id, { running: false });
+    persist();
+  }
+}
+
+/** DROP of a view/routine/trigger/event after confirmation; its editor tabs are closed. */
+export async function dropObject(connId: string, db: string, kind: EditableKind, name: string) {
+  if ((await api.confirm(`Eliminare ${g(kind, 'la', 'il')} ${OBJECT_LABEL[kind]} ${db}.${name}?`, `DROP ${OBJECT_WORD[kind]} non si può annullare.`, ['Elimina', 'Annulla'])) !== 0) return;
+  try {
+    await api.ddl.run(connId, [`DROP ${OBJECT_WORD[kind]} ${qi(db)}.${qi(name)}`]);
+  } catch (err) {
+    await api.confirm('Eliminazione non riuscita', (err as Error).message, ['OK']);
+    return;
+  }
+  st().dropMeta(`${connId}/${db}/`);
+  for (const d of st().docs) if (d.obj?.kind === kind && d.obj.name === name && d.connId === connId && d.db === db) { st().updateDoc(d.id, { dirty: false }); markSaved(d.id); await closeDoc(d.id); }
+}
+
 export const refreshExplorer = (connId: string) => st().dropMeta(`${connId}/`);
 export const invalidateSchema = (connId: string, db: string) => st().dropMeta(metaKey.schema(connId, db));
 
@@ -355,26 +523,27 @@ export function persist() {
     // designer tabs reopen on the server's definition: unapplied structure changes are not kept
     const data = docs.map((d) => (d.kind !== 'sql'
       ? { id: d.id, kind: d.kind, design: d.design, qb: d.qb, cmp: d.cmp, title: d.title, connId: d.connId, db: d.db, file: null, dirty: false, sql: '' }
-      : { id: d.id, kind: d.kind, title: d.title, connId: d.connId, db: d.db, file: d.file, dirty: d.dirty, sql: modelOf(d.id).getValue() }))
+      : { id: d.id, kind: d.kind, obj: d.obj, title: d.title, connId: d.connId, db: d.db, file: d.file, dirty: d.dirty, sql: modelOf(d.id).getValue() }))
       .filter((d) => d.kind !== 'table' || d.design?.table);
     try { localStorage.setItem(KEY, JSON.stringify({ docs: data, active })); } catch { /* storage unavailable */ }
   }, 400);
 }
 
 export function restore() {
-  let saved: { docs: { id: string; kind?: Doc['kind']; design?: Doc['design']; qb?: Doc['qb']; cmp?: Doc['cmp']; title: string; connId: string | null; db: string | null; file: string | null; dirty: boolean; sql: string }[]; active: string | null } | null = null;
+  let saved: { docs: { id: string; kind?: Doc['kind']; obj?: Doc['obj']; design?: Doc['design']; qb?: Doc['qb']; cmp?: Doc['cmp']; title: string; connId: string | null; db: string | null; file: string | null; dirty: boolean; sql: string }[]; active: string | null } | null = null;
   try { saved = JSON.parse(localStorage.getItem(KEY) ?? 'null'); } catch { saved = null; }
   if (!saved?.docs?.length) return;
   const known = new Set(st().conns.map((c) => c.id));
   for (const d of saved.docs) {
     if (d.kind && d.kind !== 'sql') {
-      if (d.connId && known.has(d.connId) && (d.db || d.kind === 'monitor' || d.kind === 'users')) st().addDoc({ id: d.id, kind: d.kind, design: d.design, qb: d.qb, cmp: d.cmp, title: d.title, connId: d.connId, db: d.db });
+      if (d.kind === 'history') st().addDoc({ id: d.id, kind: d.kind, title: d.title });
+      else if (d.connId && known.has(d.connId) && (d.db || d.kind === 'monitor' || d.kind === 'users')) st().addDoc({ id: d.id, kind: d.kind, design: d.design, qb: d.qb, cmp: d.cmp, title: d.title, connId: d.connId, db: d.db });
       continue;
     }
     const m = /^SQL(\d+)\.sql$/.exec(d.title);
     if (m) setUntitled(Number(m[1]));
     modelOf(d.id, d.sql, d.dirty);
-    st().addDoc({ id: d.id, title: d.title, connId: d.connId && known.has(d.connId) ? d.connId : null, db: d.db, file: d.file, dirty: d.dirty });
+    st().addDoc({ id: d.id, title: d.title, connId: d.connId && known.has(d.connId) ? d.connId : null, db: d.db, file: d.file, dirty: d.dirty, ...(d.obj ? { obj: d.obj } : {}) });
   }
   if (saved.active && st().docs.some((d) => d.id === saved!.active)) st().set({ activeDoc: saved.active });
 }

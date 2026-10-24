@@ -1,6 +1,7 @@
 import { useEffect, useRef, useState, useSyncExternalStore } from 'react';
 import { api } from './api';
-import { cancelDoc, closeDoc, openAssistant, openVisual, profileDoc, requestQuit, newDoc, openFiles, openSql, restore, runDoc, saveDoc, setDocTarget } from './actions';
+import { cancelDoc, closeDoc, formatDoc, openAssistant, openHistory, openServerTool, openVisual, profileDoc, requestQuit, newDoc, openFiles, openSql, restore, runDoc, saveDoc, setDocTarget, visualTarget } from './actions';
+import { formatOptions, loadSnippets, setFormatOptions } from './editor';
 import { loadDatabases, metaKey, useStore, type MetaEntry } from './store';
 import ContextMenu, { openMenu } from './components/ContextMenu';
 import { ConnectionDialog, PasswordPrompt, ValueViewer } from './components/Dialogs';
@@ -18,6 +19,11 @@ import Monitor from './components/Monitor';
 import TargetDialog from './components/TargetDialog';
 import AssistantPanel from './components/AssistantPanel';
 import Users from './components/Users';
+import History from './components/History';
+import Maint from './components/Maint';
+import ObjectBar from './components/ObjectBar';
+import SnippetsDialog from './components/SnippetsDialog';
+import CallDialog from './components/CallDialog';
 import logo from '../build/icons/128x128.png';
 import { onThemeChange, resolvedTheme, setThemePref, themePref, type ThemePref } from './theme';
 
@@ -93,11 +99,49 @@ function ThemeSwitch() {
   );
 }
 
+/** Keyword case, indent and list layout of the formatter (menu next to the Formatta button). */
+function formatMenu(e: React.MouseEvent) {
+  const o = formatOptions();
+  const mark = (on: boolean, label: string) => `${on ? '✓' : '\u2003'} ${label}`;
+  openMenu(e, [
+    { label: mark(o.keywordCase === 'upper', 'Parole chiave MAIUSCOLE'), action: () => setFormatOptions({ keywordCase: 'upper' }) },
+    { label: mark(o.keywordCase === 'lower', 'Parole chiave minuscole'), action: () => setFormatOptions({ keywordCase: 'lower' }) },
+    { label: mark(o.keywordCase === 'keep', 'Maiuscole come scritte'), action: () => setFormatOptions({ keywordCase: 'keep' }) },
+    'sep',
+    { label: mark(o.indent === 2, 'Rientro di 2 spazi'), action: () => setFormatOptions({ indent: 2 }) },
+    { label: mark(o.indent === 4, 'Rientro di 4 spazi'), action: () => setFormatOptions({ indent: 4 }) },
+    'sep',
+    { label: mark(o.listPerLine, 'Una colonna per riga (SELECT, SET, VALUES)'), action: () => setFormatOptions({ listPerLine: !o.listPerLine }) },
+  ]);
+}
+
+/** Server and database tools, on the active document's or the explorer's connection/database. */
+function toolsMenu(e: React.MouseEvent) {
+  const s = useStore.getState();
+  const t = visualTarget();
+  const connId = t?.connId ?? s.selectedConn ?? (s.docs.find((d) => d.id === s.activeDoc)?.connId ?? null);
+  const open = !!connId && s.connState[connId]?.status === 'open';
+  const task = (kind: 'backup' | 'restore' | 'import') => () => (t ? s.set({ task: { kind, connId: t.connId, db: t.db } }) : s.set({ pickTarget: { kind: 'maint' } }));
+  openMenu(e, [
+    { label: 'Cronologia query', action: openHistory },
+    { label: 'Snippet SQL…', action: () => s.set({ snippetDialog: {} }) },
+    { label: `Manutenzione tabelle${t ? ` (${t.db})` : '…'}`, action: () => openVisual('maint') },
+    'sep',
+    { label: 'Monitor sessioni', disabled: !open, action: () => openServerTool(connId!, 'monitor') },
+    { label: 'Utenti e privilegi', disabled: !open, action: () => openServerTool(connId!, 'users') },
+    'sep',
+    { label: `Backup${t ? ` di ${t.db}` : ''}…`, disabled: !t, action: task('backup') },
+    { label: 'Ripristina / esegui file SQL…', disabled: !t, action: task('restore') },
+    { label: 'Importa dati…', disabled: !t, action: task('import') },
+  ]);
+}
+
 function Toolbar() {
   const doc = useStore((s) => s.docs.find((d) => d.id === s.activeDoc));
   const set = useStore((s) => s.set);
   const running = !!doc?.running;
   const sql = doc?.kind === 'sql';
+  const obj = !!doc?.obj;
   const assistantOpen = useStore((s) => s.assistantOpen);
   const runnable = sql || doc?.kind === 'query';
   return (
@@ -108,11 +152,19 @@ function Toolbar() {
       <button title="Apri (Ctrl+O)" onClick={openFiles}><Icon name="open" /></button>
       <button title="Salva (Ctrl+S)" disabled={!sql} onClick={() => saveDoc()}><Icon name="save" /></button>
       <div className="sep" />
-      <button title="Esegui script o selezione (F5)" disabled={!runnable || running} onClick={() => runDoc('all')}><Icon name="play" /><span>Esegui</span></button>
-      <button title="Esegui istruzione corrente (Ctrl+Invio)" disabled={!runnable || running} onClick={() => runDoc('current')}><Icon name="playLine" /></button>
+      <button title={obj ? 'Applica la definizione al server (F5)' : 'Esegui script o selezione (F5)'} disabled={!runnable || running} onClick={() => runDoc('all')}><Icon name="play" /><span>{obj ? 'Applica' : 'Esegui'}</span></button>
+      <button title="Esegui istruzione corrente (Ctrl+Invio)" disabled={!runnable || running || obj} onClick={() => runDoc('current')}><Icon name="playLine" /></button>
       <button title="Interrompi (Maiusc+F5)" disabled={!running} onClick={() => cancelDoc()}><Icon name="stop" /></button>
-      <button title="Piano di esecuzione (Ctrl+E)" disabled={!runnable || running} onClick={() => runDoc('explain')}><Icon name="plan" /><span>Piano</span></button>
-      <button title="Profila l'istruzione corrente (Ctrl+Maiusc+P)" disabled={!sql || running} onClick={() => profileDoc()}><Icon name="profile" /><span>Profila</span></button>
+      <button title="Piano di esecuzione (Ctrl+E)" disabled={!runnable || running || obj} onClick={() => runDoc('explain')}><Icon name="plan" /><span>Piano</span></button>
+      <button title="Profila l'istruzione corrente (Ctrl+Maiusc+P)" disabled={!sql || running || obj} onClick={() => profileDoc()}><Icon name="profile" /><span>Profila</span></button>
+      <div className="split-btn">
+        <button title="Formatta lo script o la selezione (Ctrl+Maiusc+F)" disabled={!sql} onClick={() => formatDoc()}><Icon name="format" /><span>Formatta</span></button>
+        <button className="arrow" title="Opzioni di formattazione" onClick={formatMenu}>▾</button>
+      </div>
+      <div className="sep" />
+      <button title="Cronologia delle query eseguite" onClick={openHistory}><Icon name="history" /><span>Cronologia</span></button>
+      <button title="Snippet SQL: modelli richiamabili con prefisso + Tab" onClick={() => set({ snippetDialog: {} })}><Icon name="snippet" /><span>Snippet</span></button>
+      <button title="Strumenti: manutenzione tabelle, monitor, utenti, backup, import" onClick={toolsMenu}><Icon name="tools" /><span className="keep">Strumenti ▾</span></button>
       <div className="sep" />
       <button title="Diagramma ER del database (editor visuale: tabelle e relazioni)" onClick={() => openVisual('er')}><Icon name="er" /><span className="keep">Diagramma ER</span></button>
       <button title="Query Builder visuale" onClick={() => openVisual('query')}><Icon name="qb" /><span className="keep">Query Builder</span></button>
@@ -150,6 +202,9 @@ function DocTabs() {
             {d.running && <span className="spinner" />}
             {d.kind === 'table' && <Icon name="table" size={14} />}
             {d.kind === 'er' && <Icon name="fk" size={14} />}
+            {d.obj && <Icon name={d.obj.kind} size={14} />}
+            {d.kind === 'history' && <Icon name="history" size={14} />}
+            {d.kind === 'maint' && <Icon name="maint" size={14} />}
             <span className="name">{d.title}{d.dirty ? ' •' : ''}</span>
             <button className="x" onMouseDown={(e) => e.stopPropagation()} onClick={() => closeDoc(d.id)}><Icon name="close" size={12} /></button>
           </div>
@@ -178,6 +233,13 @@ function StartPage() {
         <button onClick={() => openVisual('table')}><Icon name="table" size={28} /><b>Designer tabelle</b><span>Colonne, indici, chiavi esterne e vincoli in una griglia; genera CREATE/ALTER</span></button>
         <button onClick={() => openVisual('compare')}><Icon name="plan" size={28} /><b>Confronto</b><span>Differenze di schema e dati tra due database, con script di sincronizzazione</span></button>
         <button onClick={openAssistant}><Icon name="ai" size={28} /><b>Assistente AI</b><span>Chiedi query in linguaggio naturale; fai spiegare, correggere e ottimizzare SQL (Claude)</span></button>
+      </div>
+      <h2>Strumenti</h2>
+      <div className="start-tiles">
+        <button onClick={openHistory}><Icon name="history" size={28} /><b>Cronologia query</b><span>Tutte le istruzioni eseguite, con durata ed esito: cerca, riapri, esegui di nuovo</span></button>
+        <button onClick={() => set({ snippetDialog: {} })}><Icon name="snippet" size={28} /><b>Snippet SQL</b><span>Modelli richiamabili nell'editor con prefisso + Tab (sel, ins, upd, ct, proc…); crea i tuoi</span></button>
+        <button onClick={() => openVisual('maint')}><Icon name="maint" size={28} /><b>Manutenzione tabelle</b><span>Dimensioni e frammentazione; Analizza, Ottimizza, Controlla, Ripara, Checksum</span></button>
+        <button onClick={() => newDoc()}><Icon name="format" size={28} /><b>Formattatore SQL</b><span>Nell'editor: Ctrl+Maiusc+F o «Formatta» riordina parole chiave, rientri e clausole</span></button>
       </div>
       {conns.length > 0 && <>
         <h2>Connessioni</h2>
@@ -221,6 +283,8 @@ export default function App() {
   const exporting = useStore((s) => s.exportDialog);
   const task = useStore((s) => s.task);
   const pickTarget = useStore((s) => s.pickTarget);
+  const snippetDialog = useStore((s) => s.snippetDialog);
+  const callDialog = useStore((s) => s.callDialog);
   const [cursor, setCursor] = useState<[number, number]>([1, 1]);
   const [side, startSide] = useDrag(300, 'x', 180, 'mibsql.side');
   const [bottom, startBottom] = useDrag(320, 'y', 80, 'mibsql.bottom');
@@ -232,6 +296,7 @@ export default function App() {
     if (ready.current) return;
     ready.current = true;
     useStore.getState().loadConns().then(restore);
+    loadSnippets().catch(() => {});
     api.file.onOpenArg(openSql);
     api.onCloseRequest(requestQuit);
   }, []);
@@ -244,7 +309,7 @@ export default function App() {
   useEffect(() => {
     const onKey = (e: KeyboardEvent) => {
       const s = useStore.getState();
-      if (s.connDialog || s.passwordPrompt || s.exportDialog || s.viewer || s.task || s.pickTarget) return;
+      if (s.connDialog || s.passwordPrompt || s.exportDialog || s.viewer || s.task || s.pickTarget || s.snippetDialog || s.callDialog) return;
       // the grid has its own Ctrl+Maiusc+N (NULL) and text inputs keep their keys
       const t = e.target as HTMLElement;
       if (t.closest?.('.grid, .result-bar') && (t.tagName === 'INPUT' || ((e.ctrlKey || e.metaKey) && e.shiftKey && e.key.toLowerCase() === 'n'))) return;
@@ -256,6 +321,7 @@ export default function App() {
       else if (ctrl && k === 'enter') run(() => runDoc('current'));
       else if (ctrl && k === 'e') run(() => runDoc('explain'));
       else if (ctrl && e.shiftKey && k === 'p') run(() => profileDoc());
+      else if (ctrl && e.shiftKey && k === 'f') run(() => formatDoc());
       else if (ctrl && e.shiftKey && k === 'n') run(() => useStore.getState().set({ connDialog: { def: {} } }));
       else if (ctrl && k === 'n') run(() => newDoc());
       else if (ctrl && k === 'o') run(openFiles);
@@ -282,6 +348,7 @@ export default function App() {
           <DocTabs />
           <div className="doc-row" style={{ display: active?.kind === 'sql' ? 'flex' : 'none' }}>
             <div className="doc-area" style={{ display: 'flex' }}>
+              {active?.obj && <ObjectBar key={active.id} doc={active} />}
               <div className="editor-wrap"><SqlEditor onCursor={(l, c) => setCursor([l, c])} /></div>
               <div className="hsplit" onMouseDown={startBottom} />
               <div style={{ height: bottom }} className="bottom">{active?.kind === 'sql' && <ResultsPanel doc={active} />}</div>
@@ -294,6 +361,8 @@ export default function App() {
           {active?.kind === 'compare' && <CompareView key={active.id} doc={active} />}
           {active?.kind === 'monitor' && <Monitor key={active.id} doc={active} />}
           {active?.kind === 'users' && <Users key={active.id} doc={active} />}
+          {active?.kind === 'history' && <History key={active.id} doc={active} />}
+          {active?.kind === 'maint' && <Maint key={active.id} doc={active} />}
           {!docs.length && <StartPage />}
         </div>
       </div>
@@ -304,6 +373,8 @@ export default function App() {
       {viewer && <ValueViewer key={viewer.title + viewer.value.length} />}
       {exporting && <ExportDialog />}
       {pickTarget && <TargetDialog kind={pickTarget.kind} />}
+      {snippetDialog && <SnippetsDialog body={snippetDialog.body} />}
+      {callDialog && <CallDialog key={callDialog.name} {...callDialog} />}
       {task?.kind === 'backup' && task.db && <BackupDialog connId={task.connId} db={task.db} />}
       {task?.kind === 'restore' && <RestoreDialog connId={task.connId} db={task.db} />}
       {task?.kind === 'import' && task.db && <ImportWizard connId={task.connId} db={task.db} table={task.table} />}

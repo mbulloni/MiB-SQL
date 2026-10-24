@@ -1,8 +1,8 @@
 import { createContext, useContext, useState, type ReactNode } from 'react';
 import { api } from '../api';
-import { closeDoc, insertText, newDoc, openCompare, openServerTool, openDesigner, openEr, openQueryBuilder, qi, refreshExplorer, runDoc, selectTop, showDdl } from '../actions';
+import { closeDoc, dropObject, insertText, newDoc, openCompare, openMaint, openNewObject, openObject, openServerTool, openDesigner, openEr, openQueryBuilder, qi, refreshExplorer, runDoc, selectTop, showDdl } from '../actions';
 import { loadDatabases, metaKey, useStore, type MetaEntry } from '../store';
-import type { ColumnInfo, ConnDef, DbObjects, ForeignKeyInfo, IndexInfo, ObjectKind } from '../types';
+import type { ColumnInfo, ConnDef, DbObjects, EditableKind, ForeignKeyInfo, IndexInfo, ObjectKind } from '../types';
 import { openMenu, type MenuItem } from './ContextMenu';
 import Icon from './Icon';
 
@@ -122,13 +122,13 @@ function TableChildren({ c, db, t, depth, view }: { c: string; db: string; t: st
   );
 }
 
-const FOLDERS: { key: keyof DbObjects; label: string; icon: string; kind: ObjectKind }[] = [
-  { key: 'tables', label: 'Tabelle', icon: 'table', kind: 'table' },
-  { key: 'views', label: 'Viste', icon: 'view', kind: 'view' },
-  { key: 'procedures', label: 'Procedure', icon: 'procedure', kind: 'procedure' },
-  { key: 'functions', label: 'Funzioni', icon: 'function', kind: 'function' },
-  { key: 'triggers', label: 'Trigger', icon: 'trigger', kind: 'trigger' },
-  { key: 'events', label: 'Eventi', icon: 'event', kind: 'event' },
+const FOLDERS: { key: keyof DbObjects; label: string; icon: string; kind: ObjectKind; add: string }[] = [
+  { key: 'tables', label: 'Tabelle', icon: 'table', kind: 'table', add: 'Nuova tabella…' },
+  { key: 'views', label: 'Viste', icon: 'view', kind: 'view', add: 'Nuova vista…' },
+  { key: 'procedures', label: 'Procedure', icon: 'procedure', kind: 'procedure', add: 'Nuova procedura…' },
+  { key: 'functions', label: 'Funzioni', icon: 'function', kind: 'function', add: 'Nuova funzione…' },
+  { key: 'triggers', label: 'Trigger', icon: 'trigger', kind: 'trigger', add: 'Nuovo trigger…' },
+  { key: 'events', label: 'Eventi', icon: 'event', kind: 'event', add: 'Nuovo evento…' },
 ];
 
 function DbChildren({ c, db, depth }: { c: string; db: string; depth: number }) {
@@ -142,7 +142,8 @@ function DbChildren({ c, db, depth }: { c: string; db: string; depth: number }) 
         const items = (entry.data![F.key] as { name: string }[]).filter((o) => !f || o.name.toLowerCase().includes(f));
         return (
           <Node key={F.key} id={`${c}/${db}/${F.key}`} label={F.label} icon="folder" depth={depth} hint={String(items.length)}
-            menu={F.kind === 'table' ? [{ label: 'Nuova tabella…', action: () => openDesigner(c, db, null) }] : undefined}>
+            menu={[{ label: F.add, action: () => (F.kind === 'table' ? openDesigner(c, db, null) : openNewObject(c, db, F.kind as EditableKind)) },
+              ...(F.kind === 'table' ? [{ label: 'Manutenzione tabelle…', action: () => openMaint(c, db) }] : [])]}>
             {() => items.length ? items.map((o) => {
               const qn = `${qi(db)}.${qi(o.name)}`;
               const common: MenuItem[] = [
@@ -165,21 +166,35 @@ function DbChildren({ c, db, depth }: { c: string; db: string; depth: number }) 
                       ...(F.kind === 'table' ? [
                         { label: 'Modifica tabella…', action: () => openDesigner(c, db, o.name) },
                         { label: 'Importa dati…', action: () => useStore.getState().set({ task: { kind: 'import', connId: c, db, table: o.name } }) },
+                        { label: 'Manutenzione…', action: () => openMaint(c, db, [o.name]) },
+                        { label: 'Nuovo trigger…', action: () => openNewObject(c, db, 'trigger', o.name) },
                         'sep' as const,
                         { label: 'Svuota tabella…', danger: true, action: () => destroy(c, db, o.name, 'truncate') },
                         { label: 'Elimina tabella…', danger: true, action: () => destroy(c, db, o.name, 'drop') },
-                      ] : []),
+                      ] : [
+                        { label: 'Modifica vista…', action: () => openObject(c, db, 'view', o.name) },
+                        { label: 'Elimina vista…', danger: true, action: () => dropObject(c, db, 'view', o.name) },
+                      ]),
                       'sep', ...common,
                     ]}>
                     {() => <TableChildren c={c} db={db} t={o.name} depth={depth + 2} view={F.kind === 'view'} />}
                   </Node>
                 );
               }
-              const extra: MenuItem[] = F.kind === 'procedure' ? [{ label: 'Genera CALL', action: () => newDoc({ connId: c, db, sql: `CALL ${qn}();\n` }) }, 'sep'] : [];
+              const kind = F.kind as EditableKind;
+              const routine = kind === 'procedure' || kind === 'function';
+              const extra: MenuItem[] = [
+                { label: 'Modifica…', action: () => openObject(c, db, kind, o.name) },
+                ...(routine ? [{ label: 'Esegui con parametri…', action: () => useStore.getState().set({ callDialog: { connId: c, db, kind, name: o.name } }) }] : []),
+                ...(kind === 'procedure' ? [{ label: 'Genera CALL', action: () => newDoc({ connId: c, db, sql: `CALL ${qn}();\n` }) }] : []),
+                { label: 'Elimina…', danger: true, action: () => dropObject(c, db, kind, o.name) },
+                'sep',
+              ];
               const hint = F.kind === 'trigger' ? `${(o as DbObjects['triggers'][number]).timing} ${(o as DbObjects['triggers'][number]).event} ${(o as DbObjects['triggers'][number]).table}`
                 : F.kind === 'event' ? (o as DbObjects['events'][number]).status : undefined;
               return <Node key={o.name} id={id} leaf label={o.name} icon={F.icon} depth={depth + 1} hint={hint} drag={qn}
-                onDouble={() => showDdl(c, db, F.kind, o.name)} menu={[...extra, ...common]} />;
+                title="Doppio clic: apri nell'editor per modificarlo"
+                onDouble={() => openObject(c, db, kind, o.name)} menu={[...extra, ...common]} />;
             }) : <Status entry={entry} depth={depth + 1} empty />}
           </Node>
         );
@@ -242,6 +257,7 @@ function ConnNode({ conn }: { conn: ConnDef }) {
             { label: 'Diagramma ER (editor visuale)', action: () => openEr(conn.id, db) },
             { label: 'Query Builder', action: () => openQueryBuilder(conn.id, db) },
             { label: 'Confronta con…', action: () => openCompare(conn.id, db) },
+            { label: 'Manutenzione tabelle…', action: () => openMaint(conn.id, db) },
             'sep',
             { label: 'Backup…', action: () => s.set({ task: { kind: 'backup', connId: conn.id, db } }) },
             { label: 'Ripristina / esegui file SQL…', action: () => s.set({ task: { kind: 'restore', connId: conn.id, db } }) },

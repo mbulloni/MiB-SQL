@@ -28,7 +28,7 @@ export interface ExportRequest {
   filtered?: boolean;
 }
 
-export type VisualKind = 'er' | 'query' | 'table' | 'compare';
+export type VisualKind = 'er' | 'query' | 'table' | 'compare' | 'maint';
 
 interface PasswordRequest {
   conn: ConnDef;
@@ -54,6 +54,9 @@ interface State {
   exportDialog: ExportRequest | null;
   task: { kind: 'backup' | 'restore' | 'import'; connId: string; db: string | null; table?: string } | null;
   viewer: { title: string; value: string; isNull?: boolean; binary?: boolean; onSave?: (v: string | null) => void } | null;
+  snippetDialog: { body?: string } | null;
+  callDialog: { connId: string; db: string; kind: 'procedure' | 'function'; name: string } | null;
+  historyTick: number; // bumped when statements are added to the history
 
   loadConns(): Promise<void>;
   openConn(id: string): Promise<ServerInfo | null>;
@@ -90,6 +93,9 @@ export const useStore = create<State>((set, get) => ({
   exportDialog: null,
   task: null,
   viewer: null,
+  snippetDialog: null,
+  callDialog: null,
+  historyTick: 0,
 
   async loadConns() {
     const { list, keyring } = await api.conn.list();

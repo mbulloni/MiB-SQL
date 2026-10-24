@@ -32,6 +32,11 @@ const P: Record<string, ReactElement> = {
   ai: <><path d="M8 1.5l1.6 3.9 3.9 1.6-3.9 1.6L8 12.5 6.4 8.6 2.5 7l3.9-1.6z" fill="#8e5cc4" /><path d="M13 10.5l.7 1.6 1.6.7-1.6.7L13 15.1l-.7-1.6-1.6-.7 1.6-.7z" fill="#3a7bd5" /></>,
   sun: <><circle cx="8" cy="8" r="3.2" fill="#e0a800" /><path d="M8 1v2M8 13v2M1 8h2M13 8h2M3 3l1.4 1.4M11.6 11.6L13 13M3 13l1.4-1.4M11.6 4.4L13 3" stroke="#e0a800" strokeWidth="1.4" strokeLinecap="round" /></>,
   moon: <path d="M12.5 10.5A5.5 5.5 0 015.5 3.5a5.5 5.5 0 107 7z" fill="#9db8ff" />,
+  format: <><path d="M2 3h12M4.5 6.5h9.5M4.5 10h7M2 13.5h10" stroke="#3a7bd5" strokeWidth="1.5" strokeLinecap="round" /></>,
+  history: <><circle cx="8.5" cy="8" r="5.5" fill="none" stroke="#3a7bd5" strokeWidth="1.4" /><path d="M8.5 5v3.2l2.2 1.4" stroke="#3a7bd5" strokeWidth="1.4" fill="none" strokeLinecap="round" /><path d="M1.5 5.5l1.5 2.5 2.5-1.6" stroke="#3a7bd5" strokeWidth="1.3" fill="none" strokeLinecap="round" /></>,
+  snippet: <><path d="M5.5 3.5L1.8 8l3.7 4.5M10.5 3.5L14.2 8l-3.7 4.5" stroke="#8e5cc4" strokeWidth="1.6" fill="none" strokeLinecap="round" strokeLinejoin="round" /><path d="M9 2.5L7 13.5" stroke="#2e9e44" strokeWidth="1.4" strokeLinecap="round" /></>,
+  maint: <><path d="M10.8 1.8a3.4 3.4 0 00-3.6 4.6L2 11.6a1.4 1.4 0 002 2l5.2-5.2a3.4 3.4 0 004.6-3.6L11.7 7 9.6 6.4 9 4.3z" fill="#6a7685" /></>,
+  tools: <><rect x="2" y="2" width="5" height="5" rx="1" fill="#3a7bd5" /><rect x="9" y="2" width="5" height="5" rx="1" fill="#2a9d8f" /><rect x="2" y="9" width="5" height="5" rx="1" fill="#e9a23b" /><rect x="9" y="9" width="5" height="5" rx="1" fill="#8e5cc4" /></>,
   close: <path d="M4 4l8 8M12 4l-8 8" stroke="currentColor" strokeWidth="1.5" />,
 };
 
