@@ -72,6 +72,14 @@ mysql -u root -p < scripts/demo.sql
 7. Backup/restore, import guidato
 8. Profiler query, utenti e privilegi, monitor sessioni
 
+## Limiti noti (da implementare)
+
+- I resultset oltre 50.000 righe vengono letti per intero e poi troncati: manca il fetch progressivo in streaming
+- Alla chiusura della finestra non c'è conferma per i documenti modificati (il testo però viene ripristinato al riavvio)
+- Blocchi `BEGIN … END` senza `DELIMITER` vengono divisi ai `;` interni, come nel client `mariadb`
+- Solo tema chiaro
+- AppImage non ancora generata e provata
+
 ## Licenza
 
 MIT
