@@ -81,6 +81,9 @@ handle('meta:indexes', (id, db, t) => explorer.indexes(id, db, t));
 handle('meta:foreignKeys', (id, db, t) => explorer.foreignKeys(id, db, t));
 handle('meta:ddl', (id, db, kind, name) => explorer.ddl(id, db, kind, name));
 handle('meta:schema', (id, db) => explorer.schema(id, db));
+handle('meta:tableDefinition', (id, db, t) => explorer.tableDefinition(id, db, t));
+handle('meta:serverOptions', (id, db) => explorer.serverOptions(id, db));
+handle('ddl:run', (connId, sqls) => server.runStatements(connId, sqls));
 
 handle('sess:open', (connId, db) => server.openSession(connId, db));
 handle('sess:close', (sid) => server.closeSession(sid));

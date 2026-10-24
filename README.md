@@ -1,10 +1,12 @@
+<p align="center"><img src="build/icons/128x128.png" width="96" alt="MiB-SQL"></p>
+
 # MiB-SQL
 
 IDE educativo per **MariaDB e MySQL** su Linux, ispirato a [dbForge Studio](https://www.devart.com/dbforge/) (che su Linux gira solo tramite CrossOver/Wine). Electron + React + Monaco, driver nativo `mariadb`.
 
 ![Database Explorer ed editor SQL](docs/screenshot-1.png)
 
-## Funzioni (v0.2 — fasi 1-3)
+## Funzioni (v0.3 — fasi 1-4)
 
 **Connessioni**
 - Profili salvati con colore d'ambiente (sviluppo/test/produzione: tinge scheda e barra di stato)
@@ -38,6 +40,15 @@ IDE educativo per **MariaDB e MySQL** su Linux, ispirato a [dbForge Studio](http
 - Dopo l'applicazione le righe vengono rilette: si vedono DEFAULT, AUTO_INCREMENT, trigger e `ON UPDATE CURRENT_TIMESTAMP`
 - Il motivo della sola lettura è sempre indicato (join, espressioni, chiave primaria mancante)
 
+**Designer tabelle**
+- «Nuova tabella…» e «Modifica tabella…» dall'Explorer: documento a schede Colonne, Indici, Chiavi esterne, Script
+- Colonne con tipo, PK, NOT NULL, AUTO_INCREMENT, predefinito (espressione SQL), commento, collation, ON UPDATE, colonne generate VIRTUAL/STORED; riordino con ↑ ↓
+- Indici PRIMARY/UNIQUE/INDEX/FULLTEXT/SPATIAL con colonne ordinate e prefissi; chiavi esterne verso qualsiasi database con ON DELETE/ON UPDATE (le colonne della chiave primaria riferita si compilano da sole)
+- Engine, collation (anche CONVERT TO), commento e rinomina della tabella
+- Script generato per differenza: `CREATE TABLE` o `ALTER TABLE` minimo (rinominare una colonna non ricrea indici e FK), posizioni FIRST/AFTER, FK modificate eliminate e ricreate; validazione prima dell'esecuzione e conferma se si eliminano colonne
+- Svuota (TRUNCATE) ed elimina tabella dall'Explorer, con conferma
+- Verificato su MariaDB 10.11, MariaDB 11.4 e MySQL 8.4
+
 **Filtri ed export**
 - Filtro testuale su tutte le colonne e filtri per valore dal menu contestuale (Filtra per / Escludi)
 - Export **CSV** (separatore, intestazioni, BOM per Excel, NULL), **Excel .xlsx**, **JSON**, **SQL INSERT**
@@ -48,6 +59,8 @@ IDE educativo per **MariaDB e MySQL** su Linux, ispirato a [dbForge Studio](http
 ![Modifica dati in griglia](docs/screenshot-4.png)
 
 ![Export](docs/screenshot-5.png)
+
+![Designer tabelle](docs/screenshot-6.png)
 
 ![Piano di esecuzione](docs/screenshot-3.png)
 
@@ -82,7 +95,7 @@ Su Ubuntu 24.04 serve `libfuse2t64` per avviare le AppImage.
 ```bash
 npm install
 npm run dev        # Vite (porta 5174) + Electron
-npm test           # splitter SQL, modifiche in griglia, export
+npm test           # splitter SQL, modifiche in griglia, export, designer
 npm run typecheck
 npm run dist       # AppImage in release/
 ```
@@ -95,7 +108,6 @@ mysql -u root -p < scripts/demo.sql
 
 ## Roadmap
 
-4. Designer tabelle visuale (colonne, indici, FK) → DDL
 5. Diagramma ER
 6. Schema compare e data compare con script di sincronizzazione
 7. Backup/restore, import guidato
@@ -109,6 +121,8 @@ mysql -u root -p < scripts/demo.sql
 - Alla chiusura della finestra non c'è conferma per i documenti modificati (il testo però viene ripristinato al riavvio)
 - Blocchi `BEGIN … END` senza `DELIMITER` vengono divisi ai `;` interni, come nel client `mariadb`
 - Solo tema chiaro
+- Designer: niente CHECK, partizioni, ordine DESC negli indici, indici invisibili; trigger e viste si modificano ancora come SQL
+- Le istruzioni DDL non sono transazionali: se una fallisce a metà, quelle precedenti restano applicate (il designer lo segnala e ricarica la struttura dal server)
 
 ## Licenza
 

@@ -1,5 +1,6 @@
 import { create } from 'zustand';
 import { api } from './api';
+import type { TableDef } from './design';
 import type { Edits } from './edits';
 import type { Cell, Column, ConnDef, ConnState, Doc, ResultSet, Secrets, ServerInfo } from './types';
 
@@ -8,6 +9,9 @@ export interface MetaEntry<T = unknown> {
   loading?: boolean;
   error?: string;
 }
+
+/** Table designer state per document: server definition (null = not created yet) and the edited one. */
+export const designByDoc = new Map<string, { orig: TableDef | null; cur: TableDef }>();
 
 /** Pending grid edits per result set: survive tab switches, dropped with the set (re-run, close). */
 export const editsBySet = new WeakMap<ResultSet, Edits>();
@@ -146,6 +150,7 @@ export const useStore = create<State>((set, get) => ({
   addDoc(partial) {
     const doc: Doc = {
       id: crypto.randomUUID(),
+      kind: 'sql',
       title: partial.title ?? nextTitle(),
       connId: null,
       db: null,

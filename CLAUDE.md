@@ -23,9 +23,15 @@ npm run dist        # AppImage
 - `src/store.ts` — zustand: profili, stato connessioni, cache metadati (`metaKey`), documenti, dialog. `openConn` gestisce il prompt password su errori di autenticazione.
 - `src/editor.ts` — Monaco: un modello per documento, dirty per `alternativeVersionId`, completamento (alias via `tableRefs`), marker errori.
 - `src/edits.ts` — logica pura delle modifiche in griglia (target modificabile, `Edits`, generazione UPDATE/INSERT/DELETE parametrizzati, anteprima). Testata da `tests/edits.test.mjs` con il type stripping di Node: `src/package.json` dichiara `"type": "module"` per questo.
+- `src/design.ts` — modello del designer tabelle (`TableDef`, colonne/indici/FK con id stabili), `createSql`, `alterSql` per differenza (FK modificate in un ALTER a parte, posizioni simulate nell'ordine delle clausole, RENAME per ultimo), `validate`. Test: `tests/design.test.mjs`; verificato anche contro MariaDB 10.11/11.4 e MySQL 8.4. `explorer.tableDefinition` legge la struttura (COLUMN_DEFAULT è un'espressione su MariaDB, su MySQL viene quotato), `server.runStatements` esegue il DDL.
+- `src/components/TableDesigner.tsx` — documento `kind: 'table'` (Doc.design.table, null = nuova); stato in `designByDoc` (store.ts). Le schede designer si ripristinano dal server, senza le modifiche non applicate.
 - `src/components/ResultView.tsx` — barra filtri/modifiche/export sopra `ResultGrid`; modifiche in sospeso in `editsBySet` (WeakMap per ResultSet, store.ts). `runDoc`/`closeDoc` chiedono conferma se ci sono modifiche non applicate.
 - `src/actions.ts` — azioni documento (run, cancel, save, DDL, select top), persistenza schede in localStorage.
 - `src/components/` — `Explorer`, `SqlEditor` (un'unica istanza Monaco, swap modelli), `ResultsPanel`, `ResultGrid` (virtualizzata, righe 22px), `Dialogs`, `ContextMenu`, `Icon` (SVG inline).
+
+## Icona
+
+`build/icons/*.png` (e `electron/icon.png`, `build/icon.png` 1024) sono generate dall'immagine fornita dall'utente (sfondo bianco reso trasparente, ritaglio quadrato).
 
 ## Test e screenshot
 

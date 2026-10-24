@@ -160,7 +160,7 @@ body.resizing-y, body.resizing-y * { cursor: row-resize !important; user-select:
 
 /* start page */
 .start { flex: 1; padding: 50px 60px; overflow: auto; }
-.start h1 { margin: 0; font-size: 30px; color: var(--accent); }
+.start h1 { margin: 0; font-size: 30px; color: var(--accent); display: flex; align-items: center; gap: 14px; }
 .start p { color: var(--muted); margin: 4px 0 24px; }
 .start h2 { font-size: 15px; margin: 30px 0 10px; }
 .start-actions, .start-conns { display: flex; gap: 10px; flex-wrap: wrap; }
@@ -194,3 +194,43 @@ body.resizing-y, body.resizing-y * { cursor: row-resize !important; user-select:
 .seg button.active { background: var(--accent); color: #fff; }
 .radios { gap: 6px !important; }
 .modal.export .status { margin: 0; }
+
+/* table designer */
+.designer { flex: 1; display: flex; flex-direction: column; min-height: 0; background: var(--panel); }
+.designer .empty { padding: 20px; }
+.designer-head { padding: 10px 14px 6px; min-height: 0; gap: 8px; overflow: visible; }
+.designer-head .row { align-items: flex-end; }
+.designer-head select { min-width: 150px; }
+.designer .tabs-row { padding: 0 14px; }
+.designer-body { flex: 1; display: flex; min-height: 0; }
+.dtable-wrap { flex: 1; overflow: auto; padding: 8px 14px 20px; }
+.dtable { border-collapse: collapse; width: 100%; font-size: 12.5px; }
+.dtable th { text-align: left; font-weight: 600; color: var(--muted); padding: 4px 4px; border-bottom: 1px solid var(--border); position: sticky; top: -8px; background: var(--panel); z-index: 1; white-space: nowrap; }
+.dtable td { padding: 2px 3px; border-bottom: 1px solid #eef0f3; vertical-align: middle; }
+.dtable tr.sel td { background: var(--accent-soft); }
+.dtable tr.new td:first-child { box-shadow: inset 3px 0 var(--ok); }
+.dtable td.n { width: 28px; text-align: center; color: var(--muted); }
+.dtable td.c { width: 44px; text-align: center; }
+.dtable td input:not([type=checkbox]), .dtable td select { width: 100%; padding: 3px 5px; border: 1px solid transparent; border-radius: 3px; background: transparent; font-size: 12.5px; min-width: 70px; }
+.dtable td input:not([type=checkbox]):hover, .dtable td select:hover { border-color: var(--border); }
+.dtable td input:not([type=checkbox]):focus, .dtable td select:focus { border-color: var(--accent); background: #fff; outline: none; }
+.dtable td input:disabled { color: var(--muted); }
+.dtable td.act { width: 80px; white-space: nowrap; text-align: right; }
+.dtable td.act button { border: 1px solid transparent; background: none; border-radius: 3px; cursor: pointer; padding: 1px 6px; color: var(--muted); }
+.dtable td.act button:hover:not(:disabled) { border-color: var(--border); background: #fff; color: var(--text); }
+.dtable td.act button.danger:hover { color: var(--err); }
+.dtable td.act button:disabled { opacity: .3; }
+.dtable .chips { display: flex; flex-wrap: wrap; gap: 4px; align-items: center; min-width: 160px; }
+.dtable .chips select { width: auto; min-width: 0; color: var(--accent); }
+.dtable .chip input.len { width: 46px !important; min-width: 0 !important; padding: 0 3px !important; border: 1px solid var(--border) !important; background: #fff !important; font-size: 11px !important; }
+.designer .add { margin-top: 8px; padding: 4px 12px; border: 1px dashed var(--border); border-radius: 3px; background: #fff; cursor: pointer; color: var(--accent); }
+.col-props { width: 300px; flex: none; border-left: 1px solid var(--border); padding: 10px 14px; min-height: 0; overflow: auto; background: #fafbfc; }
+.props-title { font-weight: 600; margin-bottom: 2px; }
+.script { flex: 1; margin: 0; padding: 12px 16px; overflow: auto; font-family: 'JetBrains Mono', 'DejaVu Sans Mono', monospace; font-size: 12.5px; background: #fafbfc; white-space: pre-wrap; }
+.designer-foot { display: flex; align-items: center; gap: 8px; padding: 8px 14px; border-top: 1px solid var(--border); background: var(--toolbar); }
+.designer-foot .status { margin: 0; padding: 5px 10px; max-width: 60%; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.designer-foot .muted { color: var(--muted); }
+.designer-foot button { padding: 5px 14px; border: 1px solid var(--border); border-radius: 3px; background: #fff; cursor: pointer; }
+.designer-foot button.primary { background: var(--accent); border-color: var(--accent); color: #fff; }
+.designer-foot button:disabled { opacity: .5; cursor: default; }
+.dtable td input[list] { min-width: 190px; }

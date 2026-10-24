@@ -1,5 +1,6 @@
+import type { ServerTable } from './design';
 import type {
-  ApplyStmt, Cell, Column, ExportFormat, ExportOptions, ColumnInfo, ConnDef, DbObjects, ExecMode, ExecResult, ForeignKeyInfo, IndexInfo, ObjectKind, Schema, Secrets, ServerInfo,
+  ServerOptions, ApplyStmt, Cell, Column, ExportFormat, ExportOptions, ColumnInfo, ConnDef, DbObjects, ExecMode, ExecResult, ForeignKeyInfo, IndexInfo, ObjectKind, Schema, Secrets, ServerInfo,
 } from './types';
 
 export interface SqlFile {
@@ -24,6 +25,8 @@ interface Api {
     foreignKeys(id: string, db: string, table: string): Promise<ForeignKeyInfo[]>;
     ddl(id: string, db: string, kind: ObjectKind, name: string): Promise<string>;
     schema(id: string, db: string): Promise<Schema>;
+    tableDefinition(id: string, db: string, table: string): Promise<ServerTable>;
+    serverOptions(id: string, db: string): Promise<ServerOptions>;
   };
   sess: {
     open(connId: string, db: string | null): Promise<{ id: string; db: string | null }>;
@@ -43,6 +46,7 @@ interface Api {
     onProgress(cb: (p: { file: string; rows: number }) => void): () => void;
   };
   showItem(file: string): Promise<void>;
+  ddl: { run(connId: string, sqls: string[]): Promise<number> };
   file: {
     open(): Promise<SqlFile[]>;
     save(content: string, path: string | null, suggested?: string): Promise<string | null>;

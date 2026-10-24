@@ -27,6 +27,8 @@ contextBridge.exposeInMainWorld('api', {
     foreignKeys: (id, db, t) => call('meta:foreignKeys', id, db, t),
     ddl: (id, db, kind, name) => call('meta:ddl', id, db, kind, name),
     schema: (id, db) => call('meta:schema', id, db),
+    tableDefinition: (id, db, t) => call('meta:tableDefinition', id, db, t),
+    serverOptions: (id, db) => call('meta:serverOptions', id, db),
   },
   sess: {
     open: (connId, db) => call('sess:open', connId, db),
@@ -50,6 +52,7 @@ contextBridge.exposeInMainWorld('api', {
     },
   },
   showItem: (file) => call('shell:showItem', file),
+  ddl: { run: (connId, sqls) => call('ddl:run', connId, sqls) },
   file: {
     open: () => call('file:open'),
     save: (content, path, suggested) => call('file:save', content, path, suggested),

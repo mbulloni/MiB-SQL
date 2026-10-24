@@ -95,6 +95,8 @@ export interface Message {
 
 export interface Doc {
   id: string;
+  kind: 'sql' | 'table';
+  design?: { table: string | null }; // table designer: existing table or null for a new one
   title: string;
   connId: string | null;
   db: string | null;
@@ -151,6 +153,13 @@ export interface Schema {
 }
 
 export type ObjectKind = 'table' | 'view' | 'procedure' | 'function' | 'trigger' | 'event';
+
+export interface ServerOptions {
+  engines: string[];
+  defaultEngine: string;
+  collations: { name: string; charset: string; isDefault: boolean }[];
+  defaultCollation: string;
+}
 
 export type ExportFormat = 'csv' | 'json' | 'sql' | 'xlsx';
 

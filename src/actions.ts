@@ -2,7 +2,7 @@
 import { api, type SqlFile } from './api';
 import { clearMarkers, disposeModel, markErrors, markSaved, modelOf, monaco } from './editor';
 import { editCount } from './edits';
-import { editsBySet, metaKey, setUntitled, useStore } from './store';
+import { designByDoc, editsBySet, metaKey, setUntitled, useStore } from './store';
 import type { Doc, ExecMode, Message, ObjectKind, StmtResult } from './types';
 
 const st = () => useStore.getState();
@@ -25,6 +25,15 @@ export function newDoc(opts: { connId?: string | null; db?: string | null; sql?:
   return doc;
 }
 
+/** Table designer document for an existing table, or a new one (table = null). */
+export function openDesigner(connId: string, db: string, table: string | null) {
+  const existing = table && st().docs.find((d) => d.kind === 'table' && d.connId === connId && d.db === db && d.design?.table === table);
+  if (existing) { st().set({ activeDoc: existing.id }); return existing; }
+  const doc = st().addDoc({ kind: 'table', connId, db, design: { table }, title: table ?? 'Nuova tabella', dirty: !table });
+  persist();
+  return doc;
+}
+
 export function openSql(f: SqlFile) {
   const existing = st().docs.find((d) => d.file === f.path);
   if (existing) { st().set({ activeDoc: existing.id }); return existing; }
@@ -37,7 +46,7 @@ export async function openFiles() {
 
 export async function saveDoc(id = st().activeDoc, as = false) {
   const doc = id ? docById(id) : undefined;
-  if (!doc) return false;
+  if (!doc || doc.kind !== 'sql') return false;
   const file = await api.file.save(modelOf(doc.id).getValue(), as ? null : doc.file, doc.file ?? doc.title);
   if (!file) return false;
   markSaved(doc.id);
@@ -50,6 +59,13 @@ export async function closeDoc(id = st().activeDoc) {
   const doc = id ? docById(id) : undefined;
   if (!doc) return;
   if (!(await discardEdits(doc, 'Chiudere il documento'))) return;
+  if (doc.kind === 'table') {
+    if (doc.dirty && (await api.confirm(`Scartare le modifiche a ${doc.title}?`, 'La struttura della tabella non è stata applicata al server.', ['Scarta', 'Annulla'])) !== 0) return;
+    designByDoc.delete(doc.id);
+    st().removeDoc(doc.id);
+    persist();
+    return;
+  }
   if (doc.dirty) {
     const r = await api.confirm(`Salvare le modifiche a ${doc.title}?`, 'Le modifiche non salvate andranno perse.', ['Salva', 'Non salvare', 'Annulla']);
     if (r === 2) return;
@@ -118,7 +134,7 @@ async function discardEdits(doc: Doc, action: string) {
 /** Executes the document: selection or whole script (all), statement under cursor (current) or its plan. */
 export async function runDoc(mode: ExecMode, id = st().activeDoc) {
   const doc = id ? docById(id) : undefined;
-  if (!doc || doc.running) return;
+  if (!doc || doc.running || doc.kind !== 'sql') return;
   if (!(await discardEdits(doc, 'Eseguire di nuovo'))) return;
   const model = modelOf(doc.id);
   const ed = editorOf(doc.id);
@@ -212,17 +228,25 @@ export function persist() {
   clearTimeout(timer);
   timer = window.setTimeout(() => {
     const { docs, activeDoc: active } = st();
-    const data = docs.map((d) => ({ id: d.id, title: d.title, connId: d.connId, db: d.db, file: d.file, dirty: d.dirty, sql: modelOf(d.id).getValue() }));
+    // designer tabs reopen on the server's definition: unapplied structure changes are not kept
+    const data = docs.map((d) => (d.kind === 'table'
+      ? { id: d.id, kind: d.kind, design: d.design, title: d.title, connId: d.connId, db: d.db, file: null, dirty: false, sql: '' }
+      : { id: d.id, kind: d.kind, title: d.title, connId: d.connId, db: d.db, file: d.file, dirty: d.dirty, sql: modelOf(d.id).getValue() }))
+      .filter((d) => d.kind === 'sql' || d.design?.table);
     try { localStorage.setItem(KEY, JSON.stringify({ docs: data, active })); } catch { /* storage unavailable */ }
   }, 400);
 }
 
 export function restore() {
-  let saved: { docs: { id: string; title: string; connId: string | null; db: string | null; file: string | null; dirty: boolean; sql: string }[]; active: string | null } | null = null;
+  let saved: { docs: { id: string; kind?: Doc['kind']; design?: Doc['design']; title: string; connId: string | null; db: string | null; file: string | null; dirty: boolean; sql: string }[]; active: string | null } | null = null;
   try { saved = JSON.parse(localStorage.getItem(KEY) ?? 'null'); } catch { saved = null; }
   if (!saved?.docs?.length) return;
   const known = new Set(st().conns.map((c) => c.id));
   for (const d of saved.docs) {
+    if (d.kind === 'table') {
+      if (d.connId && known.has(d.connId) && d.db) st().addDoc({ id: d.id, kind: 'table', design: d.design, title: d.title, connId: d.connId, db: d.db });
+      continue;
+    }
     const m = /^SQL(\d+)\.sql$/.exec(d.title);
     if (m) setUntitled(Number(m[1]));
     modelOf(d.id, d.sql, d.dirty);

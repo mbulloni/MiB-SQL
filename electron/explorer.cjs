@@ -99,4 +99,78 @@ async function schema(connId, db) {
   return { tables, routines: routines.map((r) => ({ name: r.name, type: r.type.toLowerCase() })) };
 }
 
-module.exports = { databases, objects, columns, indexes, foreignKeys, ddl, schema };
+/**
+ * Everything the table designer edits. COLUMN_DEFAULT is an SQL expression on MariaDB ('text', 0,
+ * current_timestamp()); MySQL reports bare values, quoted here unless numeric or an expression.
+ */
+async function tableDefinition(connId, db, table) {
+  const [[t], cols, stats, fks, [ver]] = await Promise.all([
+    server.meta(connId, `SELECT ENGINE AS engine, TABLE_COLLATION AS collation, TABLE_COMMENT AS comment, TABLE_TYPE AS type
+      FROM information_schema.TABLES WHERE TABLE_SCHEMA = ? AND TABLE_NAME = ?`, [db, table]),
+    server.meta(connId, `SELECT COLUMN_NAME AS name, COLUMN_TYPE AS type, IS_NULLABLE AS nullable, COLUMN_DEFAULT AS def, EXTRA AS extra,
+        COLLATION_NAME AS collation, GENERATION_EXPRESSION AS genExpr, COLUMN_COMMENT AS comment, DATA_TYPE AS dataType
+      FROM information_schema.COLUMNS WHERE TABLE_SCHEMA = ? AND TABLE_NAME = ? ORDER BY ORDINAL_POSITION`, [db, table]),
+    server.meta(connId, `SELECT INDEX_NAME AS name, NON_UNIQUE AS nonUnique, COLUMN_NAME AS col, SUB_PART AS len, INDEX_TYPE AS type, INDEX_COMMENT AS comment
+      FROM information_schema.STATISTICS WHERE TABLE_SCHEMA = ? AND TABLE_NAME = ? ORDER BY INDEX_NAME = 'PRIMARY' DESC, INDEX_NAME, SEQ_IN_INDEX`, [db, table]),
+    foreignKeys(connId, db, table),
+    server.meta(connId, 'SELECT VERSION() AS v'),
+  ]);
+  if (!t) throw new Error(`Tabella ${db}.${table} non trovata.`);
+  if (t.type === 'VIEW') throw new Error(`${table} è una vista: il designer modifica solo tabelle.`);
+  const mariadb = /mariadb/i.test(ver.v);
+  const defaultOf = (c) => {
+    if (c.def === null || c.def === undefined) return null;
+    if (mariadb) return c.def;
+    if (/DEFAULT_GENERATED/i.test(c.extra)) return /^current_timestamp/i.test(c.def) ? c.def : `(${c.def})`;
+    if (/int|dec|float|double|bit|year/i.test(c.dataType) && /^-?\d+(\.\d+)?$/.test(c.def)) return c.def;
+    return "'" + c.def.replace(/\\/g, '\\\\').replace(/'/g, "''") + "'";
+  };
+  const indexes = new Map();
+  for (const r of stats) {
+    if (!indexes.has(r.name)) {
+      const kind = r.name === 'PRIMARY' ? 'PRIMARY' : r.type === 'FULLTEXT' ? 'FULLTEXT' : r.type === 'SPATIAL' ? 'SPATIAL' : Number(r.nonUnique) === 0 ? 'UNIQUE' : 'INDEX';
+      indexes.set(r.name, { name: r.name, kind, columns: [], comment: r.comment || '' });
+    }
+    indexes.get(r.name).columns.push({ name: r.col, len: r.len === null ? null : Number(r.len) });
+  }
+  return {
+    name: table,
+    engine: t.engine,
+    collation: t.collation,
+    comment: t.comment,
+    columns: cols.map((c) => {
+      const gen = c.genExpr ? { expr: c.genExpr, stored: /STORED/i.test(c.extra) } : null;
+      const onUpdate = /on update (\S+)/i.exec(c.extra)?.[1] ?? '';
+      return {
+        name: c.name,
+        type: c.type,
+        nullable: c.nullable === 'YES',
+        default: gen ? null : defaultOf(c),
+        autoIncrement: /auto_increment/i.test(c.extra),
+        onUpdate,
+        collation: c.collation && c.collation !== t.collation ? c.collation : '',
+        comment: c.comment,
+        generated: gen,
+      };
+    }),
+    indexes: [...indexes.values()],
+    foreignKeys: fks,
+  };
+}
+
+/** Engines, collations and the database defaults for the designer's selects. */
+async function serverOptions(connId, db) {
+  const [engines, collations, [schema]] = await Promise.all([
+    server.meta(connId, "SELECT ENGINE AS name, SUPPORT AS support FROM information_schema.ENGINES WHERE SUPPORT IN ('YES', 'DEFAULT') ORDER BY ENGINE"),
+    server.meta(connId, 'SELECT COLLATION_NAME AS name, CHARACTER_SET_NAME AS charset, IS_DEFAULT AS isDefault FROM information_schema.COLLATIONS ORDER BY CHARACTER_SET_NAME, COLLATION_NAME'),
+    server.meta(connId, 'SELECT DEFAULT_COLLATION_NAME AS collation FROM information_schema.SCHEMATA WHERE SCHEMA_NAME = ?', [db]),
+  ]);
+  return {
+    engines: engines.map((e) => e.name),
+    defaultEngine: engines.find((e) => e.support === 'DEFAULT')?.name ?? 'InnoDB',
+    collations: collations.filter((c) => c.charset).map((c) => ({ name: c.name, charset: c.charset, isDefault: c.isDefault === 'Yes' })),
+    defaultCollation: schema?.collation ?? 'utf8mb4_general_ci',
+  };
+}
+
+module.exports = { tableDefinition, serverOptions, databases, objects, columns, indexes, foreignKeys, ddl, schema };

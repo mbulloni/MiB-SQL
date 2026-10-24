@@ -1,0 +1,355 @@
+import { useEffect, useMemo, useState } from 'react';
+import { api } from '../api';
+import { newDoc, persist } from '../actions';
+import {
+  alterSql, createSql, FK_RULES, fromServer, isTextType, newId, newTable, removeColumn, togglePrimary, validate,
+  type DColumn, type DForeignKey, type DIndex, type IndexKind, type TableDef,
+} from '../design';
+import { designByDoc, loadDatabases, metaKey, useStore, type MetaEntry } from '../store';
+import type { ColumnInfo, DbObjects, Doc, IndexInfo, ServerOptions } from '../types';
+import Icon from './Icon';
+
+
+const TYPES = ['int', 'int unsigned', 'bigint', 'bigint unsigned', 'tinyint(1)', 'smallint', 'mediumint', 'decimal(10,2)', 'double', 'float',
+  'varchar(255)', 'char(10)', 'text', 'mediumtext', 'longtext', 'json', 'date', 'datetime', 'datetime(3)', 'timestamp', 'time', 'year',
+  'blob', 'longblob', 'varbinary(255)', "enum('a','b')", "set('a','b')", 'boolean', 'uuid', 'inet6', 'geometry', 'point'];
+const KINDS: IndexKind[] = ['PRIMARY', 'UNIQUE', 'INDEX', 'FULLTEXT', 'SPATIAL'];
+
+type Tab = 'columns' | 'indexes' | 'fks' | 'script';
+
+/** Ordered column picker used by indexes and foreign keys: chips with removal, a select to add. */
+function ColumnChips({ value, options, onChange, lengths }: {
+  value: { key: string; label: string; len?: number | null }[];
+  options: { key: string; label: string }[];
+  onChange: (keys: { key: string; len?: number | null }[]) => void;
+  lengths?: boolean;
+}) {
+  const free = options.filter((o) => !value.some((v) => v.key === o.key));
+  return (
+    <div className="chips">
+      {value.map((v, i) => (
+        <span key={v.key} className="chip">
+          {v.label}
+          {lengths && <input className="len" type="number" min={1} placeholder="lung." title="Lunghezza del prefisso" value={v.len ?? ''}
+            onChange={(e) => onChange(value.map((x, j) => ({ key: x.key, len: j === i ? (e.target.value ? Number(e.target.value) : null) : x.len })))} />}
+          <button onClick={() => onChange(value.filter((_, j) => j !== i).map((x) => ({ key: x.key, len: x.len })))}>×</button>
+        </span>
+      ))}
+      {free.length > 0 && (
+        <select value="" onChange={(e) => e.target.value && onChange([...value.map((x) => ({ key: x.key, len: x.len })), { key: e.target.value, len: null }])}>
+          <option value="">+ colonna</option>
+          {free.map((o) => <option key={o.key} value={o.key}>{o.label}</option>)}
+        </select>
+      )}
+    </div>
+  );
+}
+
+export default function TableDesigner({ doc }: { doc: Doc }) {
+  const connId = doc.connId!;
+  const db = doc.db!;
+  const existing = doc.design?.table ?? null;
+  const [state, setStateRaw] = useState(() => designByDoc.get(doc.id) ?? null);
+  const [tab, setTab] = useState<Tab>('columns');
+  const [sel, setSel] = useState(0);
+  const [status, setStatus] = useState<{ ok?: boolean; text: string } | null>(null);
+  const [busy, setBusy] = useState(false);
+  const connOpen = useStore((s) => s.connState[connId]?.status === 'open');
+  const optsKey = `${connId}/${db}/serverOptions`;
+  const opts = useStore((s) => s.meta[optsKey]) as MetaEntry<ServerOptions> | undefined;
+  const objects = useStore((s) => s.meta[metaKey.objects(connId, db)]) as MetaEntry<DbObjects> | undefined;
+  const dbs = useStore((s) => s.meta[metaKey.databases(connId)]) as MetaEntry<string[]> | undefined;
+  const meta = useStore((s) => s.meta);
+
+  const setState = (next: { orig: TableDef | null; cur: TableDef }) => {
+    designByDoc.set(doc.id, next);
+    setStateRaw(next);
+    const dirty = !next.orig || alterSql(next.orig, next.cur).length > 0;
+    if (dirty !== doc.dirty) useStore.getState().updateDoc(doc.id, { dirty });
+  };
+  const cur = state?.cur;
+  const update = (fn: (t: TableDef) => TableDef) => state && setState({ ...state, cur: fn(state.cur) });
+
+  const load = async (table: string | null) => {
+    setStatus(null);
+    try {
+      const o = await useStore.getState().loadMeta(optsKey, () => api.meta.serverOptions(connId, db));
+      if (table) {
+        const def = fromServer(db, await api.meta.tableDefinition(connId, db, table));
+        setState({ orig: def, cur: structuredClone(def) });
+      } else {
+        setState({ orig: null, cur: newTable(db, o?.defaultEngine ?? 'InnoDB', o?.defaultCollation ?? 'utf8mb4_general_ci') });
+      }
+    } catch (err) {
+      setStatus({ ok: false, text: (err as Error).message });
+    }
+  };
+
+  useEffect(() => {
+    if (!connOpen) { useStore.getState().openConn(connId); return; }
+    if (!state) load(existing);
+    useStore.getState().loadMeta(metaKey.objects(connId, db), () => api.meta.objects(connId, db));
+    loadDatabases(connId);
+  }, [connOpen]);
+
+  const errors = useMemo(() => (cur ? validate(cur) : []), [cur]);
+  const script = useMemo(() => (!state ? [] : state.orig ? alterSql(state.orig, state.cur) : [createSql(state.cur)]), [state]);
+
+  // referenced tables' columns for the foreign key pickers
+  useEffect(() => {
+    for (const fk of cur?.foreignKeys ?? []) {
+      if (fk.refTable) useStore.getState().loadMeta(metaKey.columns(connId, fk.refDb || db, fk.refTable), () => api.meta.columns(connId, fk.refDb || db, fk.refTable));
+    }
+  }, [cur?.foreignKeys.length]);
+
+  const collations = opts?.data?.collations;
+  const byCharset = useMemo(() => {
+    const m = new Map<string, string[]>();
+    for (const c of collations ?? []) m.set(c.charset, [...(m.get(c.charset) ?? []), c.name]);
+    return [...m];
+  }, [collations]);
+
+  if (!cur) {
+    return <div className="designer"><div className="empty">{status?.text ?? (connOpen ? 'Caricamento della struttura…' : 'Connessione in corso…')}</div></div>;
+  }
+
+  const col = cur.columns[Math.min(sel, cur.columns.length - 1)];
+  const pk = cur.indexes.find((ix) => ix.kind === 'PRIMARY');
+  const setCol = (id: string, patch: Partial<DColumn>) => update((t) => ({ ...t, columns: t.columns.map((c) => (c.id === id ? { ...c, ...patch } : c)) }));
+  const setIx = (id: string, patch: Partial<DIndex>) => update((t) => ({ ...t, indexes: t.indexes.map((x) => (x.id === id ? { ...x, ...patch } : x)) }));
+  const setFk = (id: string, patch: Partial<DForeignKey>) => update((t) => ({ ...t, foreignKeys: t.foreignKeys.map((x) => (x.id === id ? { ...x, ...patch } : x)) }));
+  const move = (i: number, d: number) => {
+    update((t) => {
+      const columns = [...t.columns];
+      const [c] = columns.splice(i, 1);
+      columns.splice(i + d, 0, c);
+      return { ...t, columns };
+    });
+    setSel(i + d);
+  };
+  const addColumn = () => {
+    const at = Math.min(sel + 1, cur.columns.length);
+    update((t) => {
+      const columns = [...t.columns];
+      let n = columns.length + 1;
+      while (columns.some((c) => c.name === `colonna${n}`)) n++;
+      columns.splice(at, 0, { id: newId('c'), orig: null, name: `colonna${n}`, type: 'varchar(255)', nullable: true, default: null, autoIncrement: false, onUpdate: '', collation: '', comment: '', generated: null });
+      return { ...t, columns };
+    });
+    setSel(at);
+  };
+  const colOptions = cur.columns.map((c) => ({ key: c.id, label: c.name || '?' }));
+  const colLabel = (id: string) => cur.columns.find((c) => c.id === id)?.name ?? '(eliminata)';
+
+  // referenced table: its columns and primary key come from the explorer cache
+  const refColumns = (fk: DForeignKey) => {
+    const key = metaKey.columns(connId, fk.refDb || db, fk.refTable);
+    return (meta[key] as MetaEntry<ColumnInfo[]> | undefined)?.data;
+  };
+  const chooseRefTable = async (fk: DForeignKey, refDb: string, refTable: string) => {
+    setFk(fk.id, { refDb, refTable, refColumns: [] });
+    if (!refTable) return;
+    const L = useStore.getState().loadMeta;
+    await L(metaKey.columns(connId, refDb, refTable), () => api.meta.columns(connId, refDb, refTable));
+    const ix = await L(metaKey.indexes(connId, refDb, refTable), () => api.meta.indexes(connId, refDb, refTable)) as IndexInfo[] | undefined;
+    const refPk = ix?.find((i) => i.primary)?.columns ?? [];
+    if (refPk.length === fk.columns.length || !fk.columns.length) setFk(fk.id, { refDb, refTable, refColumns: refPk.slice(0, Math.max(fk.columns.length, refPk.length)) });
+  };
+
+  const collationSelect = (value: string, onChange: (v: string) => void, inherit?: string) => (
+    <select value={value} onChange={(e) => onChange(e.target.value)}>
+      {inherit !== undefined && <option value="">{inherit}</option>}
+      {value && !(collations ?? []).some((c) => c.name === value) && <option value={value}>{value}</option>}
+      {byCharset.map(([cs, names]) => <optgroup key={cs} label={cs}>{names.map((n) => <option key={n} value={n}>{n}</option>)}</optgroup>)}
+    </select>
+  );
+
+  const apply = async () => {
+    if (!script.length || errors.length) return;
+    const drops = script.join('\n').match(/DROP COLUMN `(?:[^`]|``)+`/g) ?? [];
+    if (drops.length || (state!.orig && cur.convert)) {
+      const what = [drops.length ? `Colonne eliminate: ${drops.map((d) => d.slice(12)).join(', ')} (i dati vanno persi).` : '', cur.convert ? 'Conversione dei dati testuali esistenti alla nuova collation.' : ''].filter(Boolean).join('\n');
+      if ((await api.confirm(`Applicare le modifiche a ${state!.orig!.name}?`, what, ['Applica', 'Annulla'])) !== 0) return;
+    }
+    setBusy(true);
+    setStatus(null);
+    try {
+      await api.ddl.run(connId, script);
+      useStore.getState().dropMeta(`${connId}/${db}/`);
+      useStore.getState().updateDoc(doc.id, { title: cur.name, design: { table: cur.name }, dirty: false });
+      designByDoc.delete(doc.id);
+      await load(cur.name);
+      setStatus({ ok: true, text: state!.orig ? `Tabella ${cur.name} modificata.` : `Tabella ${cur.name} creata.` });
+      persist();
+    } catch (err) {
+      setStatus({ ok: false, text: (err as Error).message });
+      // a failed ALTER may have half-applied (DDL is not transactional): the server's state wins on reload
+    } finally {
+      setBusy(false);
+    }
+  };
+
+  const tables = objects?.data?.tables.map((t) => t.name) ?? [];
+  const tabLabel: Record<Tab, string> = { columns: `Colonne (${cur.columns.length})`, indexes: `Indici (${cur.indexes.length})`, fks: `Chiavi esterne (${cur.foreignKeys.length})`, script: 'Script' };
+
+  return (
+    <div className="designer">
+      <div className="designer-head form">
+        <div className="row">
+          <label className="grow">Nome tabella<input value={cur.name} onChange={(e) => update((t) => ({ ...t, name: e.target.value }))} /></label>
+          <label>Engine
+            <select value={cur.engine} onChange={(e) => update((t) => ({ ...t, engine: e.target.value }))}>
+              {!(opts?.data?.engines ?? []).includes(cur.engine) && <option>{cur.engine}</option>}
+              {(opts?.data?.engines ?? []).map((e) => <option key={e}>{e}</option>)}
+            </select>
+          </label>
+          <label>Collation{collationSelect(cur.collation, (v) => update((t) => ({ ...t, collation: v })))}</label>
+          <label className="grow">Commento<input value={cur.comment} onChange={(e) => update((t) => ({ ...t, comment: e.target.value }))} /></label>
+        </div>
+        {state!.orig && cur.collation !== state!.orig.collation && (
+          <label className="check"><input type="checkbox" checked={!!cur.convert} onChange={(e) => update((t) => ({ ...t, convert: e.target.checked }))} />
+            Converti anche le colonne esistenti (CONVERT TO): senza, cambia solo il predefinito per le nuove colonne</label>
+        )}
+      </div>
+      <div className="tabs-row">
+        {(Object.keys(tabLabel) as Tab[]).map((t) => <button key={t} className={tab === t ? 'active' : ''} onClick={() => setTab(t)}>{tabLabel[t]}</button>)}
+      </div>
+
+      <div className="designer-body">
+        {tab === 'columns' && <>
+          <div className="dtable-wrap">
+            <table className="dtable">
+              <thead><tr><th>#</th><th>Nome</th><th>Tipo</th><th title="Chiave primaria">PK</th><th title="NOT NULL">Not null</th><th title="AUTO_INCREMENT">AI</th><th>Predefinito</th><th>Commento</th><th /></tr></thead>
+              <tbody>
+                {cur.columns.map((c, i) => (
+                  <tr key={c.id} className={`${col?.id === c.id ? 'sel' : ''}${c.orig === null ? ' new' : ''}`} onMouseDown={() => setSel(i)}>
+                    <td className="n">{pk?.columns.some((x) => x.col === c.id) ? <Icon name="key" /> : i + 1}</td>
+                    <td><input value={c.name} onChange={(e) => setCol(c.id, { name: e.target.value })} /></td>
+                    <td><input list="mib-types" value={c.type} onChange={(e) => setCol(c.id, { type: e.target.value })} /></td>
+                    <td className="c"><input type="checkbox" checked={!!pk?.columns.some((x) => x.col === c.id)} onChange={() => update((t) => togglePrimary(t, c.id))} /></td>
+                    <td className="c"><input type="checkbox" checked={!c.nullable} disabled={!!c.generated} onChange={(e) => setCol(c.id, { nullable: !e.target.checked, default: !e.target.checked ? c.default : c.default === 'NULL' ? null : c.default })} /></td>
+                    <td className="c"><input type="checkbox" checked={c.autoIncrement} disabled={!!c.generated} onChange={(e) => setCol(c.id, { autoIncrement: e.target.checked, default: e.target.checked ? null : c.default })} /></td>
+                    <td><input value={c.generated ? '' : c.default ?? ''} disabled={!!c.generated || c.autoIncrement} placeholder={c.generated ? 'generata' : c.nullable ? 'NULL' : ''}
+                      title="Espressione SQL: 'testo', 0, current_timestamp(), NULL"
+                      onChange={(e) => setCol(c.id, { default: e.target.value === '' ? null : e.target.value })} /></td>
+                    <td><input value={c.comment} onChange={(e) => setCol(c.id, { comment: e.target.value })} /></td>
+                    <td className="act">
+                      <button title="Su" disabled={i === 0} onClick={() => move(i, -1)}>↑</button>
+                      <button title="Giù" disabled={i === cur.columns.length - 1} onClick={() => move(i, 1)}>↓</button>
+                      <button title="Elimina colonna" className="danger" onClick={() => { update((t) => removeColumn(t, c.id)); setSel(Math.max(0, i - 1)); }}>✕</button>
+                    </td>
+                  </tr>
+                ))}
+              </tbody>
+            </table>
+            <datalist id="mib-types">{TYPES.map((t) => <option key={t} value={t} />)}</datalist>
+            <button className="add" onClick={addColumn}>+ Aggiungi colonna</button>
+          </div>
+          {col && (
+            <div className="col-props form">
+              <div className="props-title">Proprietà di «{col.name}»</div>
+              <label>Collation
+                {isTextType(col.type) ? collationSelect(col.collation, (v) => setCol(col.id, { collation: v }), `(della tabella: ${cur.collation})`) : <input disabled value="solo per tipi testo" />}
+              </label>
+              <label>ON UPDATE<input value={col.onUpdate} disabled={!!col.generated} placeholder="es. current_timestamp()" onChange={(e) => setCol(col.id, { onUpdate: e.target.value })} /></label>
+              <label className="check"><input type="checkbox" checked={!!col.generated}
+                onChange={(e) => setCol(col.id, e.target.checked ? { generated: { expr: '', stored: false }, default: null, autoIncrement: false, onUpdate: '', nullable: true } : { generated: null })} /> Colonna generata</label>
+              {col.generated && <>
+                <label>Espressione<input value={col.generated.expr} placeholder="es. concat(nome, ' ', cognome)" onChange={(e) => setCol(col.id, { generated: { ...col.generated!, expr: e.target.value } })} /></label>
+                <label className="check"><input type="checkbox" checked={col.generated.stored} onChange={(e) => setCol(col.id, { generated: { ...col.generated!, stored: e.target.checked } })} /> STORED (salvata su disco, indicizzabile ovunque)</label>
+              </>}
+            </div>
+          )}
+        </>}
+
+        {tab === 'indexes' && (
+          <div className="dtable-wrap">
+            <table className="dtable">
+              <thead><tr><th>Nome</th><th>Tipo</th><th>Colonne</th><th>Commento</th><th /></tr></thead>
+              <tbody>
+                {cur.indexes.map((ix) => (
+                  <tr key={ix.id} className={ix.orig === null ? 'new' : ''}>
+                    <td><input value={ix.kind === 'PRIMARY' ? 'PRIMARY' : ix.name} disabled={ix.kind === 'PRIMARY'} onChange={(e) => setIx(ix.id, { name: e.target.value })} /></td>
+                    <td><select value={ix.kind} onChange={(e) => {
+                      const kind = e.target.value as IndexKind;
+                      if (kind === 'PRIMARY' && pk && pk !== ix) return;
+                      setIx(ix.id, { kind, name: kind === 'PRIMARY' ? 'PRIMARY' : ix.name === 'PRIMARY' ? `ix_${cur.name}_${colLabel(ix.columns[0]?.col ?? '')}` : ix.name });
+                    }}>{KINDS.map((k) => <option key={k} disabled={k === 'PRIMARY' && !!pk && pk !== ix}>{k}</option>)}</select></td>
+                    <td><ColumnChips lengths options={colOptions}
+                      value={ix.columns.map((c) => ({ key: c.col, label: colLabel(c.col), len: c.len }))}
+                      onChange={(v) => setIx(ix.id, { columns: v.map((x) => ({ col: x.key, len: x.len ?? null })) })} /></td>
+                    <td><input value={ix.comment} onChange={(e) => setIx(ix.id, { comment: e.target.value })} /></td>
+                    <td className="act"><button className="danger" title="Elimina indice" onClick={() => update((t) => ({ ...t, indexes: t.indexes.filter((x) => x.id !== ix.id) }))}>✕</button></td>
+                  </tr>
+                ))}
+              </tbody>
+            </table>
+            <button className="add" onClick={() => {
+              const first = cur.columns[Math.min(sel, cur.columns.length - 1)];
+              update((t) => ({ ...t, indexes: [...t.indexes, { id: newId('i'), orig: null, name: `ix_${t.name}_${first?.name ?? ''}`, kind: 'INDEX', columns: first ? [{ col: first.id, len: null }] : [], comment: '' }] }));
+            }}>+ Aggiungi indice</button>
+          </div>
+        )}
+
+        {tab === 'fks' && (
+          <div className="dtable-wrap">
+            <table className="dtable">
+              <thead><tr><th>Nome</th><th>Colonne</th><th>Database</th><th>Tabella riferita</th><th>Colonne riferite</th><th>ON DELETE</th><th>ON UPDATE</th><th /></tr></thead>
+              <tbody>
+                {cur.foreignKeys.map((fk) => {
+                  const refCols = refColumns(fk);
+                  const refDb = fk.refDb || db;
+                  const refTables = refDb === db ? tables : ((meta[metaKey.objects(connId, refDb)] as MetaEntry<DbObjects> | undefined)?.data?.tables.map((t) => t.name) ?? []);
+                  return (
+                    <tr key={fk.id} className={fk.orig === null ? 'new' : ''}>
+                      <td><input value={fk.name} onChange={(e) => setFk(fk.id, { name: e.target.value })} /></td>
+                      <td><ColumnChips options={colOptions} value={fk.columns.map((c) => ({ key: c, label: colLabel(c) }))} onChange={(v) => setFk(fk.id, { columns: v.map((x) => x.key) })} /></td>
+                      <td><select value={refDb} onChange={(e) => {
+                        const d = e.target.value;
+                        useStore.getState().loadMeta(metaKey.objects(connId, d), () => api.meta.objects(connId, d));
+                        setFk(fk.id, { refDb: d, refTable: '', refColumns: [] });
+                      }}>{(dbs?.data ?? [db]).map((d) => <option key={d}>{d}</option>)}</select></td>
+                      <td><select value={fk.refTable} onChange={(e) => chooseRefTable(fk, refDb, e.target.value)}>
+                        <option value="">—</option>
+                        {fk.refTable && !refTables.includes(fk.refTable) && <option>{fk.refTable}</option>}
+                        {refTables.map((t) => <option key={t}>{t}</option>)}
+                      </select></td>
+                      <td><ColumnChips options={(refCols ?? fk.refColumns.map((n) => ({ name: n }))).map((c) => ({ key: c.name, label: c.name }))}
+                        value={fk.refColumns.map((n) => ({ key: n, label: n }))} onChange={(v) => setFk(fk.id, { refColumns: v.map((x) => x.key) })} /></td>
+                      <td><select value={fk.onDelete} onChange={(e) => setFk(fk.id, { onDelete: e.target.value })}>{FK_RULES.map((r) => <option key={r}>{r}</option>)}</select></td>
+                      <td><select value={fk.onUpdate} onChange={(e) => setFk(fk.id, { onUpdate: e.target.value })}>{FK_RULES.map((r) => <option key={r}>{r}</option>)}</select></td>
+                      <td className="act"><button className="danger" title="Elimina chiave esterna" onClick={() => update((t) => ({ ...t, foreignKeys: t.foreignKeys.filter((x) => x.id !== fk.id) }))}>✕</button></td>
+                    </tr>
+                  );
+                })}
+              </tbody>
+            </table>
+            <button className="add" onClick={() => {
+              const first = cur.columns[Math.min(sel, cur.columns.length - 1)];
+              let n = cur.foreignKeys.length + 1;
+              while (cur.foreignKeys.some((f) => f.name === `fk_${cur.name}_${n}`)) n++;
+              update((t) => ({ ...t, foreignKeys: [...t.foreignKeys, { id: newId('f'), orig: null, name: `fk_${t.name}_${n}`, columns: first ? [first.id] : [], refDb: db, refTable: '', refColumns: [], onDelete: 'RESTRICT', onUpdate: 'RESTRICT' }] }));
+            }}>+ Aggiungi chiave esterna</button>
+          </div>
+        )}
+
+        {tab === 'script' && (
+          <pre className="script">{script.length ? script.join(';\n\n') + ';' : '-- Nessuna modifica.'}</pre>
+        )}
+      </div>
+
+      <div className="designer-foot">
+        {errors.length > 0 ? <div className="status error" title={errors.join('\n')}>{errors[0]}{errors.length > 1 ? ` (+${errors.length - 1})` : ''}</div>
+          : status ? <div className={`status ${status.ok ? 'ok' : 'error'}`}>{status.text}</div>
+            : <div className="muted">{script.length ? `${script.length} ${script.length === 1 ? 'istruzione' : 'istruzioni'} da eseguire` : 'Nessuna modifica'}</div>}
+        <div className="spacer" />
+        {state!.orig && <button onClick={() => { designByDoc.delete(doc.id); load(cur.name === state!.orig!.name ? cur.name : state!.orig!.name); }} disabled={busy}>Ricarica</button>}
+        <button disabled={!script.length} onClick={() => newDoc({ connId, db, sql: script.join(';\n\n') + ';\n', title: `${cur.name}.sql` })}>Apri script nell'editor</button>
+        <button className="primary" disabled={!script.length || errors.length > 0 || busy} onClick={apply}>
+          {busy ? 'Applicazione…' : state!.orig ? 'Applica modifiche' : 'Crea tabella'}
+        </button>
+      </div>
+    </div>
+  );
+}
+

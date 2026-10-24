@@ -10,7 +10,8 @@ export default function SqlEditor({ onCursor }: { onCursor: (ln: number, col: nu
   const host = useRef<HTMLDivElement>(null);
   const ed = useRef<monaco.editor.IStandaloneCodeEditor | null>(null);
   const shown = useRef<string | null>(null);
-  const activeDoc = useStore((s) => s.activeDoc);
+  // only SQL documents have a text model; with a designer tab active the editor keeps no model
+  const activeDoc = useStore((s) => (s.docs.find((d) => d.id === s.activeDoc)?.kind === 'sql' ? s.activeDoc : null));
 
   useEffect(() => {
     const editor = monaco.editor.create(host.current!, {

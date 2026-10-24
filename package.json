@@ -1,6 +1,6 @@
 {
   "name": "mib-sql",
-  "version": "0.2.0",
+  "version": "0.3.0",
   "description": "MiB-SQL - IDE educativo per MariaDB/MySQL su Linux, ispirato a dbForge Studio",
   "main": "electron/main.cjs",
   "type": "commonjs",

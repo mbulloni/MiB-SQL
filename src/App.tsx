@@ -9,6 +9,8 @@ import Explorer from './components/Explorer';
 import Icon from './components/Icon';
 import ResultsPanel from './components/ResultsPanel';
 import SqlEditor from './components/SqlEditor';
+import TableDesigner from './components/TableDesigner';
+import logo from '../build/icons/128x128.png';
 
 function useDrag(initial: number, axis: 'x' | 'y', min: number, key: string) {
   const [size, setSize] = useState(() => Number(localStorage.getItem(key)) || initial);
@@ -69,20 +71,21 @@ function Toolbar() {
   const doc = useStore((s) => s.docs.find((d) => d.id === s.activeDoc));
   const set = useStore((s) => s.set);
   const running = !!doc?.running;
+  const sql = doc?.kind === 'sql';
   return (
     <div className="toolbar">
       <button title="Nuova connessione (Ctrl+Maiusc+N)" onClick={() => set({ connDialog: { def: {} } })}><Icon name="addConn" /></button>
       <div className="sep" />
       <button title="Nuovo SQL (Ctrl+N)" onClick={() => newDoc()}><Icon name="newSql" /><span>Nuovo SQL</span></button>
       <button title="Apri (Ctrl+O)" onClick={openFiles}><Icon name="open" /></button>
-      <button title="Salva (Ctrl+S)" disabled={!doc} onClick={() => saveDoc()}><Icon name="save" /></button>
+      <button title="Salva (Ctrl+S)" disabled={!sql} onClick={() => saveDoc()}><Icon name="save" /></button>
       <div className="sep" />
-      <button title="Esegui script o selezione (F5)" disabled={!doc || running} onClick={() => runDoc('all')}><Icon name="play" /><span>Esegui</span></button>
-      <button title="Esegui istruzione corrente (Ctrl+Invio)" disabled={!doc || running} onClick={() => runDoc('current')}><Icon name="playLine" /></button>
+      <button title="Esegui script o selezione (F5)" disabled={!sql || running} onClick={() => runDoc('all')}><Icon name="play" /><span>Esegui</span></button>
+      <button title="Esegui istruzione corrente (Ctrl+Invio)" disabled={!sql || running} onClick={() => runDoc('current')}><Icon name="playLine" /></button>
       <button title="Interrompi (Maiusc+F5)" disabled={!running} onClick={() => cancelDoc()}><Icon name="stop" /></button>
-      <button title="Piano di esecuzione (Ctrl+E)" disabled={!doc || running} onClick={() => runDoc('explain')}><Icon name="plan" /><span>Piano</span></button>
+      <button title="Piano di esecuzione (Ctrl+E)" disabled={!sql || running} onClick={() => runDoc('explain')}><Icon name="plan" /><span>Piano</span></button>
       <div className="sep" />
-      <TargetPicker />
+      {sql && <TargetPicker />}
     </div>
   );
 }
@@ -108,6 +111,7 @@ function DocTabs() {
               { label: 'Chiudi le altre', action: async () => { for (const o of useStore.getState().docs) if (o.id !== d.id) await closeDoc(o.id); } },
             ])}>
             {d.running && <span className="spinner" />}
+            {d.kind === 'table' && <Icon name="table" size={14} />}
             <span className="name">{d.title}{d.dirty ? ' •' : ''}</span>
             <button className="x" onMouseDown={(e) => e.stopPropagation()} onClick={() => closeDoc(d.id)}><Icon name="close" size={12} /></button>
           </div>
@@ -122,7 +126,7 @@ function StartPage() {
   const set = useStore((s) => s.set);
   return (
     <div className="start">
-      <h1>MiB-SQL</h1>
+      <h1><img src={logo} alt="" width={56} height={56} />MiB-SQL</h1>
       <p>IDE per MariaDB e MySQL</p>
       <div className="start-actions">
         <button onClick={() => set({ connDialog: { def: {} } })}><Icon name="addConn" /> Nuova connessione</button>
@@ -157,7 +161,7 @@ function StatusBar({ cursor }: { cursor: [number, number] }) {
         {doc?.db && <span>{doc.db}</span>}
       </> : <span>Nessuna connessione</span>}
       <div className="spacer" />
-      {doc && <span>Rg {cursor[0]}, Col {cursor[1]}</span>}
+      {doc?.kind === 'sql' && <span>Rg {cursor[0]}, Col {cursor[1]}</span>}
     </div>
   );
 }
@@ -224,11 +228,12 @@ export default function App() {
         <div className="vsplit" onMouseDown={startSide} />
         <div className="work">
           <DocTabs />
-          <div className="doc-area" style={{ display: docs.length ? 'flex' : 'none' }}>
+          <div className="doc-area" style={{ display: active?.kind === 'sql' ? 'flex' : 'none' }}>
             <div className="editor-wrap"><SqlEditor onCursor={(l, c) => setCursor([l, c])} /></div>
             <div className="hsplit" onMouseDown={startBottom} />
-            <div style={{ height: bottom }} className="bottom">{active && <ResultsPanel doc={active} />}</div>
+            <div style={{ height: bottom }} className="bottom">{active?.kind === 'sql' && <ResultsPanel doc={active} />}</div>
           </div>
+          {active?.kind === 'table' && <TableDesigner key={active.id} doc={active} />}
           {!docs.length && <StartPage />}
         </div>
       </div>

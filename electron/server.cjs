@@ -338,6 +338,26 @@ async function apply(connId, stmts) {
   }
 }
 
+/**
+ * DDL from the designer, in order on a pool connection. DDL commits implicitly, so there is no rollback:
+ * the error says which statement failed and how many ran before it.
+ */
+async function runStatements(connId, sqls) {
+  const c = await pool(connId).getConnection();
+  let at = 0;
+  try {
+    for (; at < sqls.length; at++) await c.query(sqls[at]);
+    return at;
+  } catch (err) {
+    const e = new DbError(err);
+    const done = at === 1 ? ' (la prima è stata eseguita)' : at > 1 ? ` (le prime ${at} sono state eseguite)` : '';
+    e.message = `Istruzione ${at + 1} di ${sqls.length}: ${e.message}${done}`;
+    throw e;
+  } finally {
+    c.release();
+  }
+}
+
 /** Rows of a parameterized SELECT, normalized like the grid's (re-reading edited rows after an apply). */
 async function selectRows(connId, sql, params) {
   try {
@@ -372,4 +392,4 @@ async function shutdown() {
   for (const id of [...pools.keys()]) await close(id);
 }
 
-module.exports = { test, open, close, info, meta, openSession, closeSession, useDb, exec, cancel, apply, selectRows, streamQuery, shutdown, split };
+module.exports = { test, open, close, info, meta, openSession, closeSession, useDb, exec, cancel, apply, runStatements, selectRows, streamQuery, shutdown, split };

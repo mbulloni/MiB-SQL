@@ -1,6 +1,6 @@
 import { createContext, useContext, useState, type ReactNode } from 'react';
 import { api } from '../api';
-import { insertText, newDoc, qi, refreshExplorer, runDoc, selectTop, showDdl } from '../actions';
+import { closeDoc, insertText, newDoc, openDesigner, qi, refreshExplorer, runDoc, selectTop, showDdl } from '../actions';
 import { loadDatabases, metaKey, useStore, type MetaEntry } from '../store';
 import type { ColumnInfo, ConnDef, DbObjects, ForeignKeyInfo, IndexInfo, ObjectKind } from '../types';
 import { openMenu, type MenuItem } from './ContextMenu';
@@ -60,6 +60,24 @@ function Status({ entry, depth, empty }: { entry?: MetaEntry; depth: number; emp
 
 const copy = (s: string) => navigator.clipboard.writeText(s);
 
+/** DROP / TRUNCATE after confirmation; designer tabs on a dropped table are closed. */
+async function destroy(c: string, db: string, table: string, how: 'drop' | 'truncate') {
+  const drop = how === 'drop';
+  const ok = await api.confirm(drop ? `Eliminare la tabella ${db}.${table}?` : `Svuotare la tabella ${db}.${table}?`,
+    drop ? 'La tabella e tutti i suoi dati verranno eliminati definitivamente.' : 'Tutte le righe verranno eliminate definitivamente (TRUNCATE).', [drop ? 'Elimina' : 'Svuota', 'Annulla']);
+  if (ok !== 0) return;
+  try {
+    await api.ddl.run(c, [`${drop ? 'DROP' : 'TRUNCATE'} TABLE ${qi(db)}.${qi(table)}`]);
+  } catch (err) {
+    await api.confirm('Operazione non riuscita', (err as Error).message, ['OK']);
+    return;
+  }
+  useStore.getState().dropMeta(`${c}/${db}/`);
+  if (drop) {
+    for (const d of useStore.getState().docs) if (d.kind === 'table' && d.connId === c && d.db === db && d.design?.table === table) { useStore.getState().updateDoc(d.id, { dirty: false }); await closeDoc(d.id); }
+  }
+}
+
 function TableChildren({ c, db, t, depth, view }: { c: string; db: string; t: string; depth: number; view: boolean }) {
   const meta = useStore((s) => s.meta);
   const cols = meta[metaKey.columns(c, db, t)] as MetaEntry<ColumnInfo[]> | undefined;
@@ -117,7 +135,8 @@ function DbChildren({ c, db, depth }: { c: string; db: string; depth: number }) 
       {FOLDERS.map((F) => {
         const items = (entry.data![F.key] as { name: string }[]).filter((o) => !f || o.name.toLowerCase().includes(f));
         return (
-          <Node key={F.key} id={`${c}/${db}/${F.key}`} label={F.label} icon="folder" depth={depth} hint={String(items.length)}>
+          <Node key={F.key} id={`${c}/${db}/${F.key}`} label={F.label} icon="folder" depth={depth} hint={String(items.length)}
+            menu={F.kind === 'table' ? [{ label: 'Nuova tabella…', action: () => openDesigner(c, db, null) }] : undefined}>
             {() => items.length ? items.map((o) => {
               const qn = `${qi(db)}.${qi(o.name)}`;
               const common: MenuItem[] = [
@@ -137,6 +156,12 @@ function DbChildren({ c, db, depth }: { c: string; db: string; depth: number }) 
                       { label: F.kind === 'table' ? 'Modifica dati (prime 1000 righe)' : 'Seleziona prime 1000 righe', action: () => selectTop(c, db, o.name) },
                       { label: 'Esporta dati…', action: () => useStore.getState().set({ exportDialog: { name: o.name, table: o.name, db, query: { connId: c, db, sql: `SELECT * FROM ${qn}` } } }) },
                       { label: 'Conta righe', action: () => runDoc('all', newDoc({ connId: c, db, sql: `SELECT COUNT(*) FROM ${qn};\n` }).id) },
+                      ...(F.kind === 'table' ? [
+                        { label: 'Modifica tabella…', action: () => openDesigner(c, db, o.name) },
+                        'sep' as const,
+                        { label: 'Svuota tabella…', danger: true, action: () => destroy(c, db, o.name, 'truncate') },
+                        { label: 'Elimina tabella…', danger: true, action: () => destroy(c, db, o.name, 'drop') },
+                      ] : []),
                       'sep', ...common,
                     ]}>
                     {() => <TableChildren c={c} db={db} t={o.name} depth={depth + 2} view={F.kind === 'view'} />}
@@ -202,6 +227,7 @@ function ConnNode({ conn }: { conn: ConnDef }) {
           onExpand={() => expandDb(db)}
           menu={[
             { label: 'Nuovo SQL', action: () => newDoc({ connId: conn.id, db }) },
+            { label: 'Nuova tabella…', action: () => openDesigner(conn.id, db, null) },
             { label: 'Aggiorna', action: () => { s.dropMeta(`${conn.id}/${db}/`); expandDb(db); } },
             { label: 'Copia nome', action: () => copy(db) },
           ]}>
