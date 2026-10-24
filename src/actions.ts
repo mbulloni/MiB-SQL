@@ -54,6 +54,23 @@ export function openServerTool(connId: string, kind: 'monitor' | 'users') {
   return doc;
 }
 
+/** Database for the visual tools: the active document's, else the one selected in the explorer. */
+export function visualTarget(): { connId: string; db: string } | null {
+  const d = activeDoc();
+  if (d?.connId && d.db) return { connId: d.connId, db: d.db };
+  return st().selectedDb;
+}
+
+/** Opens a visual tool on the current database, or asks which database when none is selected. */
+export function openVisual(kind: import('./store').VisualKind, target = visualTarget()) {
+  if (!target) { st().set({ pickTarget: { kind } }); return; }
+  const { connId, db } = target;
+  if (kind === 'er') openEr(connId, db);
+  else if (kind === 'query') openQueryBuilder(connId, db);
+  else if (kind === 'table') openDesigner(connId, db, null);
+  else openCompare(connId, db);
+}
+
 /** Schema/data compare, the database as source. */
 export function openCompare(connId: string, db: string) {
   const doc = st().addDoc({ kind: 'compare', connId, db, title: `Confronto ${db}`, cmp: { src: { connId, db }, tgt: { connId, db: null } } });

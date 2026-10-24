@@ -7,6 +7,8 @@ import { openMenu, type MenuItem } from './ContextMenu';
 import Icon from './Icon';
 
 const Tree = createContext<{ open: Set<string>; toggle: (k: string, v?: boolean) => void; filter: string }>({ open: new Set(), toggle: () => {}, filter: '' });
+// database a node belongs to: clicking any node under it makes it the target of the visual tools
+const Scope = createContext<{ connId: string; db: string } | null>(null);
 
 interface NodeProps {
   id: string;
@@ -26,18 +28,22 @@ interface NodeProps {
 
 function Node({ id, label, icon, depth, hint, title, leaf, onExpand, onDouble, menu, drag, dim, children }: NodeProps) {
   const { open, toggle } = useContext(Tree);
+  const scope = useContext(Scope);
+  const selected = useStore((s) => s.selectedNode === id);
   const isOpen = !leaf && open.has(id);
+  const select = () => useStore.getState().set({ selectedNode: id, ...(scope ? { selectedDb: scope, selectedConn: scope.connId } : {}) });
   const flip = () => {
+    select();
     if (leaf) return;
     if (!isOpen) onExpand?.();
     toggle(id);
   };
   return (
     <>
-      <div className={`node${dim ? ' dim' : ''}`} style={{ paddingLeft: 4 + depth * 14 }} title={title}
+      <div className={`node${dim ? ' dim' : ''}${selected ? ' sel' : ''}`} style={{ paddingLeft: 4 + depth * 14 }} title={title}
         onClick={flip}
         onDoubleClick={(e) => { if (onDouble) { e.stopPropagation(); onDouble(); } }}
-        onContextMenu={menu ? (e) => openMenu(e, menu) : undefined}
+        onContextMenu={menu ? (e) => { select(); openMenu(e, menu); } : undefined}
         draggable={!!drag}
         onDragStart={drag ? (e) => e.dataTransfer.setData('text/plain', drag) : undefined}>
         <span className={`twisty${leaf ? ' leaf' : ''}`}>{leaf ? '' : isOpen ? '▾' : '▸'}</span>
@@ -227,12 +233,13 @@ function ConnNode({ conn }: { conn: ConnDef }) {
       onExpand={() => { connect().then((ok) => { if (!ok) toggle(conn.id, false); }); }}
       menu={menu}>
       {() => dbs?.data ? dbs.data.map((db) => (
+        <Scope.Provider key={db} value={{ connId: conn.id, db }}>
         <Node key={db} id={`${conn.id}/${db}`} label={db} icon="database" depth={1} dim={SYSTEM_DBS.has(db)} drag={qi(db)}
           onExpand={() => expandDb(db)}
           menu={[
             { label: 'Nuovo SQL', action: () => newDoc({ connId: conn.id, db }) },
             { label: 'Nuova tabella…', action: () => openDesigner(conn.id, db, null) },
-            { label: 'Diagramma ER', action: () => openEr(conn.id, db) },
+            { label: 'Diagramma ER (editor visuale)', action: () => openEr(conn.id, db) },
             { label: 'Query Builder', action: () => openQueryBuilder(conn.id, db) },
             { label: 'Confronta con…', action: () => openCompare(conn.id, db) },
             'sep',
@@ -245,6 +252,7 @@ function ConnNode({ conn }: { conn: ConnDef }) {
           ]}>
           {() => <DbChildren c={conn.id} db={db} depth={2} />}
         </Node>
+        </Scope.Provider>
       )) : state === 'error' ? <Status entry={{ error: err }} depth={1} /> : <Status entry={dbs} depth={1} />}
     </Node>
   );

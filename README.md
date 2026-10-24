@@ -4,6 +4,8 @@
 
 IDE educativo per **MariaDB e MySQL** su Linux, ispirato a [dbForge Studio](https://www.devart.com/dbforge/) (che su Linux gira solo tramite CrossOver/Wine). Electron + React + Monaco, driver nativo `mariadb`.
 
+![Pagina iniziale con gli editor visuali](docs/screenshot-16.png)
+
 ![Database Explorer ed editor SQL](docs/screenshot-1.png)
 
 ## Funzioni (v1.0)
@@ -51,13 +53,13 @@ IDE educativo per **MariaDB e MySQL** su Linux, ispirato a [dbForge Studio](http
 - Verificato su MariaDB 10.11, MariaDB 11.4 e MySQL 8.4
 
 **Diagramma ER (editor visuale)**
-- Tasto destro sul database › «Diagramma ER»: disposizione automatica a livelli, notazione a zampa di gallina, relazioni opzionali tratteggiate
+- Pulsante «Diagramma ER» nella toolbar o nella pagina iniziale (sul database selezionato nell'Explorer, altrimenti viene chiesto quale), oppure tasto destro sul database: disposizione automatica a livelli, notazione a zampa di gallina, relazioni opzionali tratteggiate
 - Pan, zoom con la rotella, trascinamento delle tabelle (disposizione salvata), ricerca, modalità «Solo chiavi», tabelle nascoste
 - Modifica visuale: «+ Tabella», «🔗 Relazione» trascinando da una colonna alla colonna riferita (controllo dei tipi, regole ON DELETE/UPDATE, anteprima SQL), elimina relazione (selezione + Canc), modifica ed elimina tabelle
 - Esporta PNG e SVG
 
 **Query Builder visuale**
-- Tasto destro sul database › «Query Builder»: tabelle trascinate dall'Explorer o scelte dalla lista
+- Pulsante «Query Builder» nella toolbar o nella pagina iniziale, oppure tasto destro sul database: tabelle trascinate dall'Explorer o scelte dalla lista
 - Join automatici dalle chiavi esterne o disegnati trascinando una colonna su un'altra; clic sul join per INNER/LEFT/RIGHT o per eliminarlo
 - Colonne spuntate, alias, aggregati con GROUP BY automatico, ordinamento, filtri WHERE/HAVING (IN, BETWEEN, LIKE, IS NULL…), DISTINCT, LIMIT
 - SQL in tempo reale, esecuzione nel documento (F5), apertura nell'editor SQL

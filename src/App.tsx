@@ -1,6 +1,6 @@
 import { useEffect, useRef, useState, useSyncExternalStore } from 'react';
 import { api } from './api';
-import { cancelDoc, closeDoc, profileDoc, requestQuit, newDoc, openFiles, openSql, restore, runDoc, saveDoc, setDocTarget } from './actions';
+import { cancelDoc, closeDoc, openVisual, profileDoc, requestQuit, newDoc, openFiles, openSql, restore, runDoc, saveDoc, setDocTarget } from './actions';
 import { loadDatabases, metaKey, useStore, type MetaEntry } from './store';
 import ContextMenu, { openMenu } from './components/ContextMenu';
 import { ConnectionDialog, PasswordPrompt, ValueViewer } from './components/Dialogs';
@@ -15,6 +15,7 @@ import ErDiagram from './components/ErDiagram';
 import QueryBuilder from './components/QueryBuilder';
 import CompareView from './components/CompareView';
 import Monitor from './components/Monitor';
+import TargetDialog from './components/TargetDialog';
 import Users from './components/Users';
 import logo from '../build/icons/128x128.png';
 import { onThemeChange, resolvedTheme, setThemePref, themePref, type ThemePref } from './theme';
@@ -110,6 +111,10 @@ function Toolbar() {
       <button title="Piano di esecuzione (Ctrl+E)" disabled={!runnable || running} onClick={() => runDoc('explain')}><Icon name="plan" /><span>Piano</span></button>
       <button title="Profila l'istruzione corrente (Ctrl+Maiusc+P)" disabled={!sql || running} onClick={() => profileDoc()}><Icon name="profile" /><span>Profila</span></button>
       <div className="sep" />
+      <button title="Diagramma ER del database (editor visuale: tabelle e relazioni)" onClick={() => openVisual('er')}><Icon name="er" /><span>Diagramma ER</span></button>
+      <button title="Query Builder visuale" onClick={() => openVisual('query')}><Icon name="qb" /><span>Query Builder</span></button>
+      <button title="Nuova tabella nel designer visuale" onClick={() => openVisual('table')}><Icon name="table" /><span>Nuova tabella</span></button>
+      <div className="sep" />
       {sql && <TargetPicker />}
       <div className="spacer" />
       <ThemeSwitch />
@@ -161,6 +166,13 @@ function StartPage() {
         <button onClick={() => newDoc()}><Icon name="newSql" /> Nuovo SQL</button>
         <button onClick={openFiles}><Icon name="open" /> Apri script…</button>
       </div>
+      <h2>Editor visuali</h2>
+      <div className="start-tiles">
+        <button onClick={() => openVisual('er')}><Icon name="er" size={28} /><b>Diagramma ER</b><span>Tabelle e relazioni del database: crea tabelle, disegna le chiavi esterne trascinando le colonne</span></button>
+        <button onClick={() => openVisual('query')}><Icon name="qb" size={28} /><b>Query Builder</b><span>Componi una SELECT trascinando tabelle e colonne, join, filtri e raggruppamenti senza scrivere SQL</span></button>
+        <button onClick={() => openVisual('table')}><Icon name="table" size={28} /><b>Designer tabelle</b><span>Colonne, indici, chiavi esterne e vincoli in una griglia; genera CREATE/ALTER</span></button>
+        <button onClick={() => openVisual('compare')}><Icon name="plan" size={28} /><b>Confronto</b><span>Differenze di schema e dati tra due database, con script di sincronizzazione</span></button>
+      </div>
       {conns.length > 0 && <>
         <h2>Connessioni</h2>
         <div className="start-conns">
@@ -202,6 +214,7 @@ export default function App() {
   const viewer = useStore((s) => s.viewer);
   const exporting = useStore((s) => s.exportDialog);
   const task = useStore((s) => s.task);
+  const pickTarget = useStore((s) => s.pickTarget);
   const [cursor, setCursor] = useState<[number, number]>([1, 1]);
   const [side, startSide] = useDrag(300, 'x', 180, 'mibsql.side');
   const [bottom, startBottom] = useDrag(320, 'y', 80, 'mibsql.bottom');
@@ -223,7 +236,7 @@ export default function App() {
   useEffect(() => {
     const onKey = (e: KeyboardEvent) => {
       const s = useStore.getState();
-      if (s.connDialog || s.passwordPrompt || s.exportDialog || s.viewer || s.task) return;
+      if (s.connDialog || s.passwordPrompt || s.exportDialog || s.viewer || s.task || s.pickTarget) return;
       // the grid has its own Ctrl+Maiusc+N (NULL) and text inputs keep their keys
       const t = e.target as HTMLElement;
       if (t.closest?.('.grid, .result-bar') && (t.tagName === 'INPUT' || ((e.ctrlKey || e.metaKey) && e.shiftKey && e.key.toLowerCase() === 'n'))) return;
@@ -279,6 +292,7 @@ export default function App() {
       {prompt && <PasswordPrompt key={prompt.conn.id + prompt.error} />}
       {viewer && <ValueViewer key={viewer.title + viewer.value.length} />}
       {exporting && <ExportDialog />}
+      {pickTarget && <TargetDialog kind={pickTarget.kind} />}
       {task?.kind === 'backup' && task.db && <BackupDialog connId={task.connId} db={task.db} />}
       {task?.kind === 'restore' && <RestoreDialog connId={task.connId} db={task.db} />}
       {task?.kind === 'import' && task.db && <ImportWizard connId={task.connId} db={task.db} table={task.table} />}

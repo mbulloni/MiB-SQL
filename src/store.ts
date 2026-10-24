@@ -28,6 +28,8 @@ export interface ExportRequest {
   filtered?: boolean;
 }
 
+export type VisualKind = 'er' | 'query' | 'table' | 'compare';
+
 interface PasswordRequest {
   conn: ConnDef;
   error: string;
@@ -42,6 +44,9 @@ interface State {
   docs: Doc[];
   activeDoc: string | null;
   selectedConn: string | null;
+  selectedDb: { connId: string; db: string } | null;
+  selectedNode: string | null;
+  pickTarget: { kind: VisualKind } | null;
   connDialog: { def: Partial<ConnDef> } | null;
   passwordPrompt: PasswordRequest | null;
   exportDialog: ExportRequest | null;
@@ -73,6 +78,9 @@ export const useStore = create<State>((set, get) => ({
   docs: [],
   activeDoc: null,
   selectedConn: null,
+  selectedDb: null,
+  selectedNode: null,
+  pickTarget: null,
   connDialog: null,
   passwordPrompt: null,
   exportDialog: null,

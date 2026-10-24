@@ -495,3 +495,13 @@ details summary { cursor: pointer; color: var(--muted); font-size: 12px; }
 .users-preview { max-height: 120px; margin: 0; border-top: 1px solid var(--border); }
 
 .dtable .chip button[title] { padding: 0 3px !important; color: var(--accent) !important; }
+
+/* explorer selection and visual tool entry points */
+.node.sel { background: var(--accent-soft); }
+.start-tiles { display: grid; grid-template-columns: repeat(auto-fill, minmax(240px, 1fr)); gap: 12px; max-width: 1100px; }
+.start-tiles button { display: grid !important; grid-template-columns: 34px 1fr; grid-template-rows: auto auto; gap: 2px 10px; text-align: left; padding: 12px 14px !important; align-items: start; }
+.start-tiles button .icon { grid-row: span 2; }
+.start-tiles button b { font-size: 14px; }
+.start-tiles button span { color: var(--muted); font-size: 12px; line-height: 1.35; }
+.start-tiles button:hover { border-color: var(--accent); }
+@media (max-width: 1400px) { .toolbar button span { display: none; } }
