@@ -34,6 +34,15 @@ export function openDesigner(connId: string, db: string, table: string | null) {
   return doc;
 }
 
+/** ER diagram of a database (one tab per connection/database). */
+export function openEr(connId: string, db: string) {
+  const existing = st().docs.find((d) => d.kind === 'er' && d.connId === connId && d.db === db);
+  if (existing) { st().set({ activeDoc: existing.id }); return existing; }
+  const doc = st().addDoc({ kind: 'er', connId, db, title: `ER ${db}` });
+  persist();
+  return doc;
+}
+
 export function openSql(f: SqlFile) {
   const existing = st().docs.find((d) => d.file === f.path);
   if (existing) { st().set({ activeDoc: existing.id }); return existing; }
@@ -59,6 +68,11 @@ export async function closeDoc(id = st().activeDoc) {
   const doc = id ? docById(id) : undefined;
   if (!doc) return;
   if (!(await discardEdits(doc, 'Chiudere il documento'))) return;
+  if (doc.kind === 'er') {
+    st().removeDoc(doc.id);
+    persist();
+    return;
+  }
   if (doc.kind === 'table') {
     if (doc.dirty && (await api.confirm(`Scartare le modifiche a ${doc.title}?`, 'La struttura della tabella non è stata applicata al server.', ['Scarta', 'Annulla'])) !== 0) return;
     designByDoc.delete(doc.id);
@@ -229,10 +243,10 @@ export function persist() {
   timer = window.setTimeout(() => {
     const { docs, activeDoc: active } = st();
     // designer tabs reopen on the server's definition: unapplied structure changes are not kept
-    const data = docs.map((d) => (d.kind === 'table'
+    const data = docs.map((d) => (d.kind !== 'sql'
       ? { id: d.id, kind: d.kind, design: d.design, title: d.title, connId: d.connId, db: d.db, file: null, dirty: false, sql: '' }
       : { id: d.id, kind: d.kind, title: d.title, connId: d.connId, db: d.db, file: d.file, dirty: d.dirty, sql: modelOf(d.id).getValue() }))
-      .filter((d) => d.kind === 'sql' || d.design?.table);
+      .filter((d) => d.kind !== 'table' || d.design?.table);
     try { localStorage.setItem(KEY, JSON.stringify({ docs: data, active })); } catch { /* storage unavailable */ }
   }, 400);
 }
@@ -243,8 +257,8 @@ export function restore() {
   if (!saved?.docs?.length) return;
   const known = new Set(st().conns.map((c) => c.id));
   for (const d of saved.docs) {
-    if (d.kind === 'table') {
-      if (d.connId && known.has(d.connId) && d.db) st().addDoc({ id: d.id, kind: 'table', design: d.design, title: d.title, connId: d.connId, db: d.db });
+    if (d.kind && d.kind !== 'sql') {
+      if (d.connId && known.has(d.connId) && d.db) st().addDoc({ id: d.id, kind: d.kind, design: d.design, title: d.title, connId: d.connId, db: d.db });
       continue;
     }
     const m = /^SQL(\d+)\.sql$/.exec(d.title);

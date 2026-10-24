@@ -95,7 +95,7 @@ export interface Message {
 
 export interface Doc {
   id: string;
-  kind: 'sql' | 'table';
+  kind: 'sql' | 'table' | 'er';
   design?: { table: string | null }; // table designer: existing table or null for a new one
   title: string;
   connId: string | null;

@@ -173,4 +173,30 @@ async function serverOptions(connId, db) {
   };
 }
 
-module.exports = { tableDefinition, serverOptions, databases, objects, columns, indexes, foreignKeys, ddl, schema };
+/** Tables, columns and foreign keys of a whole database for the ER diagram (three queries). */
+async function erModel(connId, db) {
+  const [tables, cols, fks] = await Promise.all([
+    server.meta(connId, `SELECT TABLE_NAME AS name, TABLE_TYPE AS type, TABLE_ROWS AS \`rows\`, TABLE_COMMENT AS comment
+      FROM information_schema.TABLES WHERE TABLE_SCHEMA = ? ORDER BY TABLE_NAME`, [db]),
+    server.meta(connId, `SELECT TABLE_NAME AS t, COLUMN_NAME AS name, COLUMN_TYPE AS type, COLUMN_KEY AS \`key\`, IS_NULLABLE AS nullable
+      FROM information_schema.COLUMNS WHERE TABLE_SCHEMA = ? ORDER BY TABLE_NAME, ORDINAL_POSITION`, [db]),
+    server.meta(connId, `SELECT CONSTRAINT_NAME AS name, TABLE_NAME AS t, COLUMN_NAME AS col, REFERENCED_TABLE_SCHEMA AS refDb,
+        REFERENCED_TABLE_NAME AS refTable, REFERENCED_COLUMN_NAME AS refCol
+      FROM information_schema.KEY_COLUMN_USAGE WHERE TABLE_SCHEMA = ? AND REFERENCED_TABLE_NAME IS NOT NULL
+      ORDER BY TABLE_NAME, CONSTRAINT_NAME, ORDINAL_POSITION`, [db]),
+  ]);
+  const byTable = new Map(tables.map((t) => [t.name, {
+    name: t.name, kind: t.type === 'VIEW' ? 'view' : 'table', rows: t.rows === null ? null : Number(t.rows), comment: t.comment, columns: [],
+  }]));
+  for (const c of cols) byTable.get(c.t)?.columns.push({ name: c.name, type: c.type, pk: c.key === 'PRI', nullable: c.nullable === 'YES' });
+  const fkMap = new Map();
+  for (const r of fks) {
+    const k = `${r.t}/${r.name}`;
+    if (!fkMap.has(k)) fkMap.set(k, { name: r.name, table: r.t, columns: [], refDb: r.refDb, refTable: r.refTable, refColumns: [] });
+    fkMap.get(k).columns.push(r.col);
+    fkMap.get(k).refColumns.push(r.refCol);
+  }
+  return { tables: [...byTable.values()], fks: [...fkMap.values()] };
+}
+
+module.exports = { erModel, tableDefinition, serverOptions, databases, objects, columns, indexes, foreignKeys, ddl, schema };

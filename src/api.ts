@@ -1,4 +1,5 @@
 import type { ServerTable } from './design';
+import type { ErModel } from './er';
 import type {
   ServerOptions, ApplyStmt, Cell, Column, ExportFormat, ExportOptions, ColumnInfo, ConnDef, DbObjects, ExecMode, ExecResult, ForeignKeyInfo, IndexInfo, ObjectKind, Schema, Secrets, ServerInfo,
 } from './types';
@@ -27,6 +28,7 @@ interface Api {
     schema(id: string, db: string): Promise<Schema>;
     tableDefinition(id: string, db: string, table: string): Promise<ServerTable>;
     serverOptions(id: string, db: string): Promise<ServerOptions>;
+    erModel(id: string, db: string): Promise<ErModel>;
   };
   sess: {
     open(connId: string, db: string | null): Promise<{ id: string; db: string | null }>;
@@ -51,6 +53,7 @@ interface Api {
     open(): Promise<SqlFile[]>;
     save(content: string, path: string | null, suggested?: string): Promise<string | null>;
     onOpenArg(cb: (f: SqlFile) => void): void;
+    saveData(data: string, base64: boolean, suggested: string, filters: { name: string; extensions: string[] }[]): Promise<string | null>;
   };
   confirm(message: string, detail: string, buttons: string[]): Promise<number>;
   setTitle(t: string): void;

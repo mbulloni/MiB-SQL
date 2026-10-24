@@ -10,6 +10,7 @@ import Icon from './components/Icon';
 import ResultsPanel from './components/ResultsPanel';
 import SqlEditor from './components/SqlEditor';
 import TableDesigner from './components/TableDesigner';
+import ErDiagram from './components/ErDiagram';
 import logo from '../build/icons/128x128.png';
 
 function useDrag(initial: number, axis: 'x' | 'y', min: number, key: string) {
@@ -112,6 +113,7 @@ function DocTabs() {
             ])}>
             {d.running && <span className="spinner" />}
             {d.kind === 'table' && <Icon name="table" size={14} />}
+            {d.kind === 'er' && <Icon name="fk" size={14} />}
             <span className="name">{d.title}{d.dirty ? ' •' : ''}</span>
             <button className="x" onMouseDown={(e) => e.stopPropagation()} onClick={() => closeDoc(d.id)}><Icon name="close" size={12} /></button>
           </div>
@@ -234,6 +236,7 @@ export default function App() {
             <div style={{ height: bottom }} className="bottom">{active?.kind === 'sql' && <ResultsPanel doc={active} />}</div>
           </div>
           {active?.kind === 'table' && <TableDesigner key={active.id} doc={active} />}
+          {active?.kind === 'er' && <ErDiagram key={active.id} doc={active} />}
           {!docs.length && <StartPage />}
         </div>
       </div>

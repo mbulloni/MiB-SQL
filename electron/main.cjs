@@ -83,6 +83,19 @@ handle('meta:ddl', (id, db, kind, name) => explorer.ddl(id, db, kind, name));
 handle('meta:schema', (id, db) => explorer.schema(id, db));
 handle('meta:tableDefinition', (id, db, t) => explorer.tableDefinition(id, db, t));
 handle('meta:serverOptions', (id, db) => explorer.serverOptions(id, db));
+handle('meta:erModel', (id, db) => explorer.erModel(id, db));
+
+// Generic save of generated content (diagram images, reports): text or base64 data.
+handle('file:saveData', async (data, base64, suggested, filters) => {
+  let file = process.env.MIBSQL_SAVE_AS ? `${process.env.MIBSQL_SAVE_AS}${path.extname(suggested)}` : null;
+  if (!file) {
+    const r = await dialog.showSaveDialog(win, { defaultPath: suggested, filters });
+    if (r.canceled) return null;
+    file = r.filePath;
+  }
+  fs.writeFileSync(file, base64 ? Buffer.from(data, 'base64') : data);
+  return file;
+});
 handle('ddl:run', (connId, sqls) => server.runStatements(connId, sqls));
 
 handle('sess:open', (connId, db) => server.openSession(connId, db));

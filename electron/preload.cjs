@@ -29,6 +29,7 @@ contextBridge.exposeInMainWorld('api', {
     schema: (id, db) => call('meta:schema', id, db),
     tableDefinition: (id, db, t) => call('meta:tableDefinition', id, db, t),
     serverOptions: (id, db) => call('meta:serverOptions', id, db),
+    erModel: (id, db) => call('meta:erModel', id, db),
   },
   sess: {
     open: (connId, db) => call('sess:open', connId, db),
@@ -57,6 +58,7 @@ contextBridge.exposeInMainWorld('api', {
     open: () => call('file:open'),
     save: (content, path, suggested) => call('file:save', content, path, suggested),
     onOpenArg: (cb) => ipcRenderer.on('file:openArg', (_e, f) => cb(f)),
+    saveData: (data, base64, suggested, filters) => call('file:saveData', data, base64, suggested, filters),
   },
   confirm: (message, detail, buttons) => call('app:confirm', message, detail, buttons),
   setTitle: (t) => ipcRenderer.send('win:title', t),
