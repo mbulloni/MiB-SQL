@@ -35,6 +35,17 @@ IDE educativo per **MariaDB e MySQL** su Linux, ispirato a [dbForge Studio](http
 
 ![Piano di esecuzione](docs/screenshot-3.png)
 
+## Installazione
+
+Scarica `MiB-SQL-x.y.z.AppImage` dalle [release](https://github.com/mbulloni/MiB-SQL/releases), poi:
+
+```bash
+chmod +x MiB-SQL-*.AppImage
+./MiB-SQL-*.AppImage
+```
+
+Su Ubuntu 24.04 serve `libfuse2t64` per avviare le AppImage.
+
 ## Scorciatoie
 
 | Tasto | Azione |
@@ -78,7 +89,6 @@ mysql -u root -p < scripts/demo.sql
 - Alla chiusura della finestra non c'è conferma per i documenti modificati (il testo però viene ripristinato al riavvio)
 - Blocchi `BEGIN … END` senza `DELIMITER` vengono divisi ai `;` interni, come nel client `mariadb`
 - Solo tema chiaro
-- AppImage non ancora generata e provata
 
 ## Licenza
 

@@ -36,7 +36,8 @@
         "entry": {
           "StartupWMClass": "MiB-SQL"
         }
-      }
+      },
+      "syncDesktopName": true
     },
     "directories": {
       "buildResources": "build",
@@ -67,5 +68,6 @@
   "repository": {
     "type": "git",
     "url": "https://github.com/mbulloni/MiB-SQL.git"
-  }
+  },
+  "desktopName": "mib-sql.desktop"
 }
