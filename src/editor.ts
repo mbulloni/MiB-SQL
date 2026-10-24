@@ -49,6 +49,20 @@ monaco.editor.defineTheme('mibsql', {
   colors: { 'editor.lineHighlightBackground': '#f3f7ff' },
 });
 
+monaco.editor.defineTheme('mibsql-dark', {
+  base: 'vs-dark',
+  inherit: true,
+  rules: [
+    { token: 'keyword', foreground: '569cd6' },
+    { token: 'predefined', foreground: 'dcdcaa' },
+    { token: 'string', foreground: 'ce9178' },
+    { token: 'number', foreground: 'b5cea8' },
+    { token: 'comment', foreground: '6a9955', fontStyle: 'italic' },
+    { token: 'identifier.quote', foreground: 'd7ba7d' },
+  ],
+  colors: { 'editor.background': '#1e2228', 'editor.lineHighlightBackground': '#262b33', 'editorGutter.background': '#1e2228' },
+});
+
 // ---- Completion ----
 
 const KEYWORDS = [...new Set(mysql.keywords.map((k) => k.toUpperCase()))];

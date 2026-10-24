@@ -1,4 +1,4 @@
-import { useEffect, useRef, useState } from 'react';
+import { useEffect, useRef, useState, useSyncExternalStore } from 'react';
 import { api } from './api';
 import { cancelDoc, closeDoc, newDoc, openFiles, openSql, restore, runDoc, saveDoc, setDocTarget } from './actions';
 import { loadDatabases, metaKey, useStore, type MetaEntry } from './store';
@@ -13,6 +13,7 @@ import TableDesigner from './components/TableDesigner';
 import ErDiagram from './components/ErDiagram';
 import QueryBuilder from './components/QueryBuilder';
 import logo from '../build/icons/128x128.png';
+import { onThemeChange, resolvedTheme, setThemePref, themePref, type ThemePref } from './theme';
 
 function useDrag(initial: number, axis: 'x' | 'y', min: number, key: string) {
   const [size, setSize] = useState(() => Number(localStorage.getItem(key)) || initial);
@@ -69,6 +70,22 @@ function TargetPicker() {
   );
 }
 
+const THEME_LABEL: Record<ThemePref, string> = { light: 'Chiaro', dark: 'Scuro', system: 'Sistema' };
+
+/** Light / dark / system switch at the end of the toolbar. */
+function ThemeSwitch() {
+  // external store: also follows changes made elsewhere (system theme, scripts) even before effects run
+  const pref = useSyncExternalStore(onThemeChange, themePref);
+  const next: Record<ThemePref, ThemePref> = { light: 'dark', dark: 'system', system: 'light' };
+  const dark = resolvedTheme(pref) === 'dark';
+  return (
+    <button className="theme-switch" title={`Tema: ${THEME_LABEL[pref]} (clic: ${THEME_LABEL[next[pref]]})`}
+      onClick={() => setThemePref(next[pref])}>
+      <Icon name={dark ? 'moon' : 'sun'} /><span>{THEME_LABEL[pref]}</span>
+    </button>
+  );
+}
+
 function Toolbar() {
   const doc = useStore((s) => s.docs.find((d) => d.id === s.activeDoc));
   const set = useStore((s) => s.set);
@@ -89,6 +106,8 @@ function Toolbar() {
       <button title="Piano di esecuzione (Ctrl+E)" disabled={!runnable || running} onClick={() => runDoc('explain')}><Icon name="plan" /><span>Piano</span></button>
       <div className="sep" />
       {sql && <TargetPicker />}
+      <div className="spacer" />
+      <ThemeSwitch />
     </div>
   );
 }

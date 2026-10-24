@@ -11,21 +11,21 @@ import { openMenu } from './ContextMenu';
 
 // Styles live inside the SVG so exported files look the same as on screen.
 const ER_CSS = `
-.er-t rect.body { fill: #fff; stroke: #b8c2cf; }
+.er-t rect.body { fill: var(--panel, #fff); stroke: var(--box-stroke, #b8c2cf); }
 .er-t.sel rect.body { stroke: #2f6fd6; stroke-width: 2; }
 .er-t rect.head { fill: #3a7bd5; }
 .er-t.view rect.head { fill: #2a9d8f; }
-.er-t text { font: 12px 'Noto Sans', 'Segoe UI', sans-serif; fill: #1f2933; }
+.er-t text { font: 12px 'Noto Sans', 'Segoe UI', sans-serif; fill: var(--text, #1f2933); }
 .er-t text.name { font-weight: 600; fill: #fff; font-size: 12.5px; }
-.er-t text.type { fill: #7a8696; font-size: 11px; }
+.er-t text.type { fill: var(--muted, #7a8696); font-size: 11px; }
 .er-t text.pk { font-weight: 600; }
-.er-t text.more { fill: #7a8696; font-style: italic; font-size: 11px; }
+.er-t text.more { fill: var(--muted, #7a8696); font-style: italic; font-size: 11px; }
 .er-t .key { fill: #d4a017; font-size: 10px; font-weight: 700; }
 .er-t .fk { fill: #2a9d8f; font-size: 10px; font-weight: 700; }
-.er-r path { fill: none; stroke: #8a96a6; stroke-width: 1.4; }
+.er-r path { fill: none; stroke: var(--edge, #8a96a6); stroke-width: 1.4; }
 .er-r.opt path.line { stroke-dasharray: 5 4; }
 .er-r.hi path { stroke: #2f6fd6; stroke-width: 2; }
-.er-r.dim path { stroke: #d5dbe3; }
+.er-r.dim path { stroke: var(--edge-dim, #d5dbe3); }
 .er-r.picked path { stroke: #d64545; stroke-width: 2.4; }
 .er-r path.hit { stroke: transparent; stroke-width: 10; }
 .er-t rect.row-hit { fill: transparent; }
@@ -225,7 +225,7 @@ export default function ErDiagram({ doc }: { doc: Doc }) {
     clone.setAttribute('width', String(Math.ceil(b.w)));
     clone.setAttribute('height', String(Math.ceil(b.h)));
     clone.setAttribute('viewBox', `${b.x} ${b.y} ${b.w} ${b.h}`);
-    clone.querySelector('g.root')!.setAttribute('transform', '');
+    clone.querySelector('g.root')!.setAttribute('transform', ''); // exported files use the light fallbacks of ER_CSS
     clone.querySelectorAll('.sel').forEach((n) => n.classList.remove('sel'));
     clone.querySelectorAll('.hi, .dim').forEach((n) => n.classList.remove('hi', 'dim'));
     const bg = document.createElementNS('http://www.w3.org/2000/svg', 'rect');

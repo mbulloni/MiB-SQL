@@ -1,6 +1,7 @@
 import { useEffect, useRef } from 'react';
 import { bindEditor, persist } from '../actions';
 import { isDirty, modelOf, monaco } from '../editor';
+import { resolvedTheme } from '../theme';
 import { useStore } from '../store';
 
 // One Monaco instance for all documents: switching tab swaps the model and restores its view state.
@@ -15,7 +16,7 @@ export default function SqlEditor({ onCursor }: { onCursor: (ln: number, col: nu
 
   useEffect(() => {
     const editor = monaco.editor.create(host.current!, {
-      theme: 'mibsql',
+      theme: resolvedTheme() === 'dark' ? 'mibsql-dark' : 'mibsql',
       automaticLayout: true,
       fontFamily: "'JetBrains Mono', 'Fira Code', 'DejaVu Sans Mono', monospace",
       fontSize: 13,

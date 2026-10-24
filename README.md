@@ -6,7 +6,7 @@ IDE educativo per **MariaDB e MySQL** su Linux, ispirato a [dbForge Studio](http
 
 ![Database Explorer ed editor SQL](docs/screenshot-1.png)
 
-## Funzioni (v0.3 — fasi 1-4)
+## Funzioni (v0.4 — fasi 1-5)
 
 **Connessioni**
 - Profili salvati con colore d'ambiente (sviluppo/test/produzione: tinge scheda e barra di stato)
@@ -49,6 +49,22 @@ IDE educativo per **MariaDB e MySQL** su Linux, ispirato a [dbForge Studio](http
 - Svuota (TRUNCATE) ed elimina tabella dall'Explorer, con conferma
 - Verificato su MariaDB 10.11, MariaDB 11.4 e MySQL 8.4
 
+**Diagramma ER (editor visuale)**
+- Tasto destro sul database › «Diagramma ER»: disposizione automatica a livelli, notazione a zampa di gallina, relazioni opzionali tratteggiate
+- Pan, zoom con la rotella, trascinamento delle tabelle (disposizione salvata), ricerca, modalità «Solo chiavi», tabelle nascoste
+- Modifica visuale: «+ Tabella», «🔗 Relazione» trascinando da una colonna alla colonna riferita (controllo dei tipi, regole ON DELETE/UPDATE, anteprima SQL), elimina relazione (selezione + Canc), modifica ed elimina tabelle
+- Esporta PNG e SVG
+
+**Query Builder visuale**
+- Tasto destro sul database › «Query Builder»: tabelle trascinate dall'Explorer o scelte dalla lista
+- Join automatici dalle chiavi esterne o disegnati trascinando una colonna su un'altra; clic sul join per INNER/LEFT/RIGHT o per eliminarlo
+- Colonne spuntate, alias, aggregati con GROUP BY automatico, ordinamento, filtri WHERE/HAVING (IN, BETWEEN, LIKE, IS NULL…), DISTINCT, LIMIT
+- SQL in tempo reale, esecuzione nel documento (F5), apertura nell'editor SQL
+
+**Tema chiaro e scuro**
+- Interruttore in fondo alla toolbar: Chiaro, Scuro o Sistema (segue il desktop); la scelta viene ricordata
+- Editor SQL, griglie, designer, diagrammi e finestre seguono il tema (gli export dei diagrammi restano chiari)
+
 **Filtri ed export**
 - Filtro testuale su tutte le colonne e filtri per valore dal menu contestuale (Filtra per / Escludi)
 - Export **CSV** (separatore, intestazioni, BOM per Excel, NULL), **Excel .xlsx**, **JSON**, **SQL INSERT**
@@ -61,6 +77,12 @@ IDE educativo per **MariaDB e MySQL** su Linux, ispirato a [dbForge Studio](http
 ![Export](docs/screenshot-5.png)
 
 ![Designer tabelle](docs/screenshot-6.png)
+
+![Diagramma ER](docs/screenshot-7.png)
+
+![Query Builder](docs/screenshot-8.png)
+
+![Tema scuro](docs/screenshot-9.png)
 
 ![Piano di esecuzione](docs/screenshot-3.png)
 
@@ -95,7 +117,7 @@ Su Ubuntu 24.04 serve `libfuse2t64` per avviare le AppImage.
 ```bash
 npm install
 npm run dev        # Vite (porta 5174) + Electron
-npm test           # splitter SQL, modifiche in griglia, export, designer
+npm test           # splitter, modifiche in griglia, export, designer, ER, query builder
 npm run typecheck
 npm run dist       # AppImage in release/
 ```
@@ -108,7 +130,6 @@ mysql -u root -p < scripts/demo.sql
 
 ## Roadmap
 
-5. Diagramma ER
 6. Schema compare e data compare con script di sincronizzazione
 7. Backup/restore, import guidato
 8. Profiler query, utenti e privilegi, monitor sessioni
@@ -120,7 +141,6 @@ mysql -u root -p < scripts/demo.sql
 - Le modifiche in griglia usano una connessione separata da quella del documento: non vedono le transazioni aperte nello script
 - Alla chiusura della finestra non c'è conferma per i documenti modificati (il testo però viene ripristinato al riavvio)
 - Blocchi `BEGIN … END` senza `DELIMITER` vengono divisi ai `;` interni, come nel client `mariadb`
-- Solo tema chiaro
 - Designer: niente CHECK, partizioni, ordine DESC negli indici, indici invisibili; trigger e viste si modificano ancora come SQL
 - Le istruzioni DDL non sono transazionali: se una fallisce a metà, quelle precedenti restano applicate (il designer lo segnala e ricarica la struttura dal server)
 
