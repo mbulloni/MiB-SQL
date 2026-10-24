@@ -120,7 +120,15 @@ IDE educativo per **MariaDB e MySQL** su Linux, ispirato a [dbForge Studio](http
 
 ## Installazione
 
-Scarica `MiB-SQL-x.y.z.AppImage` dalle [release](https://github.com/mbulloni/MiB-SQL/releases), poi:
+Dalle [release](https://github.com/mbulloni/MiB-SQL/releases):
+
+**Debian/Ubuntu (.deb)**: installa dipendenze, voce nel menu, icona e il comando `mib-sql`:
+
+```bash
+sudo apt install ./mib-sql_x.y.z_amd64.deb
+```
+
+**AppImage** (qualsiasi distribuzione):
 
 ```bash
 chmod +x MiB-SQL-*.AppImage
@@ -152,7 +160,7 @@ npm install
 npm run dev        # Vite (porta 5174) + Electron
 npm test           # splitter (anche a flusso), griglia, export, designer, ER, query builder, confronto, import
 npm run typecheck
-npm run dist       # AppImage in release/
+npm run dist       # AppImage e .deb in release/ (npm run dist:deb solo .deb)
 ```
 
 Database di prova: `scripts/demo.sql` crea `mibsql_demo` (e `mibsql_demo2`, che `scripts/demo2.sql` riempie come copia modificata per i confronti) (clienti, prodotti, 20.000 ordini, vista, funzione, procedura, trigger, evento) e l'utente `mibsql`/`mibsql` con permessi solo su quel database.
