@@ -155,16 +155,24 @@ export function PasswordPrompt() {
 
 export function ValueViewer() {
   const v = useStore((s) => s.viewer)!;
+  const [value, setValue] = useState(v.value);
+  const [isNull, setNull] = useState(!!v.isNull);
   const close = () => useStore.getState().set({ viewer: null });
+  const save = (nv: string | null) => { v.onSave?.(nv); close(); };
   return (
     <div className="modal-back" onMouseDown={close}>
       <div className="modal viewer" onMouseDown={(e) => e.stopPropagation()} onKeyDown={(e) => { if (e.key === 'Escape') close(); }}>
-        <div className="modal-title">{v.title} <span className="hint">{v.value.length.toLocaleString('it-IT')} caratteri</span></div>
-        <textarea readOnly autoFocus value={v.value} />
+        <div className="modal-title">{v.title} <span className="hint">{isNull ? 'NULL' : `${value.length.toLocaleString('it-IT')} caratteri`}</span></div>
+        <textarea readOnly={!v.onSave} autoFocus value={value} placeholder={isNull ? 'NULL' : ''}
+          onChange={(e) => { setValue(e.target.value); setNull(false); }} />
         <div className="modal-buttons">
+          <button onClick={() => navigator.clipboard.writeText(value)}>Copia</button>
           <div className="spacer" />
-          <button onClick={() => navigator.clipboard.writeText(v.value)}>Copia</button>
-          <button className="primary" onClick={close}>Chiudi</button>
+          {v.onSave ? <>
+            <button onClick={() => save(null)}>Imposta NULL</button>
+            <button onClick={close}>Annulla</button>
+            <button className="primary" disabled={isNull && value === ''} onClick={() => save(value)}>Applica</button>
+          </> : <button className="primary" onClick={close}>Chiudi</button>}
         </div>
       </div>
     </div>

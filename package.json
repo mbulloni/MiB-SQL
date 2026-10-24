@@ -1,6 +1,6 @@
 {
   "name": "mib-sql",
-  "version": "0.1.0",
+  "version": "0.2.0",
   "description": "MiB-SQL - IDE educativo per MariaDB/MySQL su Linux, ispirato a dbForge Studio",
   "main": "electron/main.cjs",
   "type": "commonjs",
@@ -9,7 +9,7 @@
     "build": "vite build",
     "start": "vite build && electron . --no-sandbox",
     "typecheck": "tsc --noEmit",
-    "test": "node --test tests/*.test.cjs",
+    "test": "node --test tests/*.test.cjs tests/*.test.mjs",
     "dist": "vite build && electron-builder --linux AppImage"
   },
   "author": {
@@ -45,6 +45,7 @@
     }
   },
   "dependencies": {
+    "exceljs": "^4.4.0",
     "mariadb": "^3.5.4",
     "ssh2": "^1.17.0"
   },
@@ -69,5 +70,9 @@
     "type": "git",
     "url": "https://github.com/mbulloni/MiB-SQL.git"
   },
-  "desktopName": "mib-sql.desktop"
+  "desktopName": "mib-sql.desktop",
+  "overrides": {
+    "dompurify": "3.4.17",
+    "uuid": "^11.1.1"
+  }
 }

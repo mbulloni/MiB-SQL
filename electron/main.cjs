@@ -1,9 +1,10 @@
-const { app, BrowserWindow, ipcMain, dialog, Menu } = require('electron');
+const { app, BrowserWindow, ipcMain, dialog, Menu, shell } = require('electron');
 const path = require('path');
 const fs = require('fs');
 const connections = require('./connections.cjs');
 const server = require('./server.cjs');
 const explorer = require('./explorer.cjs');
+const exporter = require('./export.cjs');
 
 app.commandLine.appendSwitch('no-sandbox');
 // Separate profile for tests and screenshots, so they never touch the user's saved connections.
@@ -87,6 +88,43 @@ handle('sess:use', (sid, db) => server.useDb(sid, db));
 handle('sess:exec', (sid, text, opts) => server.exec(sid, text, opts));
 handle('sess:cancel', (sid) => server.cancel(sid));
 handle('sql:split', (text) => server.split(text));
+handle('data:apply', (connId, stmts) => server.apply(connId, stmts));
+handle('data:select', (connId, sql, params) => server.selectRows(connId, sql, params));
+
+async function exportTarget(format, suggested) {
+  // tests: write to <MIBSQL_SAVE_AS>.<ext> without the native dialog
+  if (process.env.MIBSQL_SAVE_AS) return `${process.env.MIBSQL_SAVE_AS}.${exporter.EXT[format]}`;
+  const base = (suggested || 'risultato').replace(/[\\/:*?"<>|]+/g, '_');
+  const r = await dialog.showSaveDialog(win, { defaultPath: `${base}.${exporter.EXT[format]}`, filters: exporter.FILTERS[format] });
+  if (r.canceled) return null;
+  return path.extname(r.filePath) ? r.filePath : `${r.filePath}.${exporter.EXT[format]}`;
+}
+
+handle('export:rows', async (format, opts, columns, rows, suggested) => {
+  const file = await exportTarget(format, suggested);
+  if (!file) return null;
+  return { file, rows: await exporter.writeRows(format, file, opts, columns, rows) };
+});
+
+// Whole query streamed to the file; progress every 5000 rows on 'export:progress'.
+handle('export:query', async (connId, db, sql, format, opts, suggested) => {
+  const file = await exportTarget(format, suggested);
+  if (!file) return null;
+  let w = null;
+  try {
+    const rows = await server.streamQuery(connId, db, sql, (cols) => { w = exporter.writer(format, file, opts, cols); }, async (row, n) => {
+      await w.row(row);
+      if (n % 5000 === 0) win.webContents.send('export:progress', { file, rows: n });
+    });
+    await w.end();
+    return { file, rows };
+  } catch (err) {
+    await w?.end().catch(() => {});
+    fs.rmSync(file, { force: true });
+    throw err;
+  }
+});
+handle('shell:showItem', (file) => shell.showItemInFolder(file));
 
 const SQL_FILTERS = [{ name: 'Script SQL', extensions: ['sql'] }, { name: 'Tutti i file', extensions: ['*'] }];
 

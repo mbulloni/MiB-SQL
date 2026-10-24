@@ -4,7 +4,7 @@ IDE educativo per **MariaDB e MySQL** su Linux, ispirato a [dbForge Studio](http
 
 ![Database Explorer ed editor SQL](docs/screenshot-1.png)
 
-## Funzioni (v0.1 — fasi 1-2)
+## Funzioni (v0.2 — fasi 1-3)
 
 **Connessioni**
 - Profili salvati con colore d'ambiente (sviluppo/test/produzione: tinge scheda e barra di stato)
@@ -31,7 +31,23 @@ IDE educativo per **MariaDB e MySQL** su Linux, ispirato a [dbForge Studio](http
 - Ordinamento, ridimensionamento colonne, selezione a celle, copia TSV (Ctrl+C, con intestazioni Ctrl+Maiusc+C)
 - Visualizzatore valore (doppio clic/Invio) con JSON formattato; BLOB in esadecimale, NULL distinti
 
+**Modifica dati**
+- Risultati da una sola tabella con chiave primaria (o UNIQUE NOT NULL) modificabili in griglia: F2, Invio, doppio clic o digitazione diretta; Ctrl+Maiusc+N imposta NULL
+- Aggiungi righe (colonne non toccate = DEFAULT), Canc elimina/ripristina le righe selezionate
+- Modifiche evidenziate, **anteprima SQL**, applicazione in un'unica transazione con controllo dei conflitti (riga cambiata da un altro utente → rollback completo)
+- Dopo l'applicazione le righe vengono rilette: si vedono DEFAULT, AUTO_INCREMENT, trigger e `ON UPDATE CURRENT_TIMESTAMP`
+- Il motivo della sola lettura è sempre indicato (join, espressioni, chiave primaria mancante)
+
+**Filtri ed export**
+- Filtro testuale su tutte le colonne e filtri per valore dal menu contestuale (Filtra per / Escludi)
+- Export **CSV** (separatore, intestazioni, BOM per Excel, NULL), **Excel .xlsx**, **JSON**, **SQL INSERT**
+- Righe mostrate (con filtri) oppure tutte le righe rieseguendo la query in streaming; dall'Explorer «Esporta dati…» per l'intera tabella
+
 ![Autocompletamento sugli alias ed errori](docs/screenshot-2.png)
+
+![Modifica dati in griglia](docs/screenshot-4.png)
+
+![Export](docs/screenshot-5.png)
 
 ![Piano di esecuzione](docs/screenshot-3.png)
 
@@ -55,15 +71,18 @@ Su Ubuntu 24.04 serve `libfuse2t64` per avviare le AppImage.
 | Ctrl+E | Piano di esecuzione (`EXPLAIN EXTENDED`) |
 | Maiusc+F5 | Interrompi |
 | Ctrl+N / Ctrl+O / Ctrl+S / Ctrl+W | Nuovo, apri, salva, chiudi documento |
-| Ctrl+Maiusc+N | Nuova connessione |
+| Ctrl+Maiusc+N | Nuova connessione (fuori dalla griglia) |
 | Ctrl+Tab | Documento successivo |
+| F2 / Invio | Modifica cella (Maiusc+Invio: visualizzatore) |
+| Ctrl+Maiusc+N | Imposta NULL (in griglia) |
+| Canc | Elimina/ripristina righe selezionate |
 
 ## Sviluppo
 
 ```bash
 npm install
 npm run dev        # Vite (porta 5174) + Electron
-npm test           # test dello splitter SQL
+npm test           # splitter SQL, modifiche in griglia, export
 npm run typecheck
 npm run dist       # AppImage in release/
 ```
@@ -76,7 +95,6 @@ mysql -u root -p < scripts/demo.sql
 
 ## Roadmap
 
-3. Modifica dati in griglia (insert/update/delete con anteprima SQL), filtri, export CSV/JSON/SQL/Excel
 4. Designer tabelle visuale (colonne, indici, FK) → DDL
 5. Diagramma ER
 6. Schema compare e data compare con script di sincronizzazione
@@ -85,7 +103,9 @@ mysql -u root -p < scripts/demo.sql
 
 ## Limiti noti (da implementare)
 
-- I resultset oltre 50.000 righe vengono letti per intero e poi troncati: manca il fetch progressivo in streaming
+- I resultset oltre 50.000 righe vengono letti per intero e poi troncati: manca il fetch progressivo in streaming (l'export di tutte le righe invece è in streaming)
+- Colonne binarie (BLOB/VARBINARY) non modificabili in griglia; manca un editor esadecimale/da file
+- Le modifiche in griglia usano una connessione separata da quella del documento: non vedono le transazioni aperte nello script
 - Alla chiusura della finestra non c'è conferma per i documenti modificati (il testo però viene ripristinato al riavvio)
 - Blocchi `BEGIN … END` senza `DELIMITER` vengono divisi ai `;` interni, come nel client `mariadb`
 - Solo tema chiaro

@@ -36,6 +36,20 @@ contextBridge.exposeInMainWorld('api', {
     cancel: (sid) => call('sess:cancel', sid),
   },
   split: (text) => call('sql:split', text),
+  data: {
+    apply: (connId, stmts) => call('data:apply', connId, stmts),
+    select: (connId, sql, params) => call('data:select', connId, sql, params),
+  },
+  exp: {
+    rows: (format, opts, columns, rows, suggested) => call('export:rows', format, opts, columns, rows, suggested),
+    query: (connId, db, sql, format, opts, suggested) => call('export:query', connId, db, sql, format, opts, suggested),
+    onProgress: (cb) => {
+      const fn = (_e, p) => cb(p);
+      ipcRenderer.on('export:progress', fn);
+      return () => ipcRenderer.removeListener('export:progress', fn);
+    },
+  },
+  showItem: (file) => call('shell:showItem', file),
   file: {
     open: () => call('file:open'),
     save: (content, path, suggested) => call('file:save', content, path, suggested),

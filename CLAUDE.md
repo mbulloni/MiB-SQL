@@ -19,8 +19,11 @@ npm run dist        # AppImage
 - `electron/server.cjs` — per connessione: pool metadati (explorer, completamento, `KILL QUERY`) + tunnel SSH condiviso (`ssh2`, server locale su porta 0). Per documento: connessione dedicata (sessione). `exec()` divide lo script, esegue in sequenza, normalizza celle (BigInt/DECIMAL → stringa, Buffer → `0x…`, JSON → stringa), limita a 50.000 righe per resultset. `open()` prova prima una connessione singola: il pool riproverebbe fino ad `acquireTimeout` perdendo il codice d'errore.
 - `electron/sqlsplit.cjs` — splitter tipo client mariadb (quote, commenti, `DELIMITER`), offset sul testo originale. Testato in `tests/`.
 - `electron/explorer.cjs` — query su `information_schema`, `SHOW CREATE` per i DDL.
+- `electron/export.cjs` — writer CSV/JSON/SQL/xlsx (exceljs in streaming) riga per riga; `server.streamQuery` per esportare tutta una query. `server.apply` esegue le modifiche della griglia in transazione su una connessione del pool (`expectOne` → rollback sui conflitti), `server.selectRows` rilegge le righe toccate.
 - `src/store.ts` — zustand: profili, stato connessioni, cache metadati (`metaKey`), documenti, dialog. `openConn` gestisce il prompt password su errori di autenticazione.
 - `src/editor.ts` — Monaco: un modello per documento, dirty per `alternativeVersionId`, completamento (alias via `tableRefs`), marker errori.
+- `src/edits.ts` — logica pura delle modifiche in griglia (target modificabile, `Edits`, generazione UPDATE/INSERT/DELETE parametrizzati, anteprima). Testata da `tests/edits.test.mjs` con il type stripping di Node: `src/package.json` dichiara `"type": "module"` per questo.
+- `src/components/ResultView.tsx` — barra filtri/modifiche/export sopra `ResultGrid`; modifiche in sospeso in `editsBySet` (WeakMap per ResultSet, store.ts). `runDoc`/`closeDoc` chiedono conferma se ci sono modifiche non applicate.
 - `src/actions.ts` — azioni documento (run, cancel, save, DDL, select top), persistenza schede in localStorage.
 - `src/components/` — `Explorer`, `SqlEditor` (un'unica istanza Monaco, swap modelli), `ResultsPanel`, `ResultGrid` (virtualizzata, righe 22px), `Dialogs`, `ContextMenu`, `Icon` (SVG inline).
 
@@ -28,6 +31,8 @@ npm run dist        # AppImage
 
 - `MIBSQL_USERDATA=<dir>` usa un profilo separato (mai il profilo reale nei test).
 - `MIBSQL_SHOT=out.png MIBSQL_SCRIPT=script.js [MIBSQL_WAIT=ms]`: esegue lo script nel renderer, salva il valore restituito in `out.json`, cattura e chiude. Lo script usa `window.__mib = { useStore, actions, monaco }`.
+- `MIBSQL_SAVE_AS=<path senza estensione>` salta il dialog di salvataggio degli export.
+- Nei test UI: React 19 applica lo stato in un microtask, quindi tra eventi sintetici consecutivi (mousedown → contextmenu) serve un `await sleep()`.
 - DB di prova: `scripts/demo.sql` → `mibsql_demo` + utente `mibsql`/`mibsql` limitato a quel db. Non usare i db `r_lab_*` per i test.
 - Tunnel SSH verificato con container `mariadb:11.4` + `linuxserver/openssh-server` sulla stessa rete Docker.
 

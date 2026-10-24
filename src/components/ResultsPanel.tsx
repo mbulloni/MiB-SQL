@@ -2,7 +2,7 @@ import { useEffect, useRef } from 'react';
 import { reveal } from '../actions';
 import { useStore } from '../store';
 import type { Doc, ResultSet } from '../types';
-import ResultGrid from './ResultGrid';
+import ResultView from './ResultView';
 
 const elapsed = (ms: number) => (ms < 1000 ? `${ms} ms` : `${(ms / 1000).toFixed(2)} s`);
 
@@ -17,9 +17,9 @@ function Running({ since }: { since: number }) {
 
 export default function ResultsPanel({ doc }: { doc: Doc }) {
   const update = useStore((s) => s.updateDoc);
-  const sets: { set: ResultSet; label: string; sql: string }[] = [];
-  doc.run?.results.forEach((r) => r.sets.forEach((set) => {
-    sets.push({ set, label: doc.run!.explain ? `Piano ${sets.length + 1}` : `Risultato ${sets.length + 1}`, sql: r.sql });
+  const sets: { set: ResultSet; label: string; sql: string; at: [number, number] }[] = [];
+  doc.run?.results.forEach((r, i) => r.sets.forEach((set, j) => {
+    sets.push({ set, label: doc.run!.explain ? `Piano ${sets.length + 1}` : `Risultato ${sets.length + 1}`, sql: r.sql, at: [i, j] });
   }));
   const view = doc.view === 'messages' || !sets[doc.view] ? 'messages' : doc.view;
   const current = view === 'messages' ? null : sets[view];
@@ -46,7 +46,7 @@ export default function ResultsPanel({ doc }: { doc: Doc }) {
         </div>
       </div>
       {current ? (
-        current.set.columns.length ? <ResultGrid columns={current.set.columns} rows={current.set.rows} /> : <div className="empty">Nessuna colonna.</div>
+        current.set.columns.length ? <ResultView key={`${doc.id}/${view}`} doc={doc} set={current.set} sql={current.sql} at={current.at} /> : <div className="empty">Nessuna colonna.</div>
       ) : (
         <div className="messages" ref={msgBox}>
           {doc.messages.length === 0 && <div className="empty">Premi F5 per eseguire lo script, Ctrl+Invio per l'istruzione sotto il cursore.</div>}

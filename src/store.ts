@@ -1,11 +1,27 @@
 import { create } from 'zustand';
 import { api } from './api';
-import type { ConnDef, ConnState, Doc, Secrets, ServerInfo } from './types';
+import type { Edits } from './edits';
+import type { Cell, Column, ConnDef, ConnState, Doc, ResultSet, Secrets, ServerInfo } from './types';
 
 export interface MetaEntry<T = unknown> {
   data?: T;
   loading?: boolean;
   error?: string;
+}
+
+/** Pending grid edits per result set: survive tab switches, dropped with the set (re-run, close). */
+export const editsBySet = new WeakMap<ResultSet, Edits>();
+
+export interface ExportRequest {
+  columns?: Column[];
+  rows?: Cell[][];
+  name: string;
+  table: string;
+  db: string | null;
+  query?: { connId: string; db: string | null; sql: string };
+  total?: number;
+  truncated?: boolean;
+  filtered?: boolean;
 }
 
 interface PasswordRequest {
@@ -24,7 +40,8 @@ interface State {
   selectedConn: string | null;
   connDialog: { def: Partial<ConnDef> } | null;
   passwordPrompt: PasswordRequest | null;
-  viewer: { title: string; value: string } | null;
+  exportDialog: ExportRequest | null;
+  viewer: { title: string; value: string; isNull?: boolean; onSave?: (v: string | null) => void } | null;
 
   loadConns(): Promise<void>;
   openConn(id: string): Promise<ServerInfo | null>;
@@ -53,6 +70,7 @@ export const useStore = create<State>((set, get) => ({
   selectedConn: null,
   connDialog: null,
   passwordPrompt: null,
+  exportDialog: null,
   viewer: null,
 
   async loadConns() {

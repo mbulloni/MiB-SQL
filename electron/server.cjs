@@ -202,16 +202,21 @@ async function useDb(sid, db) {
   return db;
 }
 
-const hex = (buf) => '0x' + buf.subarray(0, 256).toString('hex').toUpperCase() + (buf.length > 256 ? '…' : '');
+// Binary values travel as hex; past 1 MB only a prefix (marked with …) so a stray LONGBLOB cannot flood the UI.
+const HEX_MAX = 1024 * 1024;
+const hex = (buf, max = HEX_MAX) => '0x' + buf.subarray(0, max).toString('hex').toUpperCase() + (buf.length > max ? '…' : '');
 
-function cell(v) {
+function cell(v, max) {
   if (v === null || v === undefined) return null;
   if (typeof v === 'bigint') return v.toString();
-  if (Buffer.isBuffer(v)) return hex(v);
+  if (Buffer.isBuffer(v)) return hex(v, max);
   if (v instanceof Date) return v.toISOString();
   if (typeof v === 'object') return JSON.stringify(v);
   return v;
 }
+
+const FLAG_NOT_NULL = 1;
+const FLAG_AUTO_INCREMENT = 512;
 
 function column(m) {
   return {
@@ -223,6 +228,9 @@ function column(m) {
     type: m.type,
     length: m.columnLength,
     scale: m.scale,
+    binary: m.collation?.index === 63 && /BLOB|STRING|GEOMETRY/.test(m.type),
+    notNull: !!(m.flags & FLAG_NOT_NULL),
+    autoIncrement: !!(m.flags & FLAG_AUTO_INCREMENT),
   };
 }
 
@@ -264,7 +272,7 @@ async function exec(sid, text, { mode = 'all', cursor = 0, selStart = 0, selEnd 
         const { sets, ok } = resultSets(res);
         entry.sets = sets.map((rs) => ({
           columns: rs.meta.map(column),
-          rows: rs.slice(0, maxRows).map((r) => r.map(cell)),
+          rows: rs.slice(0, maxRows).map((r) => r.map((v) => cell(v))),
           total: rs.length,
           truncated: rs.length > maxRows,
         }));
@@ -299,8 +307,69 @@ async function cancel(sid) {
   return true;
 }
 
+/**
+ * Grid edits: statements run in one transaction on a pool connection (not the document's session, so an
+ * open transaction there is not committed by accident). expectOne guards UPDATE/DELETE by primary key:
+ * no matched row means someone else changed or deleted it, and everything is rolled back.
+ */
+async function apply(connId, stmts) {
+  const c = await pool(connId).getConnection();
+  let at = 0;
+  try {
+    await c.beginTransaction();
+    const out = [];
+    for (; at < stmts.length; at++) {
+      const st = stmts[at];
+      const r = await c.query({ sql: st.sql, rowsAsArray: false }, st.params);
+      if (st.expectOne && r.affectedRows !== 1) {
+        throw new Error(`${r.affectedRows} righe trovate invece di 1: la riga è stata modificata o eliminata da un altro utente.`);
+      }
+      out.push({ affectedRows: r.affectedRows, insertId: r.insertId ? String(r.insertId) : null });
+    }
+    await c.commit();
+    return out;
+  } catch (err) {
+    await c.rollback().catch(() => {});
+    const e = new DbError(err);
+    e.message = `Istruzione ${at + 1}: ${e.message.replace(/[.\s]*$/, '.')} Nessuna modifica applicata.`;
+    throw e;
+  } finally {
+    c.release();
+  }
+}
+
+/** Rows of a parameterized SELECT, normalized like the grid's (re-reading edited rows after an apply). */
+async function selectRows(connId, sql, params) {
+  try {
+    const res = await pool(connId).query({ sql, rowsAsArray: true }, params);
+    return Array.from(res).map((r) => r.map((v) => cell(v)));
+  } catch (err) { throw new DbError(err); }
+}
+
+/** Streams a query from a pool connection (exports): columns first, then rows with full binary values. */
+async function streamQuery(connId, db, sql, onColumns, onRow) {
+  const c = await pool(connId).getConnection();
+  try {
+    if (db) await c.query(`USE \`${db.replace(/`/g, '``')}\``);
+    const stream = c.queryStream({ sql, rowsAsArray: true });
+    let columns = null;
+    stream.on('fields', (meta) => { columns = meta.map(column); onColumns(columns); });
+    let n = 0;
+    for await (const row of stream) {
+      if (!columns) throw new Error('La query non restituisce righe.');
+      await onRow(row.map((v) => cell(v, Infinity)), ++n);
+    }
+    if (!columns) throw new Error('La query non restituisce righe.');
+    return n;
+  } catch (err) {
+    throw err instanceof DbError || !err.sqlMessage ? err : new DbError(err);
+  } finally {
+    c.release();
+  }
+}
+
 async function shutdown() {
   for (const id of [...pools.keys()]) await close(id);
 }
 
-module.exports = { test, open, close, info, meta, openSession, closeSession, useDb, exec, cancel, shutdown, split };
+module.exports = { test, open, close, info, meta, openSession, closeSession, useDb, exec, cancel, apply, selectRows, streamQuery, shutdown, split };

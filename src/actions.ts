@@ -1,7 +1,8 @@
 // Document actions shared by toolbar, shortcuts and explorer: they need both the store and the editor models.
 import { api, type SqlFile } from './api';
 import { clearMarkers, disposeModel, markErrors, markSaved, modelOf, monaco } from './editor';
-import { metaKey, setUntitled, useStore } from './store';
+import { editCount } from './edits';
+import { editsBySet, metaKey, setUntitled, useStore } from './store';
 import type { Doc, ExecMode, Message, ObjectKind, StmtResult } from './types';
 
 const st = () => useStore.getState();
@@ -48,6 +49,7 @@ export async function saveDoc(id = st().activeDoc, as = false) {
 export async function closeDoc(id = st().activeDoc) {
   const doc = id ? docById(id) : undefined;
   if (!doc) return;
+  if (!(await discardEdits(doc, 'Chiudere il documento'))) return;
   if (doc.dirty) {
     const r = await api.confirm(`Salvare le modifiche a ${doc.title}?`, 'Le modifiche non salvate andranno perse.', ['Salva', 'Non salvare', 'Annulla']);
     if (r === 2) return;
@@ -71,14 +73,14 @@ export async function setDocTarget(id: string, connId: string | null, db: string
   st().updateDoc(id, { connId, db });
   const sid = docById(id)?.sessionId;
   if (sid && db) {
-    try { await api.sess.use(sid, db); } catch (err) { log(id, 'error', (err as Error).message); }
+    try { await api.sess.use(sid, db); } catch (err) { logMessage(id, 'error', (err as Error).message); }
   }
   persist();
 }
 
 const now = () => new Date().toLocaleTimeString('it-IT');
 
-function log(id: string, level: Message['level'], text: string, extra: Partial<Message> = {}) {
+export function logMessage(id: string, level: Message['level'], text: string, extra: Partial<Message> = {}) {
   st().updateDoc(id, (d) => ({ messages: [...d.messages, { at: now(), level, text, ...extra }].slice(-1000) }));
 }
 
@@ -103,10 +105,21 @@ function describe(r: StmtResult) {
   return `${plural(r.affectedRows ?? 0, 'riga interessata', 'righe interessate')}${r.insertId ? `, ultimo id ${r.insertId}` : ''} in ${r.ms} ms`;
 }
 
+/** Grid edits not yet applied in the document's results. */
+export const pendingEdits = (doc: Doc) =>
+  doc.run?.results.reduce((n, r) => n + r.sets.reduce((m, s) => m + editCount(editsBySet.get(s) ?? { updates: {}, deleted: [], inserted: [] }), 0), 0) ?? 0;
+
+async function discardEdits(doc: Doc, action: string) {
+  const n = pendingEdits(doc);
+  if (!n) return true;
+  return (await api.confirm(`${n} modifiche ai dati non applicate`, `${action} le scarta.`, ['Scarta modifiche', 'Annulla'])) === 0;
+}
+
 /** Executes the document: selection or whole script (all), statement under cursor (current) or its plan. */
 export async function runDoc(mode: ExecMode, id = st().activeDoc) {
   const doc = id ? docById(id) : undefined;
   if (!doc || doc.running) return;
+  if (!(await discardEdits(doc, 'Eseguire di nuovo'))) return;
   const model = modelOf(doc.id);
   const ed = editorOf(doc.id);
   const text = model.getValue();
@@ -126,18 +139,18 @@ export async function runDoc(mode: ExecMode, id = st().activeDoc) {
     const r = await api.sess.exec(sid, text, opts);
     const ms = Math.round(performance.now() - t0);
     for (const x of r.results) {
-      log(doc.id, x.error ? 'error' : 'ok', describe(x), { sql: x.sql, offset: x.start });
-      for (const w of x.warnings) if (mode !== 'explain') log(doc.id, 'warning', `${w.level} ${w.code}: ${w.message}`, { offset: x.start });
+      logMessage(doc.id, x.error ? 'error' : 'ok', describe(x), { sql: x.sql, offset: x.start });
+      for (const w of x.warnings) if (mode !== 'explain') logMessage(doc.id, 'warning', `${w.level} ${w.code}: ${w.message}`, { offset: x.start });
     }
-    if (!r.results.length) log(doc.id, 'info', 'Nessuna istruzione da eseguire.');
-    if (r.cancelled) log(doc.id, 'warning', 'Esecuzione annullata.');
+    if (!r.results.length) logMessage(doc.id, 'info', 'Nessuna istruzione da eseguire.');
+    if (r.cancelled) logMessage(doc.id, 'warning', 'Esecuzione annullata.');
     markErrors(model, r.results);
     const firstSet = r.results.some((x) => x.sets.length) ? 0 : 'messages';
     const failed = r.results.some((x) => x.error);
     st().updateDoc(doc.id, { run: { results: r.results, explain: mode === 'explain', ms }, db: r.db, view: failed ? 'messages' : firstSet });
     if (r.results.some((x) => !x.error && DDL_RE.test(x.sql))) refreshAfterDdl(doc.connId!);
   } catch (err) {
-    log(doc.id, 'error', (err as Error).message);
+    logMessage(doc.id, 'error', (err as Error).message);
     st().updateDoc(doc.id, { view: 'messages' });
   } finally {
     st().updateDoc(doc.id, { running: false });
@@ -165,7 +178,7 @@ export async function showDdl(connId: string, db: string, kind: ObjectKind, name
     newDoc({ connId, db, sql, title: `${name}.sql` });
   } catch (err) {
     const doc = newDoc({ connId, db, title: `${name}.sql` });
-    log(doc.id, 'error', (err as Error).message);
+    logMessage(doc.id, 'error', (err as Error).message);
   }
 }
 

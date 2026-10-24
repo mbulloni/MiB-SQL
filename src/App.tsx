@@ -4,6 +4,7 @@ import { cancelDoc, closeDoc, newDoc, openFiles, openSql, restore, runDoc, saveD
 import { loadDatabases, metaKey, useStore, type MetaEntry } from './store';
 import ContextMenu, { openMenu } from './components/ContextMenu';
 import { ConnectionDialog, PasswordPrompt, ValueViewer } from './components/Dialogs';
+import ExportDialog from './components/ExportDialog';
 import Explorer from './components/Explorer';
 import Icon from './components/Icon';
 import ResultsPanel from './components/ResultsPanel';
@@ -167,6 +168,7 @@ export default function App() {
   const connDialog = useStore((s) => s.connDialog);
   const prompt = useStore((s) => s.passwordPrompt);
   const viewer = useStore((s) => s.viewer);
+  const exporting = useStore((s) => s.exportDialog);
   const [cursor, setCursor] = useState<[number, number]>([1, 1]);
   const [side, startSide] = useDrag(300, 'x', 180, 'mibsql.side');
   const [bottom, startBottom] = useDrag(320, 'y', 80, 'mibsql.bottom');
@@ -186,7 +188,11 @@ export default function App() {
   // Shortcuts in the capture phase so Monaco does not see them first (Ctrl+Enter, F5…).
   useEffect(() => {
     const onKey = (e: KeyboardEvent) => {
-      if (useStore.getState().connDialog || useStore.getState().passwordPrompt) return;
+      const s = useStore.getState();
+      if (s.connDialog || s.passwordPrompt || s.exportDialog || s.viewer) return;
+      // the grid has its own Ctrl+Maiusc+N (NULL) and text inputs keep their keys
+      const t = e.target as HTMLElement;
+      if (t.closest?.('.grid, .result-bar') && (t.tagName === 'INPUT' || ((e.ctrlKey || e.metaKey) && e.shiftKey && e.key.toLowerCase() === 'n'))) return;
       const ctrl = e.ctrlKey || e.metaKey;
       const k = e.key.toLowerCase();
       const run = (fn: () => void) => { e.preventDefault(); e.stopPropagation(); fn(); };
@@ -230,7 +236,8 @@ export default function App() {
       <ContextMenu />
       {connDialog && <ConnectionDialog key={connDialog.def.id ?? 'new'} />}
       {prompt && <PasswordPrompt key={prompt.conn.id + prompt.error} />}
-      {viewer && <ValueViewer />}
+      {viewer && <ValueViewer key={viewer.title + viewer.value.length} />}
+      {exporting && <ExportDialog />}
     </div>
   );
 }

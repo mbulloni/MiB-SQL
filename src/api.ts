@@ -1,5 +1,5 @@
 import type {
-  ColumnInfo, ConnDef, DbObjects, ExecMode, ExecResult, ForeignKeyInfo, IndexInfo, ObjectKind, Schema, Secrets, ServerInfo,
+  ApplyStmt, Cell, Column, ExportFormat, ExportOptions, ColumnInfo, ConnDef, DbObjects, ExecMode, ExecResult, ForeignKeyInfo, IndexInfo, ObjectKind, Schema, Secrets, ServerInfo,
 } from './types';
 
 export interface SqlFile {
@@ -33,6 +33,16 @@ interface Api {
     cancel(sid: string): Promise<boolean>;
   };
   split(text: string): Promise<{ sql: string; start: number; end: number }[]>;
+  data: {
+    apply(connId: string, stmts: ApplyStmt[]): Promise<{ affectedRows: number; insertId: string | null }[]>;
+    select(connId: string, sql: string, params: Cell[]): Promise<Cell[][]>;
+  };
+  exp: {
+    rows(format: ExportFormat, opts: ExportOptions, columns: Column[], rows: Cell[][], suggested: string): Promise<{ file: string; rows: number } | null>;
+    query(connId: string, db: string | null, sql: string, format: ExportFormat, opts: ExportOptions, suggested: string): Promise<{ file: string; rows: number } | null>;
+    onProgress(cb: (p: { file: string; rows: number }) => void): () => void;
+  };
+  showItem(file: string): Promise<void>;
   file: {
     open(): Promise<SqlFile[]>;
     save(content: string, path: string | null, suggested?: string): Promise<string | null>;

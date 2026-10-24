@@ -43,6 +43,9 @@ export interface Column {
   type: string;
   length: number;
   scale: number;
+  binary: boolean;
+  notNull: boolean;
+  autoIncrement: boolean;
 }
 
 export type Cell = string | number | null;
@@ -148,3 +151,22 @@ export interface Schema {
 }
 
 export type ObjectKind = 'table' | 'view' | 'procedure' | 'function' | 'trigger' | 'event';
+
+export type ExportFormat = 'csv' | 'json' | 'sql' | 'xlsx';
+
+export interface ExportOptions {
+  delimiter?: string;
+  header?: boolean;
+  nullAs?: string;
+  bom?: boolean;
+  table?: string;
+  db?: string;
+  batch?: number;
+  sheet?: string;
+}
+
+export interface ApplyStmt {
+  sql: string;
+  params: Cell[];
+  expectOne?: boolean;
+}

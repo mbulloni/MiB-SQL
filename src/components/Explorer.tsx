@@ -134,7 +134,8 @@ function DbChildren({ c, db, depth }: { c: string; db: string; depth: number }) 
                     title={t.comment || undefined}
                     onDouble={() => selectTop(c, db, o.name)}
                     menu={[
-                      { label: 'Seleziona prime 1000 righe', action: () => selectTop(c, db, o.name) },
+                      { label: F.kind === 'table' ? 'Modifica dati (prime 1000 righe)' : 'Seleziona prime 1000 righe', action: () => selectTop(c, db, o.name) },
+                      { label: 'Esporta dati…', action: () => useStore.getState().set({ exportDialog: { name: o.name, table: o.name, db, query: { connId: c, db, sql: `SELECT * FROM ${qn}` } } }) },
                       { label: 'Conta righe', action: () => runDoc('all', newDoc({ connId: c, db, sql: `SELECT COUNT(*) FROM ${qn};\n` }).id) },
                       'sep', ...common,
                     ]}>
