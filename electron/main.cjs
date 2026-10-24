@@ -99,7 +99,7 @@ handle('meta:erModel', (id, db) => explorer.erModel(id, db));
 handle('meta:schemaSnapshot', (id, db) => explorer.schemaSnapshot(id, db));
 handle('meta:users', (id) => explorer.users(id));
 handle('meta:grants', (id, user, host) => explorer.grants(id, user, host));
-handle('compare:data', (src, tgt, table, key, columns) => datacompare.compareTable(src, tgt, table, key, columns));
+handle('compare:data', (src, tgt, table, key, columns) => datacompare.compareTable(src, tgt, table, key, columns, (p) => win.webContents.send('task:progress', { id: `compare:${table}`, ...p })));
 
 // Generic save of generated content (diagram images, reports): text or base64 data.
 handle('file:saveData', async (data, base64, suggested, filters) => {

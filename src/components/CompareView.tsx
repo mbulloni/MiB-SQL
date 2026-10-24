@@ -58,6 +58,10 @@ export default function CompareView({ doc }: { doc: Doc }) {
   const [data, setData] = useState<Record<string, DataResult | { error: string } | 'running'>>({});
   const [dataPicked, setDataPicked] = useState<Set<string>>(new Set());
   const [dataSel, setDataSel] = useState<string | null>(null);
+  const [progress, setProgress] = useState<Record<string, number>>({});
+  useEffect(() => api.tasks.onProgress((p) => {
+    if (typeof p.id === 'string' && p.id.startsWith('compare:')) setProgress((x) => ({ ...x, [String(p.table)]: Number(p.rows) }));
+  }), []);
   const conns = useStore((s) => s.conns);
   const ready = !!(cmp.src.connId && cmp.src.db && cmp.tgt.connId && cmp.tgt.db);
   const sameDb = cmp.src.connId === cmp.tgt.connId && cmp.src.db === cmp.tgt.db;
@@ -248,7 +252,7 @@ export default function CompareView({ doc }: { doc: Doc }) {
                       <td className="c"><input type="checkbox" disabled={!done?.statements.length} checked={dataPicked.has(t.table)}
                         onChange={(e) => { const p = new Set(dataPicked); if (e.target.checked) p.add(t.table); else p.delete(t.table); setDataPicked(p); }} /></td>
                       <td>{t.table}{t.reason && <span className="muted"> · {t.reason}</span>}</td>
-                      {r === 'running' ? <td colSpan={4} className="muted">confronto…</td>
+                      {r === 'running' ? <td colSpan={4} className="muted">confronto… {progress[t.table] ? `${progress[t.table].toLocaleString('it-IT')} righe` : ''}</td>
                         : r && 'error' in r ? <td colSpan={4} className="err" title={r.error}>errore</td>
                           : done ? <><td>{done.equal}</td><td className={done.diff ? 'st-diff' : ''}>{done.diff}</td><td className={done.source ? 'st-source' : ''}>{done.source}</td><td className={done.target ? 'st-target' : ''}>{done.target}</td></>
                             : <td colSpan={4}>{!t.reason && <button className="mini" onClick={() => compareData([t.table])}>Confronta</button>}</td>}

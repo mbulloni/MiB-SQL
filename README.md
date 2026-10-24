@@ -46,6 +46,7 @@ IDE educativo per **MariaDB e MySQL** su Linux, ispirato a [dbForge Studio](http
 - «Nuova tabella…» e «Modifica tabella…» dall'Explorer: documento a schede Colonne, Indici, Chiavi esterne, Script
 - Colonne con tipo, PK, NOT NULL, AUTO_INCREMENT, predefinito (espressione SQL), commento, collation, ON UPDATE, CHECK di colonna (json_valid delle colonne JSON preservato), colonne generate VIRTUAL/STORED; riordino con ↑ ↓
 - Vincoli CHECK di tabella; indici con colonne DESC
+- Partizioni RANGE/LIST (anche COLUMNS) con confini e commenti, HASH/KEY con numero di partizioni; ALTER minimi (ADD/DROP/REORGANIZE PARTITION, ripartizionamento) con avviso quando si perdono o ridistribuiscono righe
 - Indici PRIMARY/UNIQUE/INDEX/FULLTEXT/SPATIAL con colonne ordinate e prefissi; chiavi esterne verso qualsiasi database con ON DELETE/ON UPDATE (le colonne della chiave primaria riferita si compilano da sole)
 - Engine, collation (anche CONVERT TO), commento e rinomina della tabella
 - Script generato per differenza: `CREATE TABLE` o `ALTER TABLE` minimo (rinominare una colonna non ricrea indici e FK), posizioni FIRST/AFTER, FK modificate eliminate e ricreate; validazione prima dell'esecuzione e conferma se si eliminano colonne
@@ -68,7 +69,7 @@ IDE educativo per **MariaDB e MySQL** su Linux, ispirato a [dbForge Studio](http
 - Tasto destro sul database › «Confronta con…»: origine e destinazione su qualsiasi connessione/database (⇄ per invertirle)
 - Schema: tabelle (colonne, indici, chiavi esterne, opzioni), viste, funzioni, procedure, trigger, eventi; stato Uguale/Diverso/Solo in origine/Solo in destinazione, diff riga per riga, istruzioni per oggetto
 - Script di sincronizzazione minimo (ALTER per differenza, CREATE, DROP solo se scelti), apribile nell'editor o eseguito sulla destinazione dopo conferma
-- Dati: per ogni tabella con la stessa chiave primaria, righe uguali/diverse/solo in origine/solo in destinazione, dettaglio con le celle diverse evidenziate, script INSERT/UPDATE/DELETE eseguito in un'unica transazione (binari compresi)
+- Dati: per ogni tabella con la stessa chiave primaria, a blocchi per chiave con memoria costante (2 milioni di righe in pochi secondi), righe uguali/diverse/solo in origine/solo in destinazione, dettaglio con le celle diverse evidenziate, script INSERT/UPDATE/DELETE eseguito in un'unica transazione (binari compresi)
 
 **Backup, ripristino, import**
 - «Backup…» sul database: dump SQL proprio (non serve mariadb-dump), in streaming, anche compresso .sql.gz: struttura, dati, viste (in ordine di dipendenza), funzioni, procedure, trigger (dopo i dati), eventi; UTC per i TIMESTAMP, DEFINER rimovibile, scelta delle tabelle
@@ -168,10 +169,10 @@ Completata: le otto fasi previste (connessioni ed editor, griglia e modifica dat
 ## Limiti noti
 
 - Le modifiche in griglia usano una connessione separata da quella del documento: non vedono le transazioni aperte nello script
-- Confronto dati: la destinazione viene tenuta in memoria (fino a 1.000.000 di righe per tabella), oltre 200.000 differenze lo script non viene generato; le colonne spaziali sono escluse
+- Confronto dati: oltre 200.000 differenze lo script non viene generato (il confronto sì); le colonne spaziali sono escluse; chiavi uguali solo per la collation (es. 'a'/'A' con _ci) risultano una cancellata e una inserita
 - Routine e trigger di altri utenti risultano illeggibili senza privilegi sul definer: confronto e backup li segnalano ma non possono copiarli
 - Le istruzioni DDL non sono transazionali: se una fallisce a metà, quelle precedenti restano applicate (designer e confronto lo segnalano e ricaricano lo stato dal server)
-- Designer: partizioni non gestite; colonne spaziali in sola lettura nella griglia
+- Designer: sottopartizioni solo in lettura; colonne spaziali in sola lettura nella griglia
 
 ## Licenza
 
