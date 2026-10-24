@@ -11,6 +11,7 @@ import ResultsPanel from './components/ResultsPanel';
 import SqlEditor from './components/SqlEditor';
 import TableDesigner from './components/TableDesigner';
 import ErDiagram from './components/ErDiagram';
+import QueryBuilder from './components/QueryBuilder';
 import logo from '../build/icons/128x128.png';
 
 function useDrag(initial: number, axis: 'x' | 'y', min: number, key: string) {
@@ -73,6 +74,7 @@ function Toolbar() {
   const set = useStore((s) => s.set);
   const running = !!doc?.running;
   const sql = doc?.kind === 'sql';
+  const runnable = sql || doc?.kind === 'query';
   return (
     <div className="toolbar">
       <button title="Nuova connessione (Ctrl+Maiusc+N)" onClick={() => set({ connDialog: { def: {} } })}><Icon name="addConn" /></button>
@@ -81,10 +83,10 @@ function Toolbar() {
       <button title="Apri (Ctrl+O)" onClick={openFiles}><Icon name="open" /></button>
       <button title="Salva (Ctrl+S)" disabled={!sql} onClick={() => saveDoc()}><Icon name="save" /></button>
       <div className="sep" />
-      <button title="Esegui script o selezione (F5)" disabled={!sql || running} onClick={() => runDoc('all')}><Icon name="play" /><span>Esegui</span></button>
-      <button title="Esegui istruzione corrente (Ctrl+Invio)" disabled={!sql || running} onClick={() => runDoc('current')}><Icon name="playLine" /></button>
+      <button title="Esegui script o selezione (F5)" disabled={!runnable || running} onClick={() => runDoc('all')}><Icon name="play" /><span>Esegui</span></button>
+      <button title="Esegui istruzione corrente (Ctrl+Invio)" disabled={!runnable || running} onClick={() => runDoc('current')}><Icon name="playLine" /></button>
       <button title="Interrompi (Maiusc+F5)" disabled={!running} onClick={() => cancelDoc()}><Icon name="stop" /></button>
-      <button title="Piano di esecuzione (Ctrl+E)" disabled={!sql || running} onClick={() => runDoc('explain')}><Icon name="plan" /><span>Piano</span></button>
+      <button title="Piano di esecuzione (Ctrl+E)" disabled={!runnable || running} onClick={() => runDoc('explain')}><Icon name="plan" /><span>Piano</span></button>
       <div className="sep" />
       {sql && <TargetPicker />}
     </div>
@@ -237,6 +239,7 @@ export default function App() {
           </div>
           {active?.kind === 'table' && <TableDesigner key={active.id} doc={active} />}
           {active?.kind === 'er' && <ErDiagram key={active.id} doc={active} />}
+          {active?.kind === 'query' && <QueryBuilder key={active.id} doc={active} />}
           {!docs.length && <StartPage />}
         </div>
       </div>

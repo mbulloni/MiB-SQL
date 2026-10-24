@@ -2,6 +2,7 @@
 import { api, type SqlFile } from './api';
 import { clearMarkers, disposeModel, markErrors, markSaved, modelOf, monaco } from './editor';
 import { editCount } from './edits';
+import { emptyQuery, toSql } from './qb';
 import { designByDoc, editsBySet, metaKey, setUntitled, useStore } from './store';
 import type { Doc, ExecMode, Message, ObjectKind, StmtResult } from './types';
 
@@ -39,6 +40,13 @@ export function openEr(connId: string, db: string) {
   const existing = st().docs.find((d) => d.kind === 'er' && d.connId === connId && d.db === db);
   if (existing) { st().set({ activeDoc: existing.id }); return existing; }
   const doc = st().addDoc({ kind: 'er', connId, db, title: `ER ${db}` });
+  persist();
+  return doc;
+}
+
+/** Visual query builder on a database. */
+export function openQueryBuilder(connId: string, db: string) {
+  const doc = st().addDoc({ kind: 'query', connId, db, title: `Query ${db}`, qb: emptyQuery() });
   persist();
   return doc;
 }
@@ -148,7 +156,8 @@ async function discardEdits(doc: Doc, action: string) {
 /** Executes the document: selection or whole script (all), statement under cursor (current) or its plan. */
 export async function runDoc(mode: ExecMode, id = st().activeDoc) {
   const doc = id ? docById(id) : undefined;
-  if (!doc || doc.running || doc.kind !== 'sql') return;
+  if (!doc || doc.running || (doc.kind !== 'sql' && doc.kind !== 'query')) return;
+  if (doc.kind === 'query') modelOf(doc.id).setValue(toSql(doc.qb ?? emptyQuery(), doc.db ?? ''));
   if (!(await discardEdits(doc, 'Eseguire di nuovo'))) return;
   const model = modelOf(doc.id);
   const ed = editorOf(doc.id);
@@ -244,7 +253,7 @@ export function persist() {
     const { docs, activeDoc: active } = st();
     // designer tabs reopen on the server's definition: unapplied structure changes are not kept
     const data = docs.map((d) => (d.kind !== 'sql'
-      ? { id: d.id, kind: d.kind, design: d.design, title: d.title, connId: d.connId, db: d.db, file: null, dirty: false, sql: '' }
+      ? { id: d.id, kind: d.kind, design: d.design, qb: d.qb, title: d.title, connId: d.connId, db: d.db, file: null, dirty: false, sql: '' }
       : { id: d.id, kind: d.kind, title: d.title, connId: d.connId, db: d.db, file: d.file, dirty: d.dirty, sql: modelOf(d.id).getValue() }))
       .filter((d) => d.kind !== 'table' || d.design?.table);
     try { localStorage.setItem(KEY, JSON.stringify({ docs: data, active })); } catch { /* storage unavailable */ }
@@ -252,13 +261,13 @@ export function persist() {
 }
 
 export function restore() {
-  let saved: { docs: { id: string; kind?: Doc['kind']; design?: Doc['design']; title: string; connId: string | null; db: string | null; file: string | null; dirty: boolean; sql: string }[]; active: string | null } | null = null;
+  let saved: { docs: { id: string; kind?: Doc['kind']; design?: Doc['design']; qb?: Doc['qb']; title: string; connId: string | null; db: string | null; file: string | null; dirty: boolean; sql: string }[]; active: string | null } | null = null;
   try { saved = JSON.parse(localStorage.getItem(KEY) ?? 'null'); } catch { saved = null; }
   if (!saved?.docs?.length) return;
   const known = new Set(st().conns.map((c) => c.id));
   for (const d of saved.docs) {
     if (d.kind && d.kind !== 'sql') {
-      if (d.connId && known.has(d.connId) && d.db) st().addDoc({ id: d.id, kind: d.kind, design: d.design, title: d.title, connId: d.connId, db: d.db });
+      if (d.connId && known.has(d.connId) && d.db) st().addDoc({ id: d.id, kind: d.kind, design: d.design, qb: d.qb, title: d.title, connId: d.connId, db: d.db });
       continue;
     }
     const m = /^SQL(\d+)\.sql$/.exec(d.title);
