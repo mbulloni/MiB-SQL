@@ -113,7 +113,7 @@ async function tableDefinitions(connId, db, only = null) {
     server.meta(connId, `SELECT TABLE_NAME AS t, COLUMN_NAME AS name, COLUMN_TYPE AS type, IS_NULLABLE AS nullable, COLUMN_DEFAULT AS def, EXTRA AS extra,
         COLLATION_NAME AS collation, GENERATION_EXPRESSION AS genExpr, COLUMN_COMMENT AS comment, DATA_TYPE AS dataType
       FROM information_schema.COLUMNS WHERE TABLE_SCHEMA = ?${one} ORDER BY TABLE_NAME, ORDINAL_POSITION`, args),
-    server.meta(connId, `SELECT TABLE_NAME AS t, INDEX_NAME AS name, NON_UNIQUE AS nonUnique, COLUMN_NAME AS col, SUB_PART AS len, INDEX_TYPE AS type, INDEX_COMMENT AS comment
+    server.meta(connId, `SELECT TABLE_NAME AS t, INDEX_NAME AS name, NON_UNIQUE AS nonUnique, COLUMN_NAME AS col, SUB_PART AS len, INDEX_TYPE AS type, INDEX_COMMENT AS comment, COLLATION AS collation
       FROM information_schema.STATISTICS WHERE TABLE_SCHEMA = ?${one} ORDER BY TABLE_NAME, INDEX_NAME = 'PRIMARY' DESC, INDEX_NAME, SEQ_IN_INDEX`, args),
     server.meta(connId, `SELECT k.TABLE_NAME AS t, k.CONSTRAINT_NAME AS name, k.COLUMN_NAME AS col, k.REFERENCED_TABLE_SCHEMA AS refDb,
         k.REFERENCED_TABLE_NAME AS refTable, k.REFERENCED_COLUMN_NAME AS refCol, r.UPDATE_RULE AS onUpdate, r.DELETE_RULE AS onDelete
@@ -124,6 +124,16 @@ async function tableDefinitions(connId, db, only = null) {
     server.meta(connId, 'SELECT VERSION() AS v'),
   ]);
   const mariadb = /mariadb/i.test(ver.v);
+  // CHECK constraints: MariaDB tells column-level ones apart (LEVEL); MySQL 8 has only table-level ones
+  let checks = [];
+  try {
+    checks = await server.meta(connId, mariadb
+      ? `SELECT TABLE_NAME AS t, CONSTRAINT_NAME AS name, CHECK_CLAUSE AS expr, LEVEL AS level FROM information_schema.CHECK_CONSTRAINTS
+          WHERE CONSTRAINT_SCHEMA = ?${one} ORDER BY TABLE_NAME, CONSTRAINT_NAME`
+      : `SELECT tc.TABLE_NAME AS t, cc.CONSTRAINT_NAME AS name, cc.CHECK_CLAUSE AS expr, 'Table' AS level FROM information_schema.TABLE_CONSTRAINTS tc
+          JOIN information_schema.CHECK_CONSTRAINTS cc ON cc.CONSTRAINT_SCHEMA = tc.CONSTRAINT_SCHEMA AND cc.CONSTRAINT_NAME = tc.CONSTRAINT_NAME
+          WHERE tc.CONSTRAINT_TYPE = 'CHECK' AND tc.TABLE_SCHEMA = ?${one.replace('TABLE_NAME', 'tc.TABLE_NAME')} ORDER BY tc.TABLE_NAME, cc.CONSTRAINT_NAME`, args);
+  } catch { /* server without CHECK_CONSTRAINTS (MySQL < 8.0.16) */ }
   const defaultOf = (c) => {
     if (c.def === null || c.def === undefined) return null;
     if (mariadb) return c.def;
@@ -134,7 +144,7 @@ async function tableDefinitions(connId, db, only = null) {
   const out = new Map();
   for (const t of tables) {
     if (t.type !== 'BASE TABLE' && t.type !== 'SYSTEM VERSIONED') continue;
-    out.set(t.name, { name: t.name, engine: t.engine, collation: t.collation, comment: t.comment, columns: [], indexes: [], foreignKeys: [], _ix: new Map(), _fk: new Map() });
+    out.set(t.name, { name: t.name, engine: t.engine, collation: t.collation, comment: t.comment, columns: [], indexes: [], foreignKeys: [], checks: [], _ix: new Map(), _fk: new Map() });
   }
   for (const c of cols) {
     const t = out.get(c.t);
@@ -150,7 +160,15 @@ async function tableDefinitions(connId, db, only = null) {
       collation: c.collation && c.collation !== t.collation ? c.collation : '',
       comment: c.comment,
       generated: gen,
+      check: null,
     });
+  }
+  for (const k of checks) {
+    const t = out.get(k.t);
+    if (!t) continue;
+    const col = k.level === 'Column' ? t.columns.find((c) => c.name === k.name) : null;
+    if (col) col.check = k.expr;
+    else t.checks.push({ name: k.name, expr: k.expr });
   }
   for (const r of stats) {
     const t = out.get(r.t);
@@ -161,7 +179,7 @@ async function tableDefinitions(connId, db, only = null) {
       t._ix.set(r.name, ix);
       t.indexes.push(ix);
     }
-    t._ix.get(r.name).columns.push({ name: r.col, len: r.len === null ? null : Number(r.len) });
+    t._ix.get(r.name).columns.push({ name: r.col, len: r.len === null ? null : Number(r.len), desc: r.collation === 'D' });
   }
   for (const r of fks) {
     const t = out.get(r.t);

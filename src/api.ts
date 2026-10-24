@@ -74,10 +74,14 @@ interface Api {
     open(): Promise<SqlFile[]>;
     save(content: string, path: string | null, suggested?: string): Promise<string | null>;
     onOpenArg(cb: (f: SqlFile) => void): void;
+    readHex(): Promise<string | null>;
+    writeHex(hex: string, suggested: string): Promise<string | null>;
     saveData(data: string, base64: boolean, suggested: string, filters: { name: string; extensions: string[] }[]): Promise<string | null>;
   };
   confirm(message: string, detail: string, buttons: string[]): Promise<number>;
   setTitle(t: string): void;
+  onCloseRequest(cb: () => void): void;
+  confirmClose(): void;
 }
 
 declare global {

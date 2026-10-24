@@ -8,6 +8,7 @@ const { literal } = require('./export.cjs');
 const { Splitter } = require('./sqlsplit.cjs');
 
 const qi = (s) => '`' + String(s).replace(/`/g, '``') + '`';
+const SPATIAL = /^(geometry|point|linestring|polygon|multipoint|multilinestring|multipolygon|geometrycollection|geomcollection)$/i;
 const stripDefiner = (sql) => sql.replace(/\s+DEFINER\s*=\s*(`[^`]*`|'[^']*'|\S+)@(`[^`]*`|'[^']*'|\S+)/i, '');
 
 /** Output file, gzip when the name ends in .gz; write() waits for 'drain'. */
@@ -84,18 +85,30 @@ async function dump(connId, db, file, opts, onProgress = () => {}) {
           }
           if (o.data) {
             // generated columns cannot be inserted: dump the stored ones only
-            const cols = Array.from(await c.query({
-              sql: "SELECT COLUMN_NAME AS name FROM information_schema.COLUMNS WHERE TABLE_SCHEMA = ? AND TABLE_NAME = ? AND (GENERATION_EXPRESSION IS NULL OR GENERATION_EXPRESSION = '') ORDER BY ORDINAL_POSITION",
+            const info = Array.from(await c.query({
+              sql: "SELECT COLUMN_NAME AS name, DATA_TYPE AS type FROM information_schema.COLUMNS WHERE TABLE_SCHEMA = ? AND TABLE_NAME = ? AND (GENERATION_EXPRESSION IS NULL OR GENERATION_EXPRESSION = '') ORDER BY ORDINAL_POSITION",
               rowsAsArray: false,
-            }, [db, t.name])).map((r) => r.name);
+            }, [db, t.name]));
+            const cols = info.map((r) => r.name);
+            // spatial values: the driver turns them into GeoJSON; dump them as WKB + SRID instead
+            const spatial = info.map((r) => SPATIAL.test(r.type));
+            const select = info.map((r, i) => (spatial[i] ? `ST_AsBinary(${qi(r.name)}), ST_SRID(${qi(r.name)})` : qi(r.name))).join(', ');
             const head = `INSERT INTO ${qi(t.name)} (${cols.map(qi).join(', ')}) VALUES\n`;
-            const stream = c.queryStream({ sql: `SELECT ${cols.map(qi).join(', ')} FROM ${qi(db)}.${qi(t.name)}`, rowsAsArray: true });
+            const stream = c.queryStream({ sql: `SELECT ${select} FROM ${qi(db)}.${qi(t.name)}`, rowsAsArray: true });
             let meta = null;
             stream.on('fields', (m) => { meta = m.map(server.column); });
             let batch = [];
             let rows = 0;
             for await (const r of stream) {
-              batch.push('(' + r.map((v, i) => literal(server.cell(v, Infinity), meta[i])).join(', ') + ')');
+              const vals = [];
+              for (let i = 0, k = 0; i < cols.length; i++, k++) {
+                if (spatial[i]) {
+                  const wkb = r[k];
+                  const srid = r[++k];
+                  vals.push(wkb === null ? 'NULL' : `ST_GeomFromWKB(${server.cell(wkb, Infinity)}, ${Number(srid) || 0})`);
+                } else vals.push(literal(server.cell(r[k], Infinity), meta[k]));
+              }
+              batch.push('(' + vals.join(', ') + ')');
               rows++;
               if (batch.length >= o.batch) { await out.write(head + batch.join(',\n') + ';\n'); batch = []; }
               if (rows % 5000 === 0) onProgress({ table: t.name, rows, done, total: base.length });

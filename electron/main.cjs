@@ -34,6 +34,15 @@ function createWindow() {
   win.webContents.on('before-input-event', (_e, input) => {
     if (input.type === 'keyDown' && (input.key === 'F12' || (input.control && input.shift && input.key.toLowerCase() === 'i'))) win.webContents.toggleDevTools();
   });
+  // closing asks the renderer first: unsaved files, unapplied table designs or grid edits get a confirmation
+  let closing = false;
+  win.on('close', (e) => {
+    if (closing || (process.env.MIBSQL_SHOT && !process.env.MIBSQL_TEST_CLOSE)) return;
+    e.preventDefault();
+    win.webContents.send('app:closeRequest');
+  });
+  ipcMain.removeAllListeners('app:closeConfirmed');
+  ipcMain.on('app:closeConfirmed', () => { closing = true; win.close(); });
   if (process.env.VITE_DEV) win.loadURL('http://localhost:5174');
   else win.loadFile(path.join(__dirname, '..', 'dist', 'index.html'));
   if (process.env.MIBSQL_SHOT) screenshotMode(process.env.MIBSQL_SHOT, process.env.MIBSQL_SCRIPT);
@@ -149,6 +158,26 @@ handle('export:query', async (connId, db, sql, format, opts, suggested) => {
   }
 });
 handle('shell:showItem', (file) => shell.showItemInFolder(file));
+
+// Binary cells: a file's bytes as 0x… hex for the grid, and back
+const MAX_BINARY = 16 * 1024 * 1024;
+handle('file:readHex', async () => {
+  const file = process.env.MIBSQL_OPEN || (await dialog.showOpenDialog(win, { properties: ['openFile'] })).filePaths?.[0];
+  if (!file) return null;
+  const size = fs.statSync(file).size;
+  if (size > MAX_BINARY) throw new Error(`File troppo grande (${Math.round(size / 1e6)} MB): il limite è 16 MB.`);
+  return '0x' + fs.readFileSync(file).toString('hex').toUpperCase();
+});
+handle('file:writeHex', async (hex, suggested) => {
+  let file = process.env.MIBSQL_SAVE_AS || null;
+  if (!file) {
+    const r = await dialog.showSaveDialog(win, { defaultPath: `${suggested || 'dati'}.bin` });
+    if (r.canceled) return null;
+    file = r.filePath;
+  }
+  fs.writeFileSync(file, Buffer.from(String(hex).replace(/^0x/i, ''), 'hex'));
+  return file;
+});
 handle('monitor:snapshot', (connId) => server.monitorSnapshot(connId));
 handle('monitor:kill', (connId, id, queryOnly) => server.kill(connId, id, queryOnly));
 

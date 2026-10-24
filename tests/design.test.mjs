@@ -118,3 +118,29 @@ test('primary key checkbox', () => {
   t = togglePrimary(togglePrimary(t, 'c2'), 'c0');
   assert.equal(t.indexes.some((i) => i.kind === 'PRIMARY'), false);
 });
+
+test('CHECK constraints and DESC index columns', () => {
+  const srv = structuredClone(server);
+  srv.columns.push({ ...col('attrs', 'longtext', { nullable: true, default: 'NULL' }), check: 'json_valid(`attrs`)' });
+  srv.checks = [{ name: 'ck_price', expr: '`price` >= 0' }];
+  srv.indexes.push({ name: 'ix_p', kind: 'INDEX', columns: [{ name: 'price', len: null, desc: true }, { name: 'id', len: null }], comment: '' });
+  const t = fromServer('shop', srv);
+  const sql = createSql(t);
+  assert.match(sql, /`attrs` longtext NULL DEFAULT NULL CHECK \(json_valid\(`attrs`\)\)/);
+  assert.match(sql, /KEY `ix_p` \(`price` DESC, `id`\)/);
+  assert.match(sql, /CONSTRAINT `ck_price` CHECK \(`price` >= 0\)/);
+  assert.deepEqual(alterSql(t, structuredClone(t)), []);
+  // moving the JSON column keeps its CHECK; the table CHECK is dropped first, re-added in the main ALTER
+  const cur = edit(t, (x) => {
+    const a = x.columns.pop(); x.columns.splice(1, 0, a);
+    x.checks[0].expr = '`price` > 0';
+    x.checks.push({ id: 'k9', orig: null, name: 'ck_code', expr: "`code` <> ''" });
+    x.indexes[2].columns[0].desc = false;
+  });
+  assert.deepEqual(alterSql(t, cur), [
+    'ALTER TABLE `shop`.`items`\n  DROP CONSTRAINT `ck_price`',
+    'ALTER TABLE `shop`.`items`\n  DROP INDEX `ix_p`,\n  CHANGE COLUMN `attrs` `attrs` longtext NULL DEFAULT NULL CHECK (json_valid(`attrs`)) AFTER `id`,\n' +
+    "  ADD KEY `ix_p` (`price`, `id`),\n  ADD CONSTRAINT `ck_price` CHECK (`price` > 0),\n  ADD CONSTRAINT `ck_code` CHECK (`code` <> '')",
+  ]);
+  assert.deepEqual(validate(edit(t, (x) => { x.checks.push({ id: 'z', orig: null, name: 'CK_PRICE', expr: '' }); })), ['Vincolo CHECK «CK_PRICE» ripetuto.', 'Vincolo CHECK «CK_PRICE»: espressione obbligatoria.']);
+});

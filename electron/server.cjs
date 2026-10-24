@@ -10,6 +10,8 @@ const connections = require('./connections.cjs');
 const { split, statementAt } = require('./sqlsplit.cjs');
 
 const MAX_ROWS = 50000;
+// statements answered by exactly one result set: streamed so only MAX_ROWS stay in memory
+const READ_ONLY = /^\s*(\(\s*)?(select|with|show|desc|describe|explain|values|table)\b/i;
 const tunnels = new Map();  // connId -> { port, close }
 const pools = new Map();    // connId -> mariadb pool
 const sessions = new Map(); // sessionId -> { connId, conn, db, busy, cancelled }
@@ -270,15 +272,34 @@ async function exec(sid, text, { mode = 'all', cursor = 0, selStart = 0, selEnd 
       const t0 = performance.now();
       const entry = { sql: st.sql, start: st.start, end: st.end, sets: [], affectedRows: null, insertId: null, warnings: [], ms: 0, error: null };
       try {
-        const res = await s.conn.query({ sql: st.run ?? st.sql });
+        const sql = st.run ?? st.sql;
+        let sets;
+        let ok;
+        if (READ_ONLY.test(sql)) {
+          // streamed: at most maxRows kept in memory, the rest only counted (exact total, bounded memory)
+          const stream = s.conn.queryStream({ sql });
+          let meta = [];
+          stream.on('fields', (m) => { meta = m; });
+          const rows = [];
+          let total = 0;
+          for await (const r of stream) {
+            total++;
+            if (rows.length < maxRows) rows.push(r.map((v) => cell(v)));
+          }
+          entry.sets = [{ columns: meta.map(column), rows, total, truncated: total > maxRows }];
+          sets = entry.sets;
+          ok = null;
+        } else {
+          const res = await s.conn.query({ sql });
+          ({ sets, ok } = resultSets(res));
+          entry.sets = sets.map((rs) => ({
+            columns: rs.meta.map(column),
+            rows: rs.slice(0, maxRows).map((r) => r.map((v) => cell(v))),
+            total: rs.length,
+            truncated: rs.length > maxRows,
+          }));
+        }
         entry.ms = Math.round(performance.now() - t0);
-        const { sets, ok } = resultSets(res);
-        entry.sets = sets.map((rs) => ({
-          columns: rs.meta.map(column),
-          rows: rs.slice(0, maxRows).map((r) => r.map((v) => cell(v))),
-          total: rs.length,
-          truncated: rs.length > maxRows,
-        }));
         if (ok) { entry.affectedRows = ok.affectedRows; entry.insertId = ok.insertId || null; }
         // Result sets do not carry the warning count: ask the server only for those, OK packets have it.
         const warn = ok ? ok.warningStatus : sets.length ? Number((await s.conn.query('SELECT @@warning_count'))[0][0]) : 0;

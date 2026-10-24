@@ -46,7 +46,7 @@ interface State {
   passwordPrompt: PasswordRequest | null;
   exportDialog: ExportRequest | null;
   task: { kind: 'backup' | 'restore' | 'import'; connId: string; db: string | null; table?: string } | null;
-  viewer: { title: string; value: string; isNull?: boolean; onSave?: (v: string | null) => void } | null;
+  viewer: { title: string; value: string; isNull?: boolean; binary?: boolean; onSave?: (v: string | null) => void } | null;
 
   loadConns(): Promise<void>;
   openConn(id: string): Promise<ServerInfo | null>;

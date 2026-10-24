@@ -1,6 +1,6 @@
 import { useEffect, useRef, useState, useSyncExternalStore } from 'react';
 import { api } from './api';
-import { cancelDoc, closeDoc, profileDoc, newDoc, openFiles, openSql, restore, runDoc, saveDoc, setDocTarget } from './actions';
+import { cancelDoc, closeDoc, profileDoc, requestQuit, newDoc, openFiles, openSql, restore, runDoc, saveDoc, setDocTarget } from './actions';
 import { loadDatabases, metaKey, useStore, type MetaEntry } from './store';
 import ContextMenu, { openMenu } from './components/ContextMenu';
 import { ConnectionDialog, PasswordPrompt, ValueViewer } from './components/Dialogs';
@@ -212,6 +212,7 @@ export default function App() {
     ready.current = true;
     useStore.getState().loadConns().then(restore);
     api.file.onOpenArg(openSql);
+    api.onCloseRequest(requestQuit);
   }, []);
 
   useEffect(() => {

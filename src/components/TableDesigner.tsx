@@ -15,15 +15,16 @@ const TYPES = ['int', 'int unsigned', 'bigint', 'bigint unsigned', 'tinyint(1)',
   'blob', 'longblob', 'varbinary(255)', "enum('a','b')", "set('a','b')", 'boolean', 'uuid', 'inet6', 'geometry', 'point'];
 const KINDS: IndexKind[] = ['PRIMARY', 'UNIQUE', 'INDEX', 'FULLTEXT', 'SPATIAL'];
 
-type Tab = 'columns' | 'indexes' | 'fks' | 'script';
+type Tab = 'columns' | 'indexes' | 'fks' | 'checks' | 'script';
 
 /** Ordered column picker used by indexes and foreign keys: chips with removal, a select to add. */
 function ColumnChips({ value, options, onChange, lengths }: {
-  value: { key: string; label: string; len?: number | null }[];
+  value: { key: string; label: string; len?: number | null; desc?: boolean }[];
   options: { key: string; label: string }[];
-  onChange: (keys: { key: string; len?: number | null }[]) => void;
+  onChange: (keys: { key: string; len?: number | null; desc?: boolean }[]) => void;
   lengths?: boolean;
 }) {
+  const keep = (x: { key: string; len?: number | null; desc?: boolean }) => ({ key: x.key, len: x.len, desc: x.desc });
   const free = options.filter((o) => !value.some((v) => v.key === o.key));
   return (
     <div className="chips">
@@ -31,12 +32,13 @@ function ColumnChips({ value, options, onChange, lengths }: {
         <span key={v.key} className="chip">
           {v.label}
           {lengths && <input className="len" type="number" min={1} placeholder="lung." title="Lunghezza del prefisso" value={v.len ?? ''}
-            onChange={(e) => onChange(value.map((x, j) => ({ key: x.key, len: j === i ? (e.target.value ? Number(e.target.value) : null) : x.len })))} />}
-          <button onClick={() => onChange(value.filter((_, j) => j !== i).map((x) => ({ key: x.key, len: x.len })))}>×</button>
+            onChange={(e) => onChange(value.map((x, j) => (j === i ? { ...keep(x), len: e.target.value ? Number(e.target.value) : null } : keep(x))))} />}
+          {lengths && <button title={v.desc ? 'Decrescente (DESC): clic per crescente' : 'Crescente: clic per DESC'} onClick={() => onChange(value.map((x, j) => (j === i ? { ...keep(x), desc: !x.desc } : keep(x))))}>{v.desc ? '↓' : '↑'}</button>}
+          <button onClick={() => onChange(value.filter((_, j) => j !== i).map(keep))}>×</button>
         </span>
       ))}
       {free.length > 0 && (
-        <select value="" onChange={(e) => e.target.value && onChange([...value.map((x) => ({ key: x.key, len: x.len })), { key: e.target.value, len: null }])}>
+        <select value="" onChange={(e) => e.target.value && onChange([...value.map(keep), { key: e.target.value, len: null }])}>
           <option value="">+ colonna</option>
           {free.map((o) => <option key={o.key} value={o.key}>{o.label}</option>)}
         </select>
@@ -133,7 +135,7 @@ export default function TableDesigner({ doc }: { doc: Doc }) {
       const columns = [...t.columns];
       let n = columns.length + 1;
       while (columns.some((c) => c.name === `colonna${n}`)) n++;
-      columns.splice(at, 0, { id: newId('c'), orig: null, name: `colonna${n}`, type: 'varchar(255)', nullable: true, default: null, autoIncrement: false, onUpdate: '', collation: '', comment: '', generated: null });
+      columns.splice(at, 0, { id: newId('c'), orig: null, name: `colonna${n}`, type: 'varchar(255)', nullable: true, default: null, autoIncrement: false, onUpdate: '', collation: '', comment: '', generated: null, check: null });
       return { ...t, columns };
     });
     setSel(at);
@@ -190,7 +192,7 @@ export default function TableDesigner({ doc }: { doc: Doc }) {
   };
 
   const tables = objects?.data?.tables.map((t) => t.name) ?? [];
-  const tabLabel: Record<Tab, string> = { columns: `Colonne (${cur.columns.length})`, indexes: `Indici (${cur.indexes.length})`, fks: `Chiavi esterne (${cur.foreignKeys.length})`, script: 'Script' };
+  const tabLabel: Record<Tab, string> = { columns: `Colonne (${cur.columns.length})`, indexes: `Indici (${cur.indexes.length})`, fks: `Chiavi esterne (${cur.foreignKeys.length})`, checks: `Vincoli CHECK (${cur.checks.length})`, script: 'Script' };
 
   return (
     <div className="designer">
@@ -224,7 +226,7 @@ export default function TableDesigner({ doc }: { doc: Doc }) {
                 {cur.columns.map((c, i) => (
                   <tr key={c.id} className={`${col?.id === c.id ? 'sel' : ''}${c.orig === null ? ' new' : ''}`} onMouseDown={() => setSel(i)}>
                     <td className="n">{pk?.columns.some((x) => x.col === c.id) ? <Icon name="key" /> : i + 1}</td>
-                    <td><input value={c.name} onChange={(e) => setCol(c.id, { name: e.target.value })} /></td>
+                    <td><input value={c.name} onChange={(e) => setCol(c.id, { name: e.target.value, ...(c.check ? { check: c.check.split('`' + c.name + '`').join('`' + e.target.value + '`') } : {}) })} /></td>
                     <td><input list="mib-types" value={c.type} onChange={(e) => setCol(c.id, { type: e.target.value })} /></td>
                     <td className="c"><input type="checkbox" checked={!!pk?.columns.some((x) => x.col === c.id)} onChange={() => update((t) => togglePrimary(t, c.id))} /></td>
                     <td className="c"><input type="checkbox" checked={!c.nullable} disabled={!!c.generated} onChange={(e) => setCol(c.id, { nullable: !e.target.checked, default: !e.target.checked ? c.default : c.default === 'NULL' ? null : c.default })} /></td>
@@ -252,6 +254,8 @@ export default function TableDesigner({ doc }: { doc: Doc }) {
                 {isTextType(col.type) ? collationSelect(col.collation, (v) => setCol(col.id, { collation: v }), `(della tabella: ${cur.collation})`) : <input disabled value="solo per tipi testo" />}
               </label>
               <label>ON UPDATE<input value={col.onUpdate} disabled={!!col.generated} placeholder="es. current_timestamp()" onChange={(e) => setCol(col.id, { onUpdate: e.target.value })} /></label>
+              <label>CHECK di colonna<input value={col.check ?? ''} placeholder="es. `prezzo` >= 0" title={col.check?.startsWith('json_valid') ? 'Colonna JSON di MariaDB: la verifica json_valid va mantenuta' : undefined}
+                onChange={(e) => setCol(col.id, { check: e.target.value.trim() ? e.target.value : null })} /></label>
               <label className="check"><input type="checkbox" checked={!!col.generated}
                 onChange={(e) => setCol(col.id, e.target.checked ? { generated: { expr: '', stored: false }, default: null, autoIncrement: false, onUpdate: '', nullable: true } : { generated: null })} /> Colonna generata</label>
               {col.generated && <>
@@ -276,8 +280,8 @@ export default function TableDesigner({ doc }: { doc: Doc }) {
                       setIx(ix.id, { kind, name: kind === 'PRIMARY' ? 'PRIMARY' : ix.name === 'PRIMARY' ? `ix_${cur.name}_${colLabel(ix.columns[0]?.col ?? '')}` : ix.name });
                     }}>{KINDS.map((k) => <option key={k} disabled={k === 'PRIMARY' && !!pk && pk !== ix}>{k}</option>)}</select></td>
                     <td><ColumnChips lengths options={colOptions}
-                      value={ix.columns.map((c) => ({ key: c.col, label: colLabel(c.col), len: c.len }))}
-                      onChange={(v) => setIx(ix.id, { columns: v.map((x) => ({ col: x.key, len: x.len ?? null })) })} /></td>
+                      value={ix.columns.map((c) => ({ key: c.col, label: colLabel(c.col), len: c.len, desc: c.desc }))}
+                      onChange={(v) => setIx(ix.id, { columns: v.map((x) => ({ col: x.key, len: x.len ?? null, ...(x.desc ? { desc: true } : {}) })) })} /></td>
                     <td><input value={ix.comment} onChange={(e) => setIx(ix.id, { comment: e.target.value })} /></td>
                     <td className="act"><button className="danger" title="Elimina indice" onClick={() => update((t) => ({ ...t, indexes: t.indexes.filter((x) => x.id !== ix.id) }))}>✕</button></td>
                   </tr>
@@ -330,6 +334,29 @@ export default function TableDesigner({ doc }: { doc: Doc }) {
               while (cur.foreignKeys.some((f) => f.name === `fk_${cur.name}_${n}`)) n++;
               update((t) => ({ ...t, foreignKeys: [...t.foreignKeys, { id: newId('f'), orig: null, name: `fk_${t.name}_${n}`, columns: first ? [first.id] : [], refDb: db, refTable: '', refColumns: [], onDelete: 'RESTRICT', onUpdate: 'RESTRICT' }] }));
             }}>+ Aggiungi chiave esterna</button>
+          </div>
+        )}
+
+        {tab === 'checks' && (
+          <div className="dtable-wrap">
+            <table className="dtable">
+              <thead><tr><th>Nome</th><th>Espressione</th><th /></tr></thead>
+              <tbody>
+                {cur.checks.map((k) => (
+                  <tr key={k.id} className={k.orig === null ? 'new' : ''}>
+                    <td style={{ width: 240 }}><input value={k.name} onChange={(e) => update((t) => ({ ...t, checks: t.checks.map((x) => (x.id === k.id ? { ...x, name: e.target.value } : x)) }))} /></td>
+                    <td><input value={k.expr} placeholder="es. `prezzo` > 0 AND `prezzo` < 10000" onChange={(e) => update((t) => ({ ...t, checks: t.checks.map((x) => (x.id === k.id ? { ...x, expr: e.target.value } : x)) }))} /></td>
+                    <td className="act"><button className="danger" title="Elimina vincolo" onClick={() => update((t) => ({ ...t, checks: t.checks.filter((x) => x.id !== k.id) }))}>✕</button></td>
+                  </tr>
+                ))}
+              </tbody>
+            </table>
+            <button className="add" onClick={() => {
+              let n = cur.checks.length + 1;
+              while (cur.checks.some((k) => k.name === `ck_${cur.name}_${n}`)) n++;
+              update((t) => ({ ...t, checks: [...t.checks, { id: newId('k'), orig: null, name: `ck_${t.name}_${n}`, expr: '' }] }));
+            }}>+ Aggiungi vincolo CHECK</button>
+            <p className="note">I vincoli di colonna (come json_valid delle colonne JSON di MariaDB) si modificano nelle proprietà della colonna.</p>
           </div>
         )}
 

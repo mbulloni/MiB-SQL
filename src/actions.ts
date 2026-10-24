@@ -160,6 +160,27 @@ function describe(r: StmtResult) {
   return `${plural(r.affectedRows ?? 0, 'riga interessata', 'righe interessate')}${r.insertId ? `, ultimo id ${r.insertId}` : ''} in ${r.ms} ms`;
 }
 
+/** Before quitting: what would be lost, and the choice to save files, quit anyway or stay. */
+export async function requestQuit() {
+  const docs = st().docs;
+  const files = docs.filter((d) => d.kind === 'sql' && d.dirty && d.file);
+  const designs = docs.filter((d) => d.kind === 'table' && d.dirty);
+  const edits = docs.reduce((n, d) => n + pendingEdits(d), 0);
+  if (!files.length && !designs.length && !edits) { api.confirmClose(); return; }
+  const lines = [
+    files.length ? `File non salvati: ${files.map((d) => d.title).join(', ')}` : '',
+    designs.length ? `Strutture non applicate: ${designs.map((d) => d.title).join(', ')}` : '',
+    edits ? `${edits} modifiche ai dati in griglia non applicate` : '',
+  ].filter(Boolean).join('\n');
+  const buttons = files.length ? ['Salva i file ed esci', 'Esci senza salvare', 'Annulla'] : ['Esci comunque', 'Annulla'];
+  const r = await api.confirm('Ci sono modifiche non salvate', lines, buttons);
+  if (r === buttons.length - 1) return;
+  if (files.length && r === 0) {
+    for (const d of files) if (!(await saveDoc(d.id))) return;
+  }
+  api.confirmClose();
+}
+
 /** Grid edits not yet applied in the document's results. */
 export const pendingEdits = (doc: Doc) =>
   doc.run?.results.reduce((n, r) => n + r.sets.reduce((m, s) => m + editCount(editsBySet.get(s) ?? { updates: {}, deleted: [], inserted: [] }), 0), 0) ?? 0;

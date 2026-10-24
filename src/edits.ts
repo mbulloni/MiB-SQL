@@ -85,10 +85,16 @@ export function toggleDelete(e: Edits, rows: Cell[][], positions: number[]): Edi
 }
 
 /** Parameterized statements: deletes, then updates, then inserts (frees unique values before reusing them). */
+/** Binary values travel as 0x… hex: written with UNHEX(?) so they reach the column as bytes. */
+export const isHex = (v: Cell) => v === null || (typeof v === 'string' && /^(0x)?([0-9a-f]{2})*$/i.test(v));
+export const toHex = (v: Cell): Cell => (v === null ? null : '0x' + String(v).replace(/^0x/i, '').toUpperCase());
+
 export function statements(t: EditTarget, columns: Column[], rows: Cell[][], e: Edits): ApplyStmt[] {
   const table = `${qi(t.db)}.${qi(t.table)}`;
   const col = (c: number) => qi(columns[c].orgName);
-  const where = (r: number) => ({ sql: t.key.map((k) => `${col(k)} = ?`).join(' AND '), params: t.key.map((k) => rows[r][k]) });
+  const ph = (c: number) => (columns[c].binary ? 'UNHEX(?)' : '?');
+  const val = (c: number, v: Cell) => (columns[c].binary && typeof v === 'string' ? v.replace(/^0x/i, '') : v);
+  const where = (r: number) => ({ sql: t.key.map((k) => `${col(k)} = ${ph(k)}`).join(' AND '), params: t.key.map((k) => val(k, rows[r][k])) });
   const out: ApplyStmt[] = [];
   for (const r of [...e.deleted].sort((a, b) => a - b)) {
     const w = where(r);
@@ -99,11 +105,11 @@ export function statements(t: EditTarget, columns: Column[], rows: Cell[][], e: 
     if (e.deleted.includes(r)) continue;
     const cs = Object.keys(vals).map(Number).sort((a, b) => a - b);
     const w = where(r);
-    out.push({ sql: `UPDATE ${table} SET ${cs.map((c) => `${col(c)} = ?`).join(', ')} WHERE ${w.sql} LIMIT 1`, params: [...cs.map((c) => vals[c]), ...w.params], expectOne: true });
+    out.push({ sql: `UPDATE ${table} SET ${cs.map((c) => `${col(c)} = ${ph(c)}`).join(', ')} WHERE ${w.sql} LIMIT 1`, params: [...cs.map((c) => val(c, vals[c])), ...w.params], expectOne: true });
   }
   for (const ins of e.inserted) {
     const cs = Object.keys(ins).map(Number).sort((a, b) => a - b);
-    out.push({ sql: `INSERT INTO ${table} (${cs.map(col).join(', ')}) VALUES (${cs.map(() => '?').join(', ')})`, params: cs.map((c) => ins[c]) });
+    out.push({ sql: `INSERT INTO ${table} (${cs.map(col).join(', ')}) VALUES (${cs.map(ph).join(', ')})`, params: cs.map((c) => val(c, ins[c])) });
   }
   return out;
 }

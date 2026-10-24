@@ -2,7 +2,7 @@ import { useEffect, useMemo, useState } from 'react';
 import { api } from '../api';
 import { logMessage, newDoc } from '../actions';
 import {
-  addRow, editCount, editTarget, emptyEdits, inline, isEdited, keyAfter, setCell, statements, toggleDelete, valueAt, type Edits,
+  addRow, editCount, editTarget, emptyEdits, inline, isEdited, isHex, keyAfter, setCell, statements, toggleDelete, toHex, valueAt, type Edits,
 } from '../edits';
 import { editsBySet, metaKey, useStore, type MetaEntry } from '../store';
 import type { Cell, Doc, IndexInfo, ResultSet } from '../types';
@@ -58,10 +58,17 @@ export default function ResultView({ doc, set, sql, at }: { doc: Doc; set: Resul
   const gridRows = useMemo<GridCell[][]>(() => ids.map((r) => columns.map((_, c) => valueAt(rows, edits, r, c))), [ids, rows, edits, columns]);
 
   const editing: GridEditing | undefined = canEdit ? {
-    canEdit: (c) => !columns[c].binary, // hex text would be written as text: binary editing is not supported yet
+    // binary values past 1 MB arrive truncated (…): those cells stay read-only
+    canEdit: (c, i) => columns[c].type !== 'GEOMETRY' && (!columns[c].binary || !String(valueAt(rows, edits, ids[i], c) ?? '').endsWith('…')),
     edited: (i, c) => isEdited(rows, edits, ids[i], c),
     state: (i) => (ids[i] >= rows.length ? 'new' : edits.deleted.includes(ids[i]) ? 'deleted' : undefined),
-    onEdit: (i, c, v) => setEdits(setCell(editsBySet.get(set) ?? edits, rows, ids[i], c, typed(c, v))),
+    onEdit: (i, c, v) => {
+      if (columns[c].binary && !isHex(v)) {
+        api.confirm('Valore binario non valido', 'Scrivere byte esadecimali (es. 0xDEADBEEF) o caricare un file dal visualizzatore.', ['OK']);
+        return;
+      }
+      setEdits(setCell(editsBySet.get(set) ?? edits, rows, ids[i], c, columns[c].binary ? toHex(v) : typed(c, v)));
+    },
     onDeleteRows: (is) => setEdits(toggleDelete(edits, rows, is.map((i) => ids[i]))),
   } : undefined;
 
@@ -81,10 +88,11 @@ export default function ResultView({ doc, set, sql, at }: { doc: Doc; set: Resul
       const inserts = res.slice(st.length - edits.inserted.length);
       const cols = columns.map((c) => '`' + c.orgName.replace(/`/g, '``') + '`').join(', ');
       const from = '`' + target.db.replace(/`/g, '``') + '`.`' + target.table.replace(/`/g, '``') + '`';
-      const where = target.key.map((k) => '`' + columns[k].orgName.replace(/`/g, '``') + '` = ?').join(' AND ');
+      const where = target.key.map((k) => '`' + columns[k].orgName.replace(/`/g, '``') + '` = ' + (columns[k].binary ? 'UNHEX(?)' : '?')).join(' AND ');
       const reread = async (key: Cell[] | null, fallback: Cell[]) => {
         if (!key) return fallback;
-        try { return (await api.data.select(connId, `SELECT ${cols} FROM ${from} WHERE ${where} LIMIT 1`, key))[0] ?? fallback; } catch { return fallback; }
+        const params = key.map((v, i) => (columns[target.key[i]].binary && typeof v === 'string' ? v.replace(/^0x/i, '') : v));
+        try { return (await api.data.select(connId, `SELECT ${cols} FROM ${from} WHERE ${where} LIMIT 1`, params))[0] ?? fallback; } catch { return fallback; }
       };
       const merged = (r: number) => columns.map((_, c) => valueAt(rows, edits, r, c) ?? null);
       const next: Cell[][] = [];

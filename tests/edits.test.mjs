@@ -67,3 +67,17 @@ test('new rows show DEFAULT until set and get their key from insertId', () => {
 test('inline escapes and ignores ? inside identifiers', () => {
   assert.equal(inline({ sql: 'UPDATE `a?b` SET `c` = ? WHERE `d` = ?', params: ['x\\y\n', null] }), "UPDATE `a?b` SET `c` = 'x\\\\y\\n' WHERE `d` = NULL");
 });
+
+test('binary columns go through UNHEX, also in the key', () => {
+  const bcols = [col('uid', { type: 'STRING', binary: true, notNull: true }), col('data', { type: 'BLOB', binary: true }), col('name')];
+  const bpk = [{ name: 'PRIMARY', unique: true, primary: true, type: 'BTREE', columns: ['uid'] }];
+  const brows = [['0x0102', '0xDEAD', 'a']];
+  let e = setCell(emptyEdits(), brows, 0, 1, '0xBEEF');
+  e = addRow(e);
+  e = setCell(e, brows, 1, 0, '0xFF00');
+  const st = statements(editTarget(bcols, bpk), bcols, brows, e);
+  assert.deepEqual(st.map(inline), [
+    "UPDATE `shop`.`items` SET `data` = UNHEX('BEEF') WHERE `uid` = UNHEX('0102') LIMIT 1",
+    "INSERT INTO `shop`.`items` (`uid`) VALUES (UNHEX('FF00'))",
+  ]);
+});

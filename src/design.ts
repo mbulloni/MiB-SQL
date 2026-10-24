@@ -17,14 +17,17 @@ export interface DColumn {
   collation: string; // '' = the table's
   comment: string;
   generated: { expr: string; stored: boolean } | null;
+  check: string | null; // column-level CHECK (MariaDB JSON columns: json_valid)
 }
+
+export interface DCheck { id: string; orig: string | null; name: string; expr: string }
 
 export interface DIndex {
   id: string;
   orig: string | null;
   name: string;
   kind: IndexKind;
-  columns: { col: string; len: number | null }[];
+  columns: { col: string; len: number | null; desc?: boolean }[];
   comment: string;
 }
 
@@ -49,6 +52,7 @@ export interface TableDef {
   columns: DColumn[];
   indexes: DIndex[];
   foreignKeys: DForeignKey[];
+  checks: DCheck[];
   convert?: boolean; // CONVERT TO the table collation (existing text columns too)
 }
 
@@ -58,8 +62,9 @@ export interface ServerTable {
   engine: string;
   collation: string;
   comment: string;
-  columns: Omit<DColumn, 'id' | 'orig'>[];
-  indexes: { name: string; kind: IndexKind; columns: { name: string; len: number | null }[]; comment: string }[];
+  columns: (Omit<DColumn, 'id' | 'orig' | 'check'> & { check?: string | null })[];
+  indexes: { name: string; kind: IndexKind; columns: { name: string; len: number | null; desc?: boolean }[]; comment: string }[];
+  checks?: { name: string; expr: string }[];
   foreignKeys: { name: string; columns: string[]; refDb: string; refTable: string; refColumns: string[]; onDelete: string; onUpdate: string }[];
 }
 
@@ -67,7 +72,7 @@ let seq = 0;
 export const newId = (p: string) => `${p}${++seq}_${Math.random().toString(36).slice(2, 6)}`;
 
 export function fromServer(db: string, t: ServerTable): TableDef {
-  const columns = t.columns.map((c, i) => ({ ...c, id: `c${i}`, orig: c.name }));
+  const columns = t.columns.map((c, i) => ({ ...c, check: c.check ?? null, id: `c${i}`, orig: c.name }));
   const idOf = (name: string) => columns.find((c) => c.name.toLowerCase() === name.toLowerCase())?.id ?? name;
   return {
     db,
@@ -76,8 +81,9 @@ export function fromServer(db: string, t: ServerTable): TableDef {
     collation: t.collation,
     comment: t.comment,
     columns,
-    indexes: t.indexes.map((ix, i) => ({ id: `i${i}`, orig: ix.name, name: ix.name, kind: ix.kind, comment: ix.comment, columns: ix.columns.map((c) => ({ col: idOf(c.name), len: c.len })) })),
+    indexes: t.indexes.map((ix, i) => ({ id: `i${i}`, orig: ix.name, name: ix.name, kind: ix.kind, comment: ix.comment, columns: ix.columns.map((c) => ({ col: idOf(c.name), len: c.len, ...(c.desc ? { desc: true } : {}) })) })),
     foreignKeys: t.foreignKeys.map((fk, i) => ({ ...fk, id: `f${i}`, orig: fk.name, columns: fk.columns.map(idOf) })),
+    checks: (t.checks ?? []).map((k, i) => ({ id: `k${i}`, orig: k.name, name: k.name, expr: k.expr })),
   };
 }
 
@@ -85,9 +91,10 @@ export function newTable(db: string, engine: string, collation: string): TableDe
   const id = newId('c');
   return {
     db, name: 'nuova_tabella', engine, collation, comment: '',
-    columns: [{ id, orig: null, name: 'id', type: 'int(10) unsigned', nullable: false, default: null, autoIncrement: true, onUpdate: '', collation: '', comment: '', generated: null }],
+    columns: [{ id, orig: null, name: 'id', type: 'int(10) unsigned', nullable: false, default: null, autoIncrement: true, onUpdate: '', collation: '', comment: '', generated: null, check: null }],
     indexes: [{ id: newId('i'), orig: null, name: 'PRIMARY', kind: 'PRIMARY', columns: [{ col: id, len: null }], comment: '' }],
     foreignKeys: [],
+    checks: [],
   };
 }
 
@@ -111,13 +118,17 @@ export function columnSql(c: DColumn): string {
     if (c.autoIncrement) s += ' AUTO_INCREMENT';
   }
   if (c.comment) s += ` COMMENT ${str(c.comment)}`;
+  // a CHANGE COLUMN without it would drop the column's CHECK (MariaDB JSON columns lose json_valid)
+  if (c.check) s += ` CHECK (${c.check})`;
   return s;
 }
+
+export const checkSql = (k: DCheck) => `CONSTRAINT ${qi(k.name)} CHECK (${k.expr.trim()})`;
 
 const colName = (t: TableDef, id: string) => t.columns.find((c) => c.id === id)?.name ?? id;
 
 export function indexSql(t: TableDef, ix: DIndex): string {
-  const cols = ix.columns.map((c) => qi(colName(t, c.col)) + (c.len ? `(${c.len})` : '')).join(', ');
+  const cols = ix.columns.map((c) => qi(colName(t, c.col)) + (c.len ? `(${c.len})` : '') + (c.desc ? ' DESC' : '')).join(', ');
   const head = ix.kind === 'PRIMARY' ? 'PRIMARY KEY' : `${ix.kind === 'INDEX' ? 'KEY' : `${ix.kind} KEY`} ${qi(ix.name)}`;
   return `${head} (${cols})${ix.comment ? ` COMMENT ${str(ix.comment)}` : ''}`;
 }
@@ -131,12 +142,13 @@ const tableOptions = (t: TableDef) =>
   [`ENGINE=${t.engine}`, `DEFAULT CHARSET=${charsetOf(t.collation)}`, `COLLATE=${t.collation}`, t.comment ? `COMMENT=${str(t.comment)}` : ''].filter(Boolean).join(' ');
 
 export function createSql(t: TableDef): string {
-  const lines = [...t.columns.map(columnSql), ...t.indexes.map((ix) => indexSql(t, ix)), ...t.foreignKeys.map((fk) => foreignKeySql(t, fk))];
+  const lines = [...t.columns.map(columnSql), ...t.indexes.map((ix) => indexSql(t, ix)), ...t.foreignKeys.map((fk) => foreignKeySql(t, fk)), ...(t.checks ?? []).map(checkSql)];
   return `CREATE TABLE ${qi(t.db)}.${qi(t.name)} (\n  ${lines.join(',\n  ')}\n) ${tableOptions(t)}`;
 }
 
 // identity of an index / foreign key independent of column names
-const indexKey = (ix: DIndex) => JSON.stringify([ix.kind === 'PRIMARY' ? 'PRIMARY' : ix.name, ix.kind, ix.columns, ix.comment]);
+const indexKey = (ix: DIndex) => JSON.stringify([ix.kind === 'PRIMARY' ? 'PRIMARY' : ix.name, ix.kind, ix.columns.map((c) => [c.col, c.len, !!c.desc]), ix.comment]);
+const normExpr = (s: string) => s.trim().replace(/^\((.*)\)$/s, '$1').replace(/\s+/g, ' ');
 const fkKey = (fk: DForeignKey) => JSON.stringify([fk.name, fk.columns, fk.refDb, fk.refTable, fk.refColumns, fk.onDelete, fk.onUpdate]);
 
 /** Statements turning `orig` into `cur`: drop changed foreign keys, one ALTER TABLE, rename last. */
@@ -146,8 +158,12 @@ export function alterSql(orig: TableDef, cur: TableDef): string[] {
 
   const curFk = new Map(cur.foreignKeys.map((f) => [f.id, f]));
   const dropFks = orig.foreignKeys.filter((f) => !curFk.has(f.id) || fkKey(curFk.get(f.id)!) !== fkKey(f));
-  // separate statement: MariaDB cannot drop and re-add a foreign key with the same name in one ALTER
-  if (dropFks.length) out.push(`ALTER TABLE ${table}\n  ${dropFks.map((f) => `DROP FOREIGN KEY ${qi(f.orig ?? f.name)}`).join(',\n  ')}`);
+  const curCk = new Map((cur.checks ?? []).map((k) => [k.id, k]));
+  const ckChanged = (k: DCheck) => { const n = curCk.get(k.id); return !n || n.name !== k.name || normExpr(n.expr) !== normExpr(k.expr); };
+  const dropChecks = (orig.checks ?? []).filter(ckChanged);
+  // separate statement: MariaDB cannot drop and re-add a foreign key (or constraint) with the same name in one ALTER
+  const drops = [...dropFks.map((f) => `DROP FOREIGN KEY ${qi(f.orig ?? f.name)}`), ...dropChecks.map((k) => `DROP CONSTRAINT ${qi(k.orig ?? k.name)}`)];
+  if (drops.length) out.push(`ALTER TABLE ${table}\n  ${drops.join(',\n  ')}`);
 
   const parts: string[] = [];
   const curIx = new Map(cur.indexes.map((i) => [i.id, i]));
@@ -190,6 +206,12 @@ export function alterSql(orig: TableDef, cur: TableDef): string[] {
   for (const fk of cur.foreignKeys) {
     const was = origFk.get(fk.id);
     if (!was || fkKey(was) !== fkKey(fk)) parts.push(`ADD ${foreignKeySql(cur, fk)}`);
+  }
+
+  const origCk = new Map((orig.checks ?? []).map((k) => [k.id, k]));
+  for (const k of cur.checks ?? []) {
+    const was = origCk.get(k.id);
+    if (!was || ckChanged(was)) parts.push(`ADD ${checkSql(k)}`);
   }
 
   if (cur.engine !== orig.engine) parts.push(`ENGINE=${cur.engine}`);
@@ -246,6 +268,13 @@ export function validate(t: TableDef): string[] {
     if (fk.onDelete === 'SET NULL' || fk.onUpdate === 'SET NULL') {
       if (fk.columns.some((c) => !t.columns.find((x) => x.id === c)?.nullable)) errs.push(`${label}: SET NULL richiede colonne che ammettono NULL.`);
     }
+  }
+  const ckNames = new Set<string>();
+  for (const k of t.checks ?? []) {
+    if (!k.name.trim()) errs.push('Vincolo CHECK senza nome.');
+    else if (ckNames.has(k.name.toLowerCase())) errs.push(`Vincolo CHECK «${k.name}» ripetuto.`);
+    ckNames.add(k.name.toLowerCase());
+    if (!k.expr.trim()) errs.push(`Vincolo CHECK «${k.name || '?'}»: espressione obbligatoria.`);
   }
   return errs;
 }

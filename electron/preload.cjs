@@ -80,7 +80,11 @@ contextBridge.exposeInMainWorld('api', {
     save: (content, path, suggested) => call('file:save', content, path, suggested),
     onOpenArg: (cb) => ipcRenderer.on('file:openArg', (_e, f) => cb(f)),
     saveData: (data, base64, suggested, filters) => call('file:saveData', data, base64, suggested, filters),
+    readHex: () => call('file:readHex'),
+    writeHex: (hex, suggested) => call('file:writeHex', hex, suggested),
   },
   confirm: (message, detail, buttons) => call('app:confirm', message, detail, buttons),
   setTitle: (t) => ipcRenderer.send('win:title', t),
+  onCloseRequest: (cb) => ipcRenderer.on('app:closeRequest', () => cb()),
+  confirmClose: () => ipcRenderer.send('app:closeConfirmed'),
 });

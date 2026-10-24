@@ -14,7 +14,7 @@ export type RowState = 'new' | 'deleted' | undefined;
 
 /** Editing hooks; row indices are positions in the `rows` prop (before the grid's own sorting). */
 export interface GridEditing {
-  canEdit(col: number): boolean;
+  canEdit(col: number, row: number): boolean;
   edited(row: number, col: number): boolean;
   state(row: number): RowState;
   onEdit(row: number, col: number, value: Cell): void;
@@ -152,7 +152,7 @@ export default function ResultGrid({ columns, rows, editing, onMenu }: Props) {
     navigator.clipboard.writeText(lines.join('\n'));
   };
 
-  const editable = (p: Pos) => !!editing && p[0] <= maxRow && editing.canEdit(p[1]) && editing.state(order[p[0]]) !== 'deleted';
+  const editable = (p: Pos) => !!editing && p[0] <= maxRow && editing.canEdit(p[1], order[p[0]]) && editing.state(order[p[0]]) !== 'deleted';
 
   /** Value viewer; for editable cells it edits too (long texts, JSON). */
   const view = (p: Pos) => {
@@ -165,6 +165,7 @@ export default function ResultGrid({ columns, rows, editing, onMenu }: Props) {
         title: columns[p[1]].name,
         value: v === null ? '' : v === undefined ? '' : value,
         isNull: v === null,
+        binary: columns[p[1]].binary,
         onSave: editable(p) ? (nv) => editing!.onEdit(row, p[1], nv) : undefined,
       },
     });
@@ -172,6 +173,7 @@ export default function ResultGrid({ columns, rows, editing, onMenu }: Props) {
 
   const startEdit = (p: Pos, initial?: string) => {
     if (!editable(p)) return false;
+    if (columns[p[1]].binary) { view(p); return true; } // hex and file upload live in the value viewer
     setEdit({ pos: p, value: initial ?? text(rows[order[p[0]]][p[1]]) });
     return true;
   };

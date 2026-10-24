@@ -177,11 +177,11 @@ export function ImportWizard({ connId, db, table }: { connId: string; db: string
   }, [pv]);
 
   const newTableDef = (): TableDef => {
-    const cols = map.filter((m) => m.target).map((m) => ({ id: newId('c'), orig: null, name: m.target, type: m.type, nullable: true, default: null, autoIncrement: false, onUpdate: '', collation: '', comment: '', generated: null }));
-    const id = addId ? [{ id: 'idcol', orig: null, name: 'id', type: 'int unsigned', nullable: false, default: null, autoIncrement: true, onUpdate: '', collation: '', comment: '', generated: null }] : [];
+    const cols = map.filter((m) => m.target).map((m) => ({ id: newId('c'), orig: null, name: m.target, type: m.type, nullable: true, default: null, autoIncrement: false, onUpdate: '', collation: '', comment: '', generated: null, check: null }));
+    const id = addId ? [{ id: 'idcol', orig: null, name: 'id', type: 'int unsigned', nullable: false, default: null, autoIncrement: true, onUpdate: '', collation: '', comment: '', generated: null, check: null }] : [];
     return {
       db, name, engine: 'InnoDB', collation: 'utf8mb4_unicode_ci', comment: '',
-      columns: [...id, ...cols], indexes: addId ? [{ id: 'pk', orig: null, name: 'PRIMARY', kind: 'PRIMARY', columns: [{ col: 'idcol', len: null }], comment: '' }] : [], foreignKeys: [],
+      columns: [...id, ...cols], indexes: addId ? [{ id: 'pk', orig: null, name: 'PRIMARY', kind: 'PRIMARY', columns: [{ col: 'idcol', len: null }], comment: '' }] : [], foreignKeys: [], checks: [],
     };
   };
   const tables = objects?.data?.tables.map((t) => t.name) ?? [];

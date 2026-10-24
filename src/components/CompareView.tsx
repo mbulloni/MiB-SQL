@@ -15,6 +15,7 @@ interface DataResult {
   statements: ApplyStmt[]; scriptTooLarge: boolean; columns: string[];
 }
 
+const SPATIAL = /^(geometry|point|linestring|polygon|multi\w+|geometrycollection|geomcollection)\b/i;
 const STATUS: Record<Status, string> = { equal: 'Uguale', diff: 'Diverso', source: 'Solo in origine', target: 'Solo in destinazione' };
 const KIND_ICON: Record<string, string> = { table: 'table', view: 'view', procedure: 'procedure', function: 'function', trigger: 'trigger', event: 'event' };
 
@@ -117,7 +118,8 @@ export default function CompareView({ doc }: { doc: Doc }) {
       const s = snap.src.tables[t];
       const d = snap.tgt.tables[t];
       const pk = (x: typeof s) => x.indexes.find((i) => i.kind === 'PRIMARY')?.columns.map((c) => c.name) ?? [];
-      const columns = s.columns.filter((c) => !c.generated && d.columns.some((x) => x.name === c.name && !x.generated)).map((c) => c.name);
+      // spatial columns arrive as GeoJSON: not comparable/syncable as values, left out
+      const columns = s.columns.filter((c) => !c.generated && !SPATIAL.test(c.type) && d.columns.some((x) => x.name === c.name && !x.generated)).map((c) => c.name);
       const key = pk(s);
       const reason = !key.length ? 'senza chiave primaria' : JSON.stringify(key) !== JSON.stringify(pk(d)) ? 'chiave primaria diversa' : '';
       return { table: t, key, columns, reason };

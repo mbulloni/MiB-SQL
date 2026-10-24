@@ -6,7 +6,7 @@ IDE educativo per **MariaDB e MySQL** su Linux, ispirato a [dbForge Studio](http
 
 ![Database Explorer ed editor SQL](docs/screenshot-1.png)
 
-## Funzioni (v0.7 — fasi 1-8)
+## Funzioni (v1.0)
 
 **Connessioni**
 - Profili salvati con colore d'ambiente (sviluppo/test/produzione: tinge scheda e barra di stato)
@@ -29,9 +29,9 @@ IDE educativo per **MariaDB e MySQL** su Linux, ispirato a [dbForge Studio](http
 - Schede ripristinate al riavvio, apri/salva `.sql`, `mib-sql script.sql` da terminale
 
 **Risultati**
-- Griglia virtualizzata (fino a 50.000 righe per resultset), più resultset per script e per `CALL`
+- Griglia virtualizzata: le SELECT arrivano in streaming, fino a 50.000 righe in memoria con il totale esatto anche oltre; più resultset per script e per `CALL`
 - Ordinamento, ridimensionamento colonne, selezione a celle, copia TSV (Ctrl+C, con intestazioni Ctrl+Maiusc+C)
-- Visualizzatore valore (doppio clic/Invio) con JSON formattato; BLOB in esadecimale, NULL distinti
+- Visualizzatore valore (doppio clic/Invio) con JSON formattato; BLOB in esadecimale, modificabili e caricabili/salvabili da file; NULL distinti
 
 **Modifica dati**
 - Risultati da una sola tabella con chiave primaria (o UNIQUE NOT NULL) modificabili in griglia: F2, Invio, doppio clic o digitazione diretta; Ctrl+Maiusc+N imposta NULL
@@ -42,7 +42,8 @@ IDE educativo per **MariaDB e MySQL** su Linux, ispirato a [dbForge Studio](http
 
 **Designer tabelle**
 - «Nuova tabella…» e «Modifica tabella…» dall'Explorer: documento a schede Colonne, Indici, Chiavi esterne, Script
-- Colonne con tipo, PK, NOT NULL, AUTO_INCREMENT, predefinito (espressione SQL), commento, collation, ON UPDATE, colonne generate VIRTUAL/STORED; riordino con ↑ ↓
+- Colonne con tipo, PK, NOT NULL, AUTO_INCREMENT, predefinito (espressione SQL), commento, collation, ON UPDATE, CHECK di colonna (json_valid delle colonne JSON preservato), colonne generate VIRTUAL/STORED; riordino con ↑ ↓
+- Vincoli CHECK di tabella; indici con colonne DESC
 - Indici PRIMARY/UNIQUE/INDEX/FULLTEXT/SPATIAL con colonne ordinate e prefissi; chiavi esterne verso qualsiasi database con ON DELETE/ON UPDATE (le colonne della chiave primaria riferita si compilano da sole)
 - Engine, collation (anche CONVERT TO), commento e rinomina della tabella
 - Script generato per differenza: `CREATE TABLE` o `ALTER TABLE` minimo (rinominare una colonna non ricrea indici e FK), posizioni FIRST/AFTER, FK modificate eliminate e ricreate; validazione prima dell'esecuzione e conferma se si eliminano colonne
@@ -159,18 +160,16 @@ mysql -u root -p < scripts/demo.sql
 
 ## Roadmap
 
+Completata: le otto fasi previste (connessioni ed editor, griglia e modifica dati, designer, ER, confronto, backup/import, profiler/monitor/utenti) più Query Builder e tema scuro.
 
-## Limiti noti (da implementare)
 
-- I resultset oltre 50.000 righe vengono letti per intero e poi troncati: manca il fetch progressivo in streaming (l'export di tutte le righe invece è in streaming)
-- Colonne binarie (BLOB/VARBINARY) non modificabili in griglia; manca un editor esadecimale/da file
+## Limiti noti
+
 - Le modifiche in griglia usano una connessione separata da quella del documento: non vedono le transazioni aperte nello script
-- Alla chiusura della finestra non c'è conferma per i documenti modificati (il testo però viene ripristinato al riavvio)
-- Blocchi `BEGIN … END` senza `DELIMITER` vengono divisi ai `;` interni, come nel client `mariadb`
-- Designer: niente CHECK, partizioni, ordine DESC negli indici, indici invisibili; trigger e viste si modificano ancora come SQL
-- Confronto dati: la destinazione viene tenuta in memoria (fino a 1.000.000 di righe per tabella), oltre 200.000 differenze lo script non viene generato
-- Routine e trigger di altri utenti risultano illeggibili senza privilegi sul definer: il confronto li segnala ma non può sincronizzarli
-- Le istruzioni DDL non sono transazionali: se una fallisce a metà, quelle precedenti restano applicate (il designer lo segnala e ricarica la struttura dal server)
+- Confronto dati: la destinazione viene tenuta in memoria (fino a 1.000.000 di righe per tabella), oltre 200.000 differenze lo script non viene generato; le colonne spaziali sono escluse
+- Routine e trigger di altri utenti risultano illeggibili senza privilegi sul definer: confronto e backup li segnalano ma non possono copiarli
+- Le istruzioni DDL non sono transazionali: se una fallisce a metà, quelle precedenti restano applicate (designer e confronto lo segnalano e ricaricano lo stato dal server)
+- Designer: partizioni non gestite; colonne spaziali in sola lettura nella griglia
 
 ## Licenza
 

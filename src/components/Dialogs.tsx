@@ -162,11 +162,15 @@ export function ValueViewer() {
   return (
     <div className="modal-back" onMouseDown={close}>
       <div className="modal viewer" onMouseDown={(e) => e.stopPropagation()} onKeyDown={(e) => { if (e.key === 'Escape') close(); }}>
-        <div className="modal-title">{v.title} <span className="hint">{isNull ? 'NULL' : `${value.length.toLocaleString('it-IT')} caratteri`}</span></div>
+        <div className="modal-title">{v.title} <span className="hint">{isNull ? 'NULL' : v.binary ? `${Math.floor(value.replace(/^0x/i, '').length / 2).toLocaleString('it-IT')} byte (esadecimale)` : `${value.length.toLocaleString('it-IT')} caratteri`}</span></div>
         <textarea readOnly={!v.onSave} autoFocus value={value} placeholder={isNull ? 'NULL' : ''}
           onChange={(e) => { setValue(e.target.value); setNull(false); }} />
         <div className="modal-buttons">
           <button onClick={() => navigator.clipboard.writeText(value)}>Copia</button>
+          {v.binary && <>
+            <button disabled={!v.onSave} onClick={async () => { const hex = await api.file.readHex(); if (hex !== null) { setValue(hex); setNull(false); } }}>Carica da file…</button>
+            <button disabled={!value || isNull} onClick={() => api.file.writeHex(value, v.title)}>Salva su file…</button>
+          </>}
           <div className="spacer" />
           {v.onSave ? <>
             <button onClick={() => save(null)}>Imposta NULL</button>
