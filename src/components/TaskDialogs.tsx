@@ -181,7 +181,7 @@ export function ImportWizard({ connId, db, table }: { connId: string; db: string
     const id = addId ? [{ id: 'idcol', orig: null, name: 'id', type: 'int unsigned', nullable: false, default: null, autoIncrement: true, onUpdate: '', collation: '', comment: '', generated: null, check: null }] : [];
     return {
       db, name, engine: 'InnoDB', collation: 'utf8mb4_unicode_ci', comment: '',
-      columns: [...id, ...cols], indexes: addId ? [{ id: 'pk', orig: null, name: 'PRIMARY', kind: 'PRIMARY', columns: [{ col: 'idcol', len: null }], comment: '' }] : [], foreignKeys: [], checks: [],
+      columns: [...id, ...cols], indexes: addId ? [{ id: 'pk', orig: null, name: 'PRIMARY', kind: 'PRIMARY', columns: [{ col: 'idcol', len: null }], comment: '' }] : [], foreignKeys: [], checks: [], partitioning: null,
     };
   };
   const tables = objects?.data?.tables.map((t) => t.name) ?? [];

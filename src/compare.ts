@@ -47,7 +47,12 @@ export function alignTo(target: TableDef, source: TableDef): TableDef {
     const t = ck.get(k.name.toLowerCase());
     return { ...k, id: t ? t.id : `s_${k.id}`, orig: t ? t.name : null };
   });
-  return { ...source, db: target.db, name: target.name, columns, indexes, foreignKeys, checks };
+  const pt = new Map((target.partitioning?.partitions ?? []).map((p) => [p.name.toLowerCase(), p]));
+  const partitioning = source.partitioning ? {
+    ...source.partitioning,
+    partitions: source.partitioning.partitions.map((p) => { const t = pt.get(p.name.toLowerCase()); return { ...p, id: t ? t.id : `s_${p.id}`, orig: t ? t.name : null }; }),
+  } : null;
+  return { ...source, db: target.db, name: target.name, columns, indexes, foreignKeys, checks, partitioning };
 }
 
 const DROP: Record<ObjectKind, string> = { table: 'TABLE', view: 'VIEW', procedure: 'PROCEDURE', function: 'FUNCTION', trigger: 'TRIGGER', event: 'EVENT' };
@@ -67,7 +72,7 @@ export function compareSchemas(source: Snapshot, target: Snapshot, sourceDb: str
     const sd = s ? fromServer(sourceDb, s) : null;
     const td = t ? fromServer(targetDb, t) : null;
     // the source as it would be created in the target (database and FK references mapped)
-    const mapped = sd ? alignTo({ ...sd, db: targetDb, columns: [], indexes: [], foreignKeys: [], checks: [] }, sd) : null;
+    const mapped = sd ? alignTo({ ...sd, db: targetDb, columns: [], indexes: [], foreignKeys: [], checks: [], partitioning: null }, sd) : null;
     const sourceDdl = mapped ? createSql(mapped) : '';
     const targetDdl = td ? createSql(td) : '';
     if (mapped && !td) {

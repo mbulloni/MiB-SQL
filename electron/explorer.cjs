@@ -124,6 +124,9 @@ async function tableDefinitions(connId, db, only = null) {
     server.meta(connId, 'SELECT VERSION() AS v'),
   ]);
   const mariadb = /mariadb/i.test(ver.v);
+  const parts = await server.meta(connId, `SELECT TABLE_NAME AS t, PARTITION_NAME AS name, SUBPARTITION_NAME AS sub, PARTITION_METHOD AS method,
+      PARTITION_EXPRESSION AS expr, PARTITION_DESCRIPTION AS vals, TABLE_ROWS AS \`rows\`, PARTITION_COMMENT AS comment
+    FROM information_schema.PARTITIONS WHERE TABLE_SCHEMA = ?${one} AND PARTITION_NAME IS NOT NULL ORDER BY TABLE_NAME, PARTITION_ORDINAL_POSITION, SUBPARTITION_ORDINAL_POSITION`, args);
   // CHECK constraints: MariaDB tells column-level ones apart (LEVEL); MySQL 8 has only table-level ones
   let checks = [];
   try {
@@ -192,7 +195,14 @@ async function tableDefinitions(connId, db, only = null) {
     t._fk.get(r.name).columns.push(r.col);
     t._fk.get(r.name).refColumns.push(r.refCol);
   }
-  for (const t of out.values()) { delete t._ix; delete t._fk; }
+  for (const r of parts) {
+    const t = out.get(r.t);
+    if (!t) continue;
+    t.partitioning ??= { method: r.method, expr: r.expr ?? '', partitions: [], subpartitioned: false };
+    if (r.sub) { t.partitioning.subpartitioned = true; if (t.partitioning.partitions.some((x) => x.name === r.name)) continue; }
+    t.partitioning.partitions.push({ name: r.name, values: r.vals ?? '', comment: r.comment ?? '', rows: r.rows === null ? null : Number(r.rows) });
+  }
+  for (const t of out.values()) { delete t._ix; delete t._fk; t.partitioning ??= null; }
   return out;
 }
 

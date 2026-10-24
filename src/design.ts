@@ -22,6 +22,18 @@ export interface DColumn {
 
 export interface DCheck { id: string; orig: string | null; name: string; expr: string }
 
+export type PartitionMethod = 'RANGE' | 'RANGE COLUMNS' | 'LIST' | 'LIST COLUMNS' | 'HASH' | 'LINEAR HASH' | 'KEY' | 'LINEAR KEY';
+export const PARTITION_METHODS: PartitionMethod[] = ['RANGE', 'RANGE COLUMNS', 'LIST', 'LIST COLUMNS', 'HASH', 'LINEAR HASH', 'KEY', 'LINEAR KEY'];
+export interface DPartition { id: string; orig: string | null; name: string; values: string; comment: string; rows?: number | null }
+export interface Partitioning {
+  method: PartitionMethod;
+  expr: string;          // expression (RANGE/LIST/HASH) or column list (COLUMNS, KEY; empty KEY = primary key)
+  count: number;         // HASH / KEY
+  partitions: DPartition[]; // RANGE / LIST
+  subpartitioned?: boolean; // shown, never altered
+}
+export const byList = (m: PartitionMethod) => m.startsWith('RANGE') || m.startsWith('LIST');
+
 export interface DIndex {
   id: string;
   orig: string | null;
@@ -53,6 +65,7 @@ export interface TableDef {
   indexes: DIndex[];
   foreignKeys: DForeignKey[];
   checks: DCheck[];
+  partitioning: Partitioning | null;
   convert?: boolean; // CONVERT TO the table collation (existing text columns too)
 }
 
@@ -65,6 +78,7 @@ export interface ServerTable {
   columns: (Omit<DColumn, 'id' | 'orig' | 'check'> & { check?: string | null })[];
   indexes: { name: string; kind: IndexKind; columns: { name: string; len: number | null; desc?: boolean }[]; comment: string }[];
   checks?: { name: string; expr: string }[];
+  partitioning?: { method: string; expr: string; partitions: { name: string; values: string; comment: string; rows: number | null }[]; subpartitioned: boolean } | null;
   foreignKeys: { name: string; columns: string[]; refDb: string; refTable: string; refColumns: string[]; onDelete: string; onUpdate: string }[];
 }
 
@@ -84,6 +98,13 @@ export function fromServer(db: string, t: ServerTable): TableDef {
     indexes: t.indexes.map((ix, i) => ({ id: `i${i}`, orig: ix.name, name: ix.name, kind: ix.kind, comment: ix.comment, columns: ix.columns.map((c) => ({ col: idOf(c.name), len: c.len, ...(c.desc ? { desc: true } : {}) })) })),
     foreignKeys: t.foreignKeys.map((fk, i) => ({ ...fk, id: `f${i}`, orig: fk.name, columns: fk.columns.map(idOf) })),
     checks: (t.checks ?? []).map((k, i) => ({ id: `k${i}`, orig: k.name, name: k.name, expr: k.expr })),
+    partitioning: t.partitioning ? {
+      method: t.partitioning.method as PartitionMethod,
+      expr: t.partitioning.expr,
+      count: t.partitioning.partitions.length,
+      partitions: byList(t.partitioning.method as PartitionMethod) ? t.partitioning.partitions.map((p, i) => ({ id: `p${i}`, orig: p.name, name: p.name, values: p.values, comment: p.comment, rows: p.rows })) : [],
+      subpartitioned: t.partitioning.subpartitioned,
+    } : null,
   };
 }
 
@@ -95,6 +116,7 @@ export function newTable(db: string, engine: string, collation: string): TableDe
     indexes: [{ id: newId('i'), orig: null, name: 'PRIMARY', kind: 'PRIMARY', columns: [{ col: id, len: null }], comment: '' }],
     foreignKeys: [],
     checks: [],
+    partitioning: null,
   };
 }
 
@@ -141,9 +163,54 @@ export function foreignKeySql(t: TableDef, fk: DForeignKey): string {
 const tableOptions = (t: TableDef) =>
   [`ENGINE=${t.engine}`, `DEFAULT CHARSET=${charsetOf(t.collation)}`, `COLLATE=${t.collation}`, t.comment ? `COMMENT=${str(t.comment)}` : ''].filter(Boolean).join(' ');
 
+export function partitionSql(m: PartitionMethod, p: DPartition) {
+  const v = p.values.trim();
+  const values = m.startsWith('RANGE')
+    ? (/^maxvalue$/i.test(v) ? (m === 'RANGE' ? 'LESS THAN MAXVALUE' : 'LESS THAN (MAXVALUE)') : `LESS THAN (${v})`)
+    : `IN (${v})`;
+  return `PARTITION ${qi(p.name)} VALUES ${values}${p.comment ? ` COMMENT ${str(p.comment)}` : ''}`;
+}
+
+/** PARTITION BY clause (CREATE TABLE tail or ALTER TABLE … PARTITION BY). */
+export function partitionBySql(p: Partitioning) {
+  const head = `PARTITION BY ${p.method} (${p.expr.trim()})`;
+  if (!byList(p.method)) return `${head} PARTITIONS ${p.count}`;
+  return `${head} (\n  ${p.partitions.map((x) => partitionSql(p.method, x)).join(',\n  ')}\n)`;
+}
+
 export function createSql(t: TableDef): string {
   const lines = [...t.columns.map(columnSql), ...t.indexes.map((ix) => indexSql(t, ix)), ...t.foreignKeys.map((fk) => foreignKeySql(t, fk)), ...(t.checks ?? []).map(checkSql)];
-  return `CREATE TABLE ${qi(t.db)}.${qi(t.name)} (\n  ${lines.join(',\n  ')}\n) ${tableOptions(t)}`;
+  const parts = t.partitioning && !t.partitioning.subpartitioned ? `\n${partitionBySql(t.partitioning)}` : '';
+  return `CREATE TABLE ${qi(t.db)}.${qi(t.name)} (\n  ${lines.join(',\n  ')}\n) ${tableOptions(t)}${parts}`;
+}
+
+const normPart = (s: string) => s.replace(/`/g, '').replace(/\s+/g, '').toLowerCase();
+const partKey = (p: DPartition) => JSON.stringify([p.name, normPart(p.values), p.comment]);
+
+/**
+ * Partition changes, each its own ALTER (MariaDB allows one partition operation per statement): switch
+ * on/off, full PARTITION BY when method/expression/count change, else DROP and ADD at the end, or
+ * REORGANIZE of every partition for any other change (values, order, names).
+ */
+export function partitionStatements(table: string, a: Partitioning | null, b: Partitioning | null): string[] {
+  if (a?.subpartitioned) return [];
+  if (!a && !b) return [];
+  if (!b) return [`ALTER TABLE ${table} REMOVE PARTITIONING`];
+  if (!a || a.method !== b.method || normPart(a.expr) !== normPart(b.expr) || (!byList(b.method) && a.count !== b.count)) {
+    return [`ALTER TABLE ${table} ${partitionBySql(b)}`];
+  }
+  if (!byList(b.method)) return [];
+  const keptA = a.partitions.filter((p) => b.partitions.some((q) => q.id === p.id));
+  const dropped = a.partitions.filter((p) => !b.partitions.some((q) => q.id === p.id));
+  const sameKept = keptA.every((p, i) => b.partitions[i]?.id === p.id && partKey(b.partitions[i]) === partKey(p));
+  const added = b.partitions.slice(keptA.length);
+  if (sameKept && added.every((p) => p.orig === null || !a.partitions.some((q) => q.id === p.id))) {
+    const out: string[] = [];
+    if (dropped.length) out.push(`ALTER TABLE ${table} DROP PARTITION ${dropped.map((p) => qi(p.orig ?? p.name)).join(', ')}`);
+    if (added.length) out.push(`ALTER TABLE ${table} ADD PARTITION (\n  ${added.map((p) => partitionSql(b.method, p)).join(',\n  ')}\n)`);
+    return out;
+  }
+  return [`ALTER TABLE ${table} REORGANIZE PARTITION ${a.partitions.map((p) => qi(p.orig ?? p.name)).join(', ')} INTO (\n  ${b.partitions.map((p) => partitionSql(b.method, p)).join(',\n  ')}\n)`];
 }
 
 // identity of an index / foreign key independent of column names
@@ -220,6 +287,7 @@ export function alterSql(orig: TableDef, cur: TableDef): string[] {
   if (cur.comment !== orig.comment) parts.push(`COMMENT=${str(cur.comment)}`);
 
   if (parts.length) out.push(`ALTER TABLE ${table}\n  ${parts.join(',\n  ')}`);
+  out.push(...partitionStatements(table, orig.partitioning ?? null, cur.partitioning ?? null));
   if (cur.name !== orig.name) out.push(`RENAME TABLE ${table} TO ${qi(cur.db)}.${qi(cur.name)}`);
   return out;
 }
@@ -268,6 +336,21 @@ export function validate(t: TableDef): string[] {
     if (fk.onDelete === 'SET NULL' || fk.onUpdate === 'SET NULL') {
       if (fk.columns.some((c) => !t.columns.find((x) => x.id === c)?.nullable)) errs.push(`${label}: SET NULL richiede colonne che ammettono NULL.`);
     }
+  }
+  const p = t.partitioning;
+  if (p && !p.subpartitioned) {
+    if (!p.expr.trim() && !p.method.endsWith('KEY')) errs.push('Partizioni: espressione obbligatoria.');
+    if (byList(p.method)) {
+      if (!p.partitions.length) errs.push('Partizioni: serve almeno una partizione.');
+      const names = new Set<string>();
+      p.partitions.forEach((x, i) => {
+        if (!x.name.trim()) errs.push(`Partizione ${i + 1}: nome obbligatorio.`);
+        else if (names.has(x.name.toLowerCase())) errs.push(`Partizione «${x.name}» ripetuta.`);
+        names.add(x.name.toLowerCase());
+        if (!x.values.trim()) errs.push(`Partizione «${x.name || i + 1}»: valori obbligatori.`);
+        if (p.method.startsWith('RANGE') && /^maxvalue$/i.test(x.values.trim()) && i !== p.partitions.length - 1) errs.push('Partizioni: MAXVALUE solo nell\'ultima partizione.');
+      });
+    } else if (!(p.count >= 1 && p.count <= 8192)) errs.push('Partizioni: numero tra 1 e 8192.');
   }
   const ckNames = new Set<string>();
   for (const k of t.checks ?? []) {

@@ -144,3 +144,28 @@ test('CHECK constraints and DESC index columns', () => {
   ]);
   assert.deepEqual(validate(edit(t, (x) => { x.checks.push({ id: 'z', orig: null, name: 'CK_PRICE', expr: '' }); })), ['Vincolo CHECK «CK_PRICE» ripetuto.', 'Vincolo CHECK «CK_PRICE»: espressione obbligatoria.']);
 });
+
+test('partitions: create, add/drop at the end, reorganize, repartition, remove', () => {
+  const srv = structuredClone(server);
+  srv.partitioning = { method: 'RANGE', expr: 'year(`d`)', subpartitioned: false, partitions: [
+    { name: 'p2024', values: '2025', comment: '', rows: 0 }, { name: 'p2025', values: '2026', comment: 'corrente', rows: 0 }] };
+  const t = fromServer('shop', srv);
+  assert.match(createSql(t), /\nPARTITION BY RANGE \(year\(`d`\)\) \(\n  PARTITION `p2024` VALUES LESS THAN \(2025\),\n  PARTITION `p2025` VALUES LESS THAN \(2026\) COMMENT 'corrente'\n\)$/);
+  assert.deepEqual(alterSql(t, structuredClone(t)), []);
+  const T = '`shop`.`items`';
+  // append MAXVALUE and drop the first: two statements
+  let cur = edit(t, (x) => { x.partitioning.partitions.shift(); x.partitioning.partitions.push({ id: 'n', orig: null, name: 'pmax', values: 'MAXVALUE', comment: '' }); });
+  assert.deepEqual(alterSql(t, cur), [`ALTER TABLE ${T} DROP PARTITION \`p2024\``, `ALTER TABLE ${T} ADD PARTITION (\n  PARTITION \`pmax\` VALUES LESS THAN MAXVALUE\n)`]);
+  // changing a bound reorganizes; expression typed differently but equal does not repartition
+  cur = edit(t, (x) => { x.partitioning.partitions[0].values = '2024'; x.partitioning.expr = 'YEAR(d)'; });
+  assert.deepEqual(alterSql(t, cur), [`ALTER TABLE ${T} REORGANIZE PARTITION \`p2024\`, \`p2025\` INTO (\n  PARTITION \`p2024\` VALUES LESS THAN (2024),\n  PARTITION \`p2025\` VALUES LESS THAN (2026) COMMENT 'corrente'\n)`]);
+  cur = edit(t, (x) => { x.partitioning = { method: 'HASH', expr: '`id`', count: 4, partitions: [] }; });
+  assert.deepEqual(alterSql(t, cur), [`ALTER TABLE ${T} PARTITION BY HASH (\`id\`) PARTITIONS 4`]);
+  assert.deepEqual(alterSql(t, edit(t, (x) => { x.partitioning = null; })), [`ALTER TABLE ${T} REMOVE PARTITIONING`]);
+  assert.deepEqual(validate(edit(t, (x) => { x.partitioning.partitions[0].values = 'MAXVALUE'; x.partitioning.partitions[1].name = 'P2024'; })),
+    ['Partizioni: MAXVALUE solo nell\'ultima partizione.', 'Partizione «P2024» ripetuta.']);
+  const list = fromServer('shop', { ...structuredClone(server), partitioning: { method: 'LIST COLUMNS', expr: '`code`', subpartitioned: false, partitions: [{ name: 'a', values: "'X','Y'", comment: '', rows: 0 }] } });
+  assert.match(createSql(list), /PARTITION BY LIST COLUMNS \(`code`\) \(\n  PARTITION `a` VALUES IN \('X','Y'\)\n\)/);
+  const sub = fromServer('shop', { ...structuredClone(server), partitioning: { method: 'RANGE', expr: 'id', subpartitioned: true, partitions: [{ name: 'a', values: '10', comment: '', rows: 0 }] } });
+  assert.deepEqual(alterSql(sub, edit(sub, (x) => { x.partitioning = null; })), []); // subpartitioned: never touched
+});

@@ -2,8 +2,8 @@ import { useEffect, useMemo, useState } from 'react';
 import { api } from '../api';
 import { newDoc, persist } from '../actions';
 import {
-  alterSql, createSql, FK_RULES, fromServer, isTextType, newId, newTable, removeColumn, togglePrimary, validate,
-  type DColumn, type DForeignKey, type DIndex, type IndexKind, type TableDef,
+  alterSql, byList, createSql, FK_RULES, fromServer, isTextType, newId, newTable, PARTITION_METHODS, removeColumn, togglePrimary, validate,
+  type DColumn, type DForeignKey, type DIndex, type IndexKind, type PartitionMethod, type Partitioning, type TableDef,
 } from '../design';
 import { designByDoc, loadDatabases, metaKey, useStore, type MetaEntry } from '../store';
 import type { ColumnInfo, DbObjects, Doc, IndexInfo, ServerOptions } from '../types';
@@ -15,7 +15,7 @@ const TYPES = ['int', 'int unsigned', 'bigint', 'bigint unsigned', 'tinyint(1)',
   'blob', 'longblob', 'varbinary(255)', "enum('a','b')", "set('a','b')", 'boolean', 'uuid', 'inet6', 'geometry', 'point'];
 const KINDS: IndexKind[] = ['PRIMARY', 'UNIQUE', 'INDEX', 'FULLTEXT', 'SPATIAL'];
 
-type Tab = 'columns' | 'indexes' | 'fks' | 'checks' | 'script';
+type Tab = 'columns' | 'indexes' | 'fks' | 'checks' | 'partitions' | 'script';
 
 /** Ordered column picker used by indexes and foreign keys: chips with removal, a select to add. */
 function ColumnChips({ value, options, onChange, lengths }: {
@@ -168,9 +168,17 @@ export default function TableDesigner({ doc }: { doc: Doc }) {
 
   const apply = async () => {
     if (!script.length || errors.length) return;
-    const drops = script.join('\n').match(/DROP COLUMN `(?:[^`]|``)+`/g) ?? [];
-    if (drops.length || (state!.orig && cur.convert)) {
-      const what = [drops.length ? `Colonne eliminate: ${drops.map((d) => d.slice(12)).join(', ')} (i dati vanno persi).` : '', cur.convert ? 'Conversione dei dati testuali esistenti alla nuova collation.' : ''].filter(Boolean).join('\n');
+    const text = script.join('\n');
+    const drops = text.match(/DROP COLUMN `(?:[^`]|``)+`/g) ?? [];
+    const dropParts = /DROP PARTITION (.+)/.exec(text)?.[1];
+    const rewrite = /PARTITION BY|REORGANIZE PARTITION|REMOVE PARTITIONING/.test(text);
+    if (drops.length || (state!.orig && cur.convert) || dropParts || (state!.orig && rewrite)) {
+      const what = [
+        drops.length ? `Colonne eliminate: ${drops.map((d) => d.slice(12)).join(', ')} (i dati vanno persi).` : '',
+        cur.convert ? 'Conversione dei dati testuali esistenti alla nuova collation.' : '',
+        dropParts ? `Partizioni eliminate: ${dropParts} (le righe che contengono vanno perse).` : '',
+        rewrite ? 'Le righe vengono ridistribuite tra le partizioni: su tabelle grandi può richiedere tempo.' : '',
+      ].filter(Boolean).join('\n');
       if ((await api.confirm(`Applicare le modifiche a ${state!.orig!.name}?`, what, ['Applica', 'Annulla'])) !== 0) return;
     }
     setBusy(true);
@@ -192,7 +200,7 @@ export default function TableDesigner({ doc }: { doc: Doc }) {
   };
 
   const tables = objects?.data?.tables.map((t) => t.name) ?? [];
-  const tabLabel: Record<Tab, string> = { columns: `Colonne (${cur.columns.length})`, indexes: `Indici (${cur.indexes.length})`, fks: `Chiavi esterne (${cur.foreignKeys.length})`, checks: `Vincoli CHECK (${cur.checks.length})`, script: 'Script' };
+  const tabLabel: Record<Tab, string> = { columns: `Colonne (${cur.columns.length})`, indexes: `Indici (${cur.indexes.length})`, fks: `Chiavi esterne (${cur.foreignKeys.length})`, checks: `Vincoli CHECK (${cur.checks.length})`, partitions: cur.partitioning ? `Partizioni (${byList(cur.partitioning.method) ? cur.partitioning.partitions.length : cur.partitioning.count})` : 'Partizioni', script: 'Script' };
 
   return (
     <div className="designer">
@@ -359,6 +367,58 @@ export default function TableDesigner({ doc }: { doc: Doc }) {
             <p className="note">I vincoli di colonna (come json_valid delle colonne JSON di MariaDB) si modificano nelle proprietà della colonna.</p>
           </div>
         )}
+
+        {tab === 'partitions' && (() => {
+          const p = cur.partitioning;
+          const setP = (patch: Partial<Partitioning> | null) => update((t) => ({ ...t, partitioning: patch === null ? null : { ...(t.partitioning ?? { method: 'RANGE', expr: '', count: 4, partitions: [] }), ...patch } as Partitioning }));
+          const setPart = (id: string, patch: Partial<Partitioning['partitions'][number]>) => p && setP({ partitions: p.partitions.map((x) => (x.id === id ? { ...x, ...patch } : x)) });
+          const hint = !p ? '' : p.method.startsWith('RANGE') ? 'valore limite superiore escluso, es. 2026 o MAXVALUE (solo ultima)' : 'elenco di valori, es. 1,2,3 oppure \'LO\',\'PI\'';
+          return (
+            <div className="dtable-wrap">
+              <div className="form part-head">
+                <label className="check"><input type="checkbox" checked={!!p} disabled={p?.subpartitioned}
+                  onChange={(e) => setP(e.target.checked ? { method: 'RANGE', expr: '', count: 4, partitions: [{ id: newId('p'), orig: null, name: 'p0', values: 'MAXVALUE', comment: '' }] } : null)} /> Tabella partizionata</label>
+                {p && <div className="row">
+                  <label>Metodo<select value={p.method} disabled={p.subpartitioned} onChange={(e) => setP({ method: e.target.value as PartitionMethod })}>{PARTITION_METHODS.map((m) => <option key={m}>{m}</option>)}</select></label>
+                  <label className="grow">{p.method.includes('COLUMNS') || p.method.endsWith('KEY') ? 'Colonne' : 'Espressione'}
+                    <input value={p.expr} disabled={p.subpartitioned} placeholder={p.method.endsWith('KEY') ? 'vuoto = chiave primaria' : p.method.includes('COLUMNS') ? 'es. `regione`' : 'es. YEAR(`data`)'} onChange={(e) => setP({ expr: e.target.value })} /></label>
+                  {!byList(p.method) && <label className="port">Partizioni<input type="number" min={1} max={8192} value={p.count} disabled={p.subpartitioned} onChange={(e) => setP({ count: Number(e.target.value) || 1 })} /></label>}
+                </div>}
+                {p?.subpartitioned && <div className="status error">Tabella con sottopartizioni: qui sono solo mostrate, lo script non le modifica.</div>}
+                {p && <p className="note">Le colonne usate devono far parte di ogni chiave primaria/univoca. Cambiare metodo, espressione, numero o confini ridistribuisce le righe; eliminare una partizione RANGE/LIST elimina le sue righe.</p>}
+              </div>
+              {p && byList(p.method) && <>
+                <table className="dtable">
+                  <thead><tr><th>Nome</th><th>Valori <span className="muted">({hint})</span></th><th>Commento</th><th className="num">Righe (stima)</th><th /></tr></thead>
+                  <tbody>
+                    {p.partitions.map((x, i) => (
+                      <tr key={x.id} className={x.orig === null ? 'new' : ''}>
+                        <td style={{ width: 200 }}><input value={x.name} disabled={p.subpartitioned} onChange={(e) => setPart(x.id, { name: e.target.value })} /></td>
+                        <td><input value={x.values} disabled={p.subpartitioned} onChange={(e) => setPart(x.id, { values: e.target.value })} /></td>
+                        <td><input value={x.comment} disabled={p.subpartitioned} onChange={(e) => setPart(x.id, { comment: e.target.value })} /></td>
+                        <td className="num muted">{x.rows !== undefined && x.rows !== null ? x.rows.toLocaleString('it-IT') : ''}</td>
+                        <td className="act">
+                          <button disabled={i === 0 || p.subpartitioned} onClick={() => { const ps = [...p.partitions]; [ps[i - 1], ps[i]] = [ps[i], ps[i - 1]]; setP({ partitions: ps }); }}>↑</button>
+                          <button disabled={i === p.partitions.length - 1 || p.subpartitioned} onClick={() => { const ps = [...p.partitions]; [ps[i + 1], ps[i]] = [ps[i], ps[i + 1]]; setP({ partitions: ps }); }}>↓</button>
+                          <button className="danger" disabled={p.subpartitioned} onClick={() => setP({ partitions: p.partitions.filter((y) => y.id !== x.id) })}>✕</button>
+                        </td>
+                      </tr>
+                    ))}
+                  </tbody>
+                </table>
+                {!p.subpartitioned && <button className="add" onClick={() => {
+                  let n = p.partitions.length;
+                  while (p.partitions.some((x) => x.name === `p${n}`)) n++;
+                  const last = p.partitions[p.partitions.length - 1];
+                  const item = { id: newId('p'), orig: null, name: `p${n}`, values: '', comment: '' };
+                  // a new RANGE partition goes before a final MAXVALUE one
+                  const ps = p.method.startsWith('RANGE') && last && /^maxvalue$/i.test(last.values.trim()) ? [...p.partitions.slice(0, -1), item, last] : [...p.partitions, item];
+                  setP({ partitions: ps });
+                }}>+ Aggiungi partizione</button>}
+              </>}
+            </div>
+          );
+        })()}
 
         {tab === 'script' && (
           <pre className="script">{script.length ? script.join(';\n\n') + ';' : '-- Nessuna modifica.'}</pre>
