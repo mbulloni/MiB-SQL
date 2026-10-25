@@ -1,7 +1,8 @@
 import { useMemo } from 'react';
 import { COUNTERS, hints, planRows, type Profile } from '../profile';
+import { t as tr, locale } from '../i18n';
 
-const fmt = (v: number, d = 2) => v.toLocaleString('it-IT', { maximumFractionDigits: d });
+const fmt = (v: number, d = 2) => v.toLocaleString(locale(), { maximumFractionDigits: d });
 
 /** Profilo tab: hints, stage timeline, session counters and the real execution plan. */
 export default function ProfileView({ profile: p }: { profile: Profile }) {
@@ -12,26 +13,26 @@ export default function ProfileView({ profile: p }: { profile: Profile }) {
   return (
     <div className="profile">
       <div className="prof-head">
-        <div className="tile"><span>Tempo</span><b>{fmt(p.ms, 1)} ms</b></div>
-        <div className="tile"><span>{p.rows ? 'Righe restituite' : 'Righe interessate'}</span><b>{fmt(p.rows || p.affectedRows || 0, 0)}</b></div>
-        <div className="tile grow"><span>Istruzione</span><code>{p.sql.replace(/\s+/g, ' ').slice(0, 220)}</code></div>
+        <div className="tile"><span>{tr('Tempo')}</span><b>{fmt(p.ms, 1)} ms</b></div>
+        <div className="tile"><span>{p.rows ? tr('Righe restituite') : tr('Righe interessate')}</span><b>{fmt(p.rows || p.affectedRows || 0, 0)}</b></div>
+        <div className="tile grow"><span>{tr('Istruzione')}</span><code>{p.sql.replace(/\s+/g, ' ').slice(0, 220)}</code></div>
       </div>
       <div className="prof-hints">
-        {tips.map((t, i) => <div key={i} className={`prof-hint ${t.level}`}><span className="tag">{t.level === 'warn' ? '⚠ Attenzione' : 'ℹ Nota'}</span>{t.text}</div>)}
+        {tips.map((t, i) => <div key={i} className={`prof-hint ${t.level}`}><span className="tag">{t.level === 'warn' ? tr('⚠ Attenzione') : tr('ℹ Nota')}</span>{t.text}</div>)}
       </div>
       <div className="prof-cols">
         <section>
-          <h4>Fasi di esecuzione <small>SHOW PROFILE</small></h4>
+          <h4>{tr('Fasi di esecuzione')}{' '}<small>SHOW PROFILE</small></h4>
           {p.stages.length ? p.stages.map((s, i) => (
             <div key={i} className={`stage${top.has(s.stage) ? ' top' : ''}`} title={`${s.stage}: ${fmt(s.ms, 3)} ms`}>
               <span className="name">{s.stage}</span>
               <span className="bar"><span style={{ width: `${Math.max(1, (s.ms / maxStage) * 100)}%` }} /></span>
               <span className="ms">{fmt(s.ms, 3)} ms</span>
             </div>
-          )) : <div className="empty">Profiling non disponibile su questo server.</div>}
+          )) : <div className="empty">{tr('Profiling non disponibile su questo server.')}</div>}
         </section>
         <section>
-          <h4>Contatori di sessione <small>variazione durante l'esecuzione</small></h4>
+          <h4>{tr('Contatori di sessione')}{' '}<small>{tr('variazione durante l\'esecuzione')}</small></h4>
           <table className="dtable">
             <tbody>
               {p.status.map((s) => (
@@ -39,15 +40,15 @@ export default function ProfileView({ profile: p }: { profile: Profile }) {
               ))}
             </tbody>
           </table>
-          {!p.status.length && <div className="empty">Nessun contatore modificato.</div>}
+          {!p.status.length && <div className="empty">{tr('Nessun contatore modificato.')}</div>}
         </section>
       </div>
       {p.plan && (
         <section className="prof-plan">
-          <h4>Piano reale <small>{p.plan.format === 'json' ? 'ANALYZE FORMAT=JSON: la query è stata eseguita una seconda volta' : p.plan.format === 'tree' ? 'EXPLAIN ANALYZE' : ''}</small></h4>
+          <h4>{tr('Piano reale')}{' '}<small>{p.plan.format === 'json' ? tr('ANALYZE FORMAT=JSON: la query è stata eseguita una seconda volta') : p.plan.format === 'tree' ? 'EXPLAIN ANALYZE' : ''}</small></h4>
           {p.plan.format === 'json' ? (
             <table className="dtable">
-              <thead><tr><th>Operazione / tabella</th><th>Accesso</th><th>Indice</th><th className="num">Righe stimate</th><th className="num">Righe reali</th><th className="num">Cicli</th><th className="num">Filtrate %</th><th className="num">Tempo</th><th>Condizione</th></tr></thead>
+              <thead><tr><th>{tr('Operazione / tabella')}</th><th>{tr('Accesso')}</th><th>{tr('Indice')}</th><th className="num">{tr('Righe stimate')}</th><th className="num">{tr('Righe reali')}</th><th className="num">{tr('Cicli')}</th><th className="num">{tr('Filtrate %')}</th><th className="num">{tr('Tempo')}</th><th>{tr('Condizione')}</th></tr></thead>
               <tbody>
                 {rows.map((r, i) => (
                   <tr key={i} className={r.warn ? 'warn' : ''}>

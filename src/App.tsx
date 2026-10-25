@@ -1,6 +1,6 @@
 import { useEffect, useRef, useState, useSyncExternalStore } from 'react';
 import { api } from './api';
-import { cancelDoc, closeDoc, formatDoc, openAssistant, openHistory, openServerTool, openVisual, profileDoc, requestQuit, newDoc, openFiles, openSql, restore, runDoc, saveDoc, setDocTarget, visualTarget } from './actions';
+import { cancelDoc, closeDoc, formatDoc, openAssistant, openHistory, openServerTool, openVisual, profileDoc, requestQuit, switchLanguage, newDoc, openFiles, openSql, restore, runDoc, saveDoc, setDocTarget, visualTarget } from './actions';
 import { formatOptions, loadSnippets, setFormatOptions } from './editor';
 import { loadDatabases, metaKey, useStore, type MetaEntry } from './store';
 import ContextMenu, { openMenu } from './components/ContextMenu';
@@ -21,10 +21,15 @@ import AssistantPanel from './components/AssistantPanel';
 import Users from './components/Users';
 import History from './components/History';
 import Maint from './components/Maint';
+import ProcessManager from './components/ProcessManager';
+import Performance from './components/Performance';
+import DataGenerator from './components/DataGenerator';
+import DocGenerator from './components/DocGenerator';
 import ObjectBar from './components/ObjectBar';
 import SnippetsDialog from './components/SnippetsDialog';
 import CallDialog from './components/CallDialog';
 import logo from '../build/icons/128x128.png';
+import { getLang, LANGS, t } from './i18n';
 import { onThemeChange, resolvedTheme, setThemePref, themePref, type ThemePref } from './theme';
 
 /** Splitter drag; `invert` for panels on the right, which grow when dragged left. */
@@ -63,19 +68,19 @@ function TargetPicker() {
   const list = dbs?.data ?? [];
   return (
     <div className="target" style={color ? { borderColor: color } : undefined}>
-      <select value={doc.connId ?? ''} title="Connessione"
+      <select value={doc.connId ?? ''} title={t('Connessione')}
         onChange={async (e) => {
           const id = e.target.value || null;
           await setDocTarget(doc.id, id, id ? (conns.find((c) => c.id === id)?.database || null) : null);
           if (id && useStore.getState().connState[id]?.status !== 'open') useStore.getState().openConn(id);
         }}>
-        <option value="">(nessuna connessione)</option>
+        <option value="">{t('(nessuna connessione)')}</option>
         {conns.map((c) => <option key={c.id} value={c.id}>{c.name}</option>)}
       </select>
       <select value={doc.db ?? ''} title="Database" disabled={!doc.connId}
         onFocus={() => { if (doc.connId && state !== 'open') useStore.getState().openConn(doc.connId); }}
         onChange={(e) => setDocTarget(doc.id, doc.connId, e.target.value || null)}>
-        <option value="">(nessun database)</option>
+        <option value="">{t('(nessun database)')}</option>
         {doc.db && !list.includes(doc.db) && <option value={doc.db}>{doc.db}</option>}
         {list.map((d) => <option key={d} value={d}>{d}</option>)}
       </select>
@@ -83,7 +88,7 @@ function TargetPicker() {
   );
 }
 
-const THEME_LABEL: Record<ThemePref, string> = { light: 'Chiaro', dark: 'Scuro', system: 'Sistema' };
+const THEME_LABEL: Record<ThemePref, string> = { light: t('Chiaro'), dark: t('Scuro'), system: t('Sistema') };
 
 /** Light / dark / system switch at the end of the toolbar. */
 function ThemeSwitch() {
@@ -92,9 +97,20 @@ function ThemeSwitch() {
   const next: Record<ThemePref, ThemePref> = { light: 'dark', dark: 'system', system: 'light' };
   const dark = resolvedTheme(pref) === 'dark';
   return (
-    <button className="theme-switch" title={`Tema: ${THEME_LABEL[pref]} (clic: ${THEME_LABEL[next[pref]]})`}
+    <button className="theme-switch" title={t('Tema: {0} (clic: {1})', THEME_LABEL[pref], THEME_LABEL[next[pref]])}
       onClick={() => setThemePref(next[pref])}>
       <Icon name={dark ? 'moon' : 'sun'} /><span>{THEME_LABEL[pref]}</span>
+    </button>
+  );
+}
+
+/** Interface language (the window reloads with the tabs kept). */
+function LangSwitch() {
+  const cur = getLang();
+  return (
+    <button className="theme-switch" title={t('Lingua dell\'interfaccia')}
+      onClick={(e) => openMenu(e, LANGS.map((l) => ({ label: `${l.id === cur ? '✓' : '\u2003'} ${l.name}`, action: () => { if (l.id !== cur) switchLanguage(l.id); } })))}>
+      <Icon name="lang" /><span>{cur.toUpperCase()}</span>
     </button>
   );
 }
@@ -104,35 +120,39 @@ function formatMenu(e: React.MouseEvent) {
   const o = formatOptions();
   const mark = (on: boolean, label: string) => `${on ? '✓' : '\u2003'} ${label}`;
   openMenu(e, [
-    { label: mark(o.keywordCase === 'upper', 'Parole chiave MAIUSCOLE'), action: () => setFormatOptions({ keywordCase: 'upper' }) },
-    { label: mark(o.keywordCase === 'lower', 'Parole chiave minuscole'), action: () => setFormatOptions({ keywordCase: 'lower' }) },
-    { label: mark(o.keywordCase === 'keep', 'Maiuscole come scritte'), action: () => setFormatOptions({ keywordCase: 'keep' }) },
+    { label: mark(o.keywordCase === 'upper', t('Parole chiave MAIUSCOLE')), action: () => setFormatOptions({ keywordCase: 'upper' }) },
+    { label: mark(o.keywordCase === 'lower', t('Parole chiave minuscole')), action: () => setFormatOptions({ keywordCase: 'lower' }) },
+    { label: mark(o.keywordCase === 'keep', t('Maiuscole come scritte')), action: () => setFormatOptions({ keywordCase: 'keep' }) },
     'sep',
-    { label: mark(o.indent === 2, 'Rientro di 2 spazi'), action: () => setFormatOptions({ indent: 2 }) },
-    { label: mark(o.indent === 4, 'Rientro di 4 spazi'), action: () => setFormatOptions({ indent: 4 }) },
+    { label: mark(o.indent === 2, t('Rientro di 2 spazi')), action: () => setFormatOptions({ indent: 2 }) },
+    { label: mark(o.indent === 4, t('Rientro di 4 spazi')), action: () => setFormatOptions({ indent: 4 }) },
     'sep',
-    { label: mark(o.listPerLine, 'Una colonna per riga (SELECT, SET, VALUES)'), action: () => setFormatOptions({ listPerLine: !o.listPerLine }) },
+    { label: mark(o.listPerLine, t('Una colonna per riga (SELECT, SET, VALUES)')), action: () => setFormatOptions({ listPerLine: !o.listPerLine }) },
   ]);
 }
 
 /** Server and database tools, on the active document's or the explorer's connection/database. */
 function toolsMenu(e: React.MouseEvent) {
   const s = useStore.getState();
-  const t = visualTarget();
-  const connId = t?.connId ?? s.selectedConn ?? (s.docs.find((d) => d.id === s.activeDoc)?.connId ?? null);
+  const tg = visualTarget();
+  const connId = tg?.connId ?? s.selectedConn ?? (s.docs.find((d) => d.id === s.activeDoc)?.connId ?? null);
   const open = !!connId && s.connState[connId]?.status === 'open';
-  const task = (kind: 'backup' | 'restore' | 'import') => () => (t ? s.set({ task: { kind, connId: t.connId, db: t.db } }) : s.set({ pickTarget: { kind: 'maint' } }));
+  const task = (kind: 'backup' | 'restore' | 'import') => () => (tg ? s.set({ task: { kind, connId: tg.connId, db: tg.db } }) : s.set({ pickTarget: { kind: 'maint' } }));
   openMenu(e, [
-    { label: 'Cronologia query', action: openHistory },
-    { label: 'Snippet SQL…', action: () => s.set({ snippetDialog: {} }) },
-    { label: `Manutenzione tabelle${t ? ` (${t.db})` : '…'}`, action: () => openVisual('maint') },
+    { label: t('Cronologia query'), action: openHistory },
+    { label: t('Snippet SQL…'), action: () => s.set({ snippetDialog: {} }) },
+    { label: t('Manutenzione tabelle{0}', tg ? ` (${tg.db})` : '…'), action: () => openVisual('maint') },
+    { label: `${t('Generatore di dati di test')}${tg ? ` (${tg.db})` : '…'}`, action: () => openVisual('datagen') },
+    { label: `${t('Documentazione del database')}${tg ? ` (${tg.db})` : '…'}`, action: () => openVisual('docgen') },
     'sep',
-    { label: 'Monitor sessioni', disabled: !open, action: () => openServerTool(connId!, 'monitor') },
-    { label: 'Utenti e privilegi', disabled: !open, action: () => openServerTool(connId!, 'users') },
+    { label: t('Prestazioni e ottimizzazione'), action: () => openVisual('perf') },
+    { label: t('Processi e transazioni'), action: () => openVisual('procs') },
+    { label: t('Monitor sessioni'), action: () => (open ? openServerTool(connId!, 'monitor') : openVisual('monitor')) },
+    { label: t('Utenti e privilegi'), action: () => (open ? openServerTool(connId!, 'users') : openVisual('users')) },
     'sep',
-    { label: `Backup${t ? ` di ${t.db}` : ''}…`, disabled: !t, action: task('backup') },
-    { label: 'Ripristina / esegui file SQL…', disabled: !t, action: task('restore') },
-    { label: 'Importa dati…', disabled: !t, action: task('import') },
+    { label: tg ? t('Backup di {0}…', tg.db) : t('Backup…'), disabled: !tg, action: task('backup') },
+    { label: t('Ripristina / esegui file SQL…'), disabled: !tg, action: task('restore') },
+    { label: t('Importa dati…'), disabled: !tg, action: task('import') },
   ]);
 }
 
@@ -146,34 +166,37 @@ function Toolbar() {
   const runnable = sql || doc?.kind === 'query';
   return (
     <div className="toolbar">
-      <button title="Nuova connessione (Ctrl+Maiusc+N)" onClick={() => set({ connDialog: { def: {} } })}><Icon name="addConn" /></button>
+      <button title={t('Nuova connessione (Ctrl+Maiusc+N)')} onClick={() => set({ connDialog: { def: {} } })}><Icon name="addConn" /></button>
       <div className="sep" />
-      <button title="Nuovo SQL (Ctrl+N)" onClick={() => newDoc()}><Icon name="newSql" /><span>Nuovo SQL</span></button>
-      <button title="Apri (Ctrl+O)" onClick={openFiles}><Icon name="open" /></button>
-      <button title="Salva (Ctrl+S)" disabled={!sql} onClick={() => saveDoc()}><Icon name="save" /></button>
+      <button title={t('Nuovo SQL (Ctrl+N)')} onClick={() => newDoc()}><Icon name="newSql" /><span>{t('Nuovo SQL')}</span></button>
+      <button title={t('Apri (Ctrl+O)')} onClick={openFiles}><Icon name="open" /></button>
+      <button title={t('Salva (Ctrl+S)')} disabled={!sql} onClick={() => saveDoc()}><Icon name="save" /></button>
       <div className="sep" />
-      <button title={obj ? 'Applica la definizione al server (F5)' : 'Esegui script o selezione (F5)'} disabled={!runnable || running} onClick={() => runDoc('all')}><Icon name="play" /><span>{obj ? 'Applica' : 'Esegui'}</span></button>
-      <button title="Esegui istruzione corrente (Ctrl+Invio)" disabled={!runnable || running || obj} onClick={() => runDoc('current')}><Icon name="playLine" /></button>
-      <button title="Interrompi (Maiusc+F5)" disabled={!running} onClick={() => cancelDoc()}><Icon name="stop" /></button>
-      <button title="Piano di esecuzione (Ctrl+E)" disabled={!runnable || running || obj} onClick={() => runDoc('explain')}><Icon name="plan" /><span>Piano</span></button>
-      <button title="Profila l'istruzione corrente (Ctrl+Maiusc+P)" disabled={!sql || running || obj} onClick={() => profileDoc()}><Icon name="profile" /><span>Profila</span></button>
+      <button title={obj ? t('Applica la definizione al server (F5)') : t('Esegui script o selezione (F5)')} disabled={!runnable || running} onClick={() => runDoc('all')}><Icon name="play" /><span>{obj ? t('Applica') : t('Esegui')}</span></button>
+      <button title={t('Esegui istruzione corrente (Ctrl+Invio)')} disabled={!runnable || running || obj} onClick={() => runDoc('current')}><Icon name="playLine" /></button>
+      <button title={t('Interrompi (Maiusc+F5)')} disabled={!running} onClick={() => cancelDoc()}><Icon name="stop" /></button>
+      <button title={t('Piano di esecuzione (Ctrl+E)')} disabled={!runnable || running || obj} onClick={() => runDoc('explain')}><Icon name="plan" /><span>{t('Piano')}</span></button>
+      <button title={t('Profila l\'istruzione corrente (Ctrl+Maiusc+P)')} disabled={!sql || running || obj} onClick={() => profileDoc()}><Icon name="profile" /><span>{t('Profila')}</span></button>
       <div className="split-btn">
-        <button title="Formatta lo script o la selezione (Ctrl+Maiusc+F)" disabled={!sql} onClick={() => formatDoc()}><Icon name="format" /><span>Formatta</span></button>
-        <button className="arrow" title="Opzioni di formattazione" onClick={formatMenu}>▾</button>
+        <button title={t('Formatta lo script o la selezione (Ctrl+Maiusc+F)')} disabled={!sql} onClick={() => formatDoc()}><Icon name="format" /><span>{t('Formatta')}</span></button>
+        <button className="arrow" title={t('Opzioni di formattazione')} onClick={formatMenu}>▾</button>
       </div>
       <div className="sep" />
-      <button title="Cronologia delle query eseguite" onClick={openHistory}><Icon name="history" /><span>Cronologia</span></button>
-      <button title="Snippet SQL: modelli richiamabili con prefisso + Tab" onClick={() => set({ snippetDialog: {} })}><Icon name="snippet" /><span>Snippet</span></button>
-      <button title="Strumenti: manutenzione tabelle, monitor, utenti, backup, import" onClick={toolsMenu}><Icon name="tools" /><span className="keep">Strumenti ▾</span></button>
+      <button title={t('Cronologia delle query eseguite')} onClick={openHistory}><Icon name="history" /><span>{t('Cronologia')}</span></button>
+      <button title={t('Snippet SQL: modelli richiamabili con prefisso + Tab')} onClick={() => set({ snippetDialog: {} })}><Icon name="snippet" /><span>{t('Snippet')}</span></button>
+      <button title={t('Prestazioni: consigli sul server, query pesanti, indici, ottimizzazione delle query, variabili')} onClick={() => openVisual('perf')}><Icon name="perf" /><span className="keep">{t('Prestazioni')}</span></button>
+      <button title={t('Processi: connessioni, transazioni, blocchi e deadlock; termina query e connessioni')} onClick={() => openVisual('procs')}><Icon name="procs" /><span>{t('Processi')}</span></button>
+      <button title={t('Strumenti: manutenzione tabelle, monitor, utenti, backup, import')} onClick={toolsMenu}><Icon name="tools" /><span className="keep">{t('Strumenti ▾')}</span></button>
       <div className="sep" />
-      <button title="Diagramma ER del database (editor visuale: tabelle e relazioni)" onClick={() => openVisual('er')}><Icon name="er" /><span className="keep">Diagramma ER</span></button>
-      <button title="Query Builder visuale" onClick={() => openVisual('query')}><Icon name="qb" /><span className="keep">Query Builder</span></button>
-      <button title="Nuova tabella nel designer visuale" onClick={() => openVisual('table')}><Icon name="table" /><span>Nuova tabella</span></button>
+      <button title={t('Diagramma ER del database (editor visuale: tabelle e relazioni)')} onClick={() => openVisual('er')}><Icon name="er" /><span className="keep">{t('Diagramma ER')}</span></button>
+      <button title={t('Query Builder visuale')} onClick={() => openVisual('query')}><Icon name="qb" /><span className="keep">{t('Query Builder')}</span></button>
+      <button title={t('Nuova tabella nel designer visuale')} onClick={() => openVisual('table')}><Icon name="table" /><span>{t('Nuova tabella')}</span></button>
       <div className="sep" />
-      <button className={assistantOpen && sql ? 'on' : ''} title="Assistente AI (Claude): genera, spiega, correggi e ottimizza SQL" onClick={() => (assistantOpen && sql ? useStore.getState().setAssistantOpen(false) : openAssistant())}><Icon name="ai" /><span className="keep">Assistente AI</span></button>
+      <button className={assistantOpen && sql ? 'on' : ''} title={t('Assistente AI (Claude): genera, spiega, correggi e ottimizza SQL')} onClick={() => (assistantOpen && sql ? useStore.getState().setAssistantOpen(false) : openAssistant())}><Icon name="ai" /><span className="keep">{t('Assistente AI')}</span></button>
       <div className="sep" />
       {sql && <TargetPicker />}
       <div className="spacer" />
+      <LangSwitch />
       <ThemeSwitch />
     </div>
   );
@@ -205,6 +228,7 @@ function DocTabs() {
             {d.obj && <Icon name={d.obj.kind} size={14} />}
             {d.kind === 'history' && <Icon name="history" size={14} />}
             {d.kind === 'maint' && <Icon name="maint" size={14} />}
+            {(d.kind === 'perf' || d.kind === 'procs' || d.kind === 'datagen' || d.kind === 'docgen') && <Icon name={d.kind} size={14} />}
             <span className="name">{d.title}{d.dirty ? ' •' : ''}</span>
             <button className="x" onMouseDown={(e) => e.stopPropagation()} onClick={() => closeDoc(d.id)}><Icon name="close" size={12} /></button>
           </div>
@@ -220,29 +244,38 @@ function StartPage() {
   return (
     <div className="start">
       <h1><img src={logo} alt="" width={56} height={56} />MiB-SQL</h1>
-      <p>IDE per MariaDB e MySQL</p>
+      <p>{t('IDE per MariaDB e MySQL')}</p>
       <div className="start-actions">
-        <button onClick={() => set({ connDialog: { def: {} } })}><Icon name="addConn" /> Nuova connessione</button>
-        <button onClick={() => newDoc()}><Icon name="newSql" /> Nuovo SQL</button>
-        <button onClick={openFiles}><Icon name="open" /> Apri script…</button>
+        <button onClick={() => set({ connDialog: { def: {} } })}><Icon name="addConn" />{' '}{t('Nuova connessione')}</button>
+        <button onClick={() => newDoc()}><Icon name="newSql" />{' '}{t('Nuovo SQL')}</button>
+        <button onClick={openFiles}><Icon name="open" />{' '}{t('Apri script…')}</button>
       </div>
-      <h2>Editor visuali</h2>
+      <h2>{t('Editor visuali')}</h2>
       <div className="start-tiles">
-        <button onClick={() => openVisual('er')}><Icon name="er" size={28} /><b>Diagramma ER</b><span>Tabelle e relazioni del database: crea tabelle, disegna le chiavi esterne trascinando le colonne</span></button>
-        <button onClick={() => openVisual('query')}><Icon name="qb" size={28} /><b>Query Builder</b><span>Componi una SELECT trascinando tabelle e colonne, join, filtri e raggruppamenti senza scrivere SQL</span></button>
-        <button onClick={() => openVisual('table')}><Icon name="table" size={28} /><b>Designer tabelle</b><span>Colonne, indici, chiavi esterne e vincoli in una griglia; genera CREATE/ALTER</span></button>
-        <button onClick={() => openVisual('compare')}><Icon name="plan" size={28} /><b>Confronto</b><span>Differenze di schema e dati tra due database, con script di sincronizzazione</span></button>
-        <button onClick={openAssistant}><Icon name="ai" size={28} /><b>Assistente AI</b><span>Chiedi query in linguaggio naturale; fai spiegare, correggere e ottimizzare SQL (Claude)</span></button>
+        <button onClick={() => openVisual('er')}><Icon name="er" size={28} /><b>{t('Diagramma ER')}</b><span>{t('Tabelle e relazioni del database: crea tabelle, disegna le chiavi esterne trascinando le colonne')}</span></button>
+        <button onClick={() => openVisual('query')}><Icon name="qb" size={28} /><b>{t('Query Builder')}</b><span>{t('Componi una SELECT trascinando tabelle e colonne, join, filtri e raggruppamenti senza scrivere SQL')}</span></button>
+        <button onClick={() => openVisual('table')}><Icon name="table" size={28} /><b>{t('Designer tabelle')}</b><span>{t('Colonne, indici, chiavi esterne e vincoli in una griglia; genera CREATE/ALTER')}</span></button>
+        <button onClick={() => openVisual('compare')}><Icon name="plan" size={28} /><b>{t('Confronto')}</b><span>{t('Differenze di schema e dati tra due database, con script di sincronizzazione')}</span></button>
+        <button onClick={openAssistant}><Icon name="ai" size={28} /><b>{t('Assistente AI')}</b><span>{t('Chiedi query in linguaggio naturale; fai spiegare, correggere e ottimizzare SQL (Claude)')}</span></button>
       </div>
-      <h2>Strumenti</h2>
+      <h2>{t('Strumenti')}</h2>
       <div className="start-tiles">
-        <button onClick={openHistory}><Icon name="history" size={28} /><b>Cronologia query</b><span>Tutte le istruzioni eseguite, con durata ed esito: cerca, riapri, esegui di nuovo</span></button>
-        <button onClick={() => set({ snippetDialog: {} })}><Icon name="snippet" size={28} /><b>Snippet SQL</b><span>Modelli richiamabili nell'editor con prefisso + Tab (sel, ins, upd, ct, proc…); crea i tuoi</span></button>
-        <button onClick={() => openVisual('maint')}><Icon name="maint" size={28} /><b>Manutenzione tabelle</b><span>Dimensioni e frammentazione; Analizza, Ottimizza, Controlla, Ripara, Checksum</span></button>
-        <button onClick={() => newDoc()}><Icon name="format" size={28} /><b>Formattatore SQL</b><span>Nell'editor: Ctrl+Maiusc+F o «Formatta» riordina parole chiave, rientri e clausole</span></button>
+        <button onClick={openHistory}><Icon name="history" size={28} /><b>{t('Cronologia query')}</b><span>{t('Tutte le istruzioni eseguite, con durata ed esito: cerca, riapri, esegui di nuovo')}</span></button>
+        <button onClick={() => set({ snippetDialog: {} })}><Icon name="snippet" size={28} /><b>{t('Snippet SQL')}</b><span>{t('Modelli richiamabili nell\'editor con prefisso + Tab (sel, ins, upd, ct, proc…); crea i tuoi')}</span></button>
+        <button onClick={() => openVisual('maint')}><Icon name="maint" size={28} /><b>{t('Manutenzione tabelle')}</b><span>{t('Dimensioni e frammentazione; Analizza, Ottimizza, Controlla, Ripara, Checksum')}</span></button>
+        <button onClick={() => openVisual('datagen')}><Icon name="datagen" size={28} /><b>{t('Dati di test')}</b><span>{t('Riempie le tabelle con dati verosimili (nomi, email, date, importi) rispettando tipi, chiavi esterne e valori unici')}</span></button>
+        <button onClick={() => openVisual('docgen')}><Icon name="docgen" size={28} /><b>{t('Documentazione')}</b><span>{t('Documento HTML o Markdown del database: tabelle, colonne, indici, relazioni, viste e routine, con diagramma')}</span></button>
+        <button onClick={() => newDoc()}><Icon name="format" size={28} /><b>{t('Formattatore SQL')}</b><span>{t('Nell\'editor: Ctrl+Maiusc+F o «Formatta» riordina parole chiave, rientri e clausole')}</span></button>
+      </div>
+      <h2>{t('Server')}</h2>
+      <div className="start-tiles">
+        <button onClick={() => openVisual('perf')}><Icon name="perf" size={28} /><b>{t('Prestazioni')}</b><span>{t('Consigli sulla configurazione, query più pesanti, indici inutili o mancanti, analisi e ottimizzazione delle query')}</span></button>
+        <button onClick={() => openVisual('procs')}><Icon name="procs" size={28} /><b>{t('Processi')}</b><span>{t('Connessioni e query in corso, transazioni aperte, chi blocca chi, ultimo deadlock; termina una o più connessioni')}</span></button>
+        <button onClick={() => openVisual('monitor')}><Icon name="profile" size={28} /><b>{t('Monitor')}</b><span>{t('Grafici in tempo reale: query al secondo, connessioni, rete, buffer pool')}</span></button>
+        <button onClick={() => openVisual('users')}><Icon name="key" size={28} /><b>{t('Utenti e privilegi')}</b><span>{t('Account, ruoli e permessi del server')}</span></button>
       </div>
       {conns.length > 0 && <>
-        <h2>Connessioni</h2>
+        <h2>{t('Connessioni')}</h2>
         <div className="start-conns">
           {conns.map((c) => (
             <button key={c.id} onClick={() => { newDoc({ connId: c.id, db: c.database || null }); useStore.getState().openConn(c.id); }}>
@@ -267,9 +300,9 @@ function StatusBar({ cursor }: { cursor: [number, number] }) {
         {st?.info && <span>{st.info.version}</span>}
         {st?.info && <span>{st.info.user}</span>}
         {doc?.db && <span>{doc.db}</span>}
-      </> : <span>Nessuna connessione</span>}
+      </> : <span>{t('Nessuna connessione')}</span>}
       <div className="spacer" />
-      {doc?.kind === 'sql' && <span>Rg {cursor[0]}, Col {cursor[1]}</span>}
+      {doc?.kind === 'sql' && <span>Rg {cursor[0]}{t(', Col')}{' '}{cursor[1]}</span>}
     </div>
   );
 }
@@ -363,6 +396,10 @@ export default function App() {
           {active?.kind === 'users' && <Users key={active.id} doc={active} />}
           {active?.kind === 'history' && <History key={active.id} doc={active} />}
           {active?.kind === 'maint' && <Maint key={active.id} doc={active} />}
+          {active?.kind === 'procs' && <ProcessManager key={active.id} doc={active} />}
+          {active?.kind === 'perf' && <Performance key={active.id} doc={active} />}
+          {active?.kind === 'datagen' && <DataGenerator key={active.id} doc={active} />}
+          {active?.kind === 'docgen' && <DocGenerator key={active.id} doc={active} />}
           {!docs.length && <StartPage />}
         </div>
       </div>

@@ -1,5 +1,6 @@
 // SQL assistant prompts and reply parsing. Pure functions (no React, no IPC) for tests.
 import type { ErModel } from './er';
+import { t as tr } from './i18n.ts';
 
 export const SYSTEM_PROMPT = `Sei l'assistente SQL integrato in MiB-SQL, un IDE per MariaDB e MySQL. Aiuti chi lavora sul database qui sotto: scrivi query, le spieghi, correggi errori e suggerisci ottimizzazioni.
 
@@ -9,7 +10,7 @@ Tu non esegui nulla: l'utente decide se inserire ed eseguire il codice. Per istr
 
 /** Compact schema description: one line per table with columns, keys and estimated rows; then relations. */
 export function schemaText(model: ErModel, db: string, server: string) {
-  const lines = [`Server: ${server}`, `Database: ${db}`, ''];
+  const lines = [tr('Server: {0}', server), tr('Database: {0}', db), ''];
   const fkCols = new Map<string, Set<string>>();
   for (const fk of model.fks) {
     const s = fkCols.get(fk.table) ?? new Set<string>();
@@ -18,11 +19,11 @@ export function schemaText(model: ErModel, db: string, server: string) {
   }
   for (const t of model.tables) {
     const cols = t.columns.map((c) => `${c.name} ${c.type}${c.pk ? ' PK' : ''}${fkCols.get(t.name)?.has(c.name) ? ' FK' : ''}${c.nullable ? '' : ' NOT NULL'}`);
-    const rows = t.rows !== null && t.kind === 'table' ? `, ~${t.rows} righe` : '';
+    const rows = t.rows !== null && t.kind === 'table' ? tr(', ~{0} righe', t.rows) : '';
     lines.push(`${t.kind === 'view' ? 'VISTA' : 'TABELLA'} ${t.name} (${cols.join(', ')})${rows}${t.comment ? ` -- ${t.comment}` : ''}`);
   }
   if (model.fks.length) {
-    lines.push('', 'Relazioni:');
+    lines.push('', tr('Relazioni:'));
     for (const fk of model.fks) lines.push(`${fk.table}(${fk.columns.join(', ')}) -> ${fk.refDb && fk.refDb !== db ? fk.refDb + '.' : ''}${fk.refTable}(${fk.refColumns.join(', ')})`);
   }
   return lines.join('\n');
@@ -39,9 +40,9 @@ export interface TurnContext {
 export function userMessage(question: string, ctx: TurnContext) {
   const parts = [question.trim()];
   if (ctx.script?.trim()) parts.push(`Script corrente nell'editor:\n\`\`\`sql\n${ctx.script.trim().slice(0, 20000)}\n\`\`\``);
-  if (ctx.error) parts.push(`Ultimo errore restituito dal server:\n${ctx.error}`);
-  if (ctx.plan) parts.push(`Piano / profilo dell'ultima esecuzione:\n${ctx.plan.slice(0, 8000)}`);
-  if (ctx.sample) parts.push(`Prime righe del risultato (TSV):\n${ctx.sample.slice(0, 8000)}`);
+  if (ctx.error) parts.push(tr('Ultimo errore restituito dal server:\n{0}', ctx.error));
+  if (ctx.plan) parts.push(tr('Piano / profilo dell\'ultima esecuzione:\n{0}', ctx.plan.slice(0, 8000)));
+  if (ctx.sample) parts.push(tr('Prime righe del risultato (TSV):\n{0}', ctx.sample.slice(0, 8000)));
   return parts.join('\n\n');
 }
 

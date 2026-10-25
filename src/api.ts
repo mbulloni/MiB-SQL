@@ -3,6 +3,10 @@ import type { ErModel } from './er';
 import type { Snapshot } from './compare';
 import type { Snapshot as MonitorSnapshot } from './monitor';
 import type { Profile } from './profile';
+import type { ProcSnapshot } from './procs';
+import type { Overview } from './advisor';
+import type { IndexData } from './indexes';
+import type { PlanRow, SlowRow, TopRow } from './queryadvisor';
 import type {
   EditableKind, HistoryEntry, MaintOp, MaintResult, Snippet, TableStat, ServerOptions, ApplyStmt, Cell, Column, ExportFormat, ExportOptions, ColumnInfo, ConnDef, DbObjects, ExecMode, ExecResult, ForeignKeyInfo, IndexInfo, ObjectKind, Schema, Secrets, ServerInfo,
 } from './types';
@@ -74,7 +78,7 @@ interface Api {
     save(list: Snippet[] | null): Promise<{ list: Snippet[]; custom: boolean }>;
   };
   objects: {
-    apply(connId: string, db: string, kind: EditableKind, orig: string | null, text: string): Promise<{ name: string; created: boolean; renamed: boolean; method: 'create' | 'replace' | 'drop-create' }>;
+    apply(connId: string, db: string, kind: EditableKind, orig: string | null, text: string): Promise<{ name: string; created: boolean; renamed: boolean; method: 'create' | 'replace' | 'drop-create'; grants?: { unreadable: boolean; restored: number; failed: string[] } }>;
     params(connId: string, db: string, kind: 'procedure' | 'function', name: string): Promise<{ params: { mode: string; name: string; type: string }[]; returns: string | null }>;
     currentUser(connId: string): Promise<string>;
   };
@@ -83,6 +87,32 @@ interface Api {
     run(id: string, connId: string, db: string, tables: string[], op: MaintOp, opts: { option?: string; local?: boolean }): Promise<{ results: MaintResult[]; stopped: boolean }>;
     stop(id: string): Promise<void>;
   };
+  procs: {
+    snapshot(connId: string): Promise<ProcSnapshot>;
+    explainFor(connId: string, id: number, flavor: 'mariadb' | 'mysql'): Promise<{ columns: string[]; rows: (string | null)[][] }>;
+    kill(connId: string, ids: number[], queryOnly: boolean): Promise<{ killed: number; failed: { id: number; message: string }[] }>;
+    innodbStatus(connId: string): Promise<string>;
+  };
+  perf: {
+    overview(connId: string): Promise<Overview>;
+    topQueries(connId: string, source: 'digest' | 'slowlog'): Promise<{
+      sources: { ps: boolean; digest: boolean; slowTable: boolean; slowLog: boolean; logOutput: string; longQueryTime: number; flavor: 'mariadb' | 'mysql' };
+      rows: TopRow[] | SlowRow[];
+    }>;
+    resetTop(connId: string, source: 'digest' | 'slowlog'): Promise<void>;
+    enableSlowLog(connId: string, seconds: number): Promise<unknown>;
+    indexData(connId: string, db: string): Promise<IndexData>;
+    setVariable(connId: string, name: string, value: string, persist: boolean): Promise<string | null>;
+    explain(connId: string, db: string, sql: string): Promise<PlanRow[]>;
+  };
+  datagen: {
+    tables(connId: string, db: string): Promise<(ServerTable & { rows: number | null })[]>;
+    values(connId: string, db: string, table: string, column: string, limit?: number): Promise<(string | number)[]>;
+    tuples(connId: string, db: string, table: string, columns: string[]): Promise<string[]>;
+    clear(connId: string, db: string, tables: string[], truncate: boolean): Promise<void>;
+    counts(connId: string, db: string, tables: string[]): Promise<Record<string, number>>;
+  };
+  setLang(lang: string): Promise<void>;
   monitor: { snapshot(connId: string): Promise<MonitorSnapshot>; kill(connId: string, id: number, queryOnly: boolean): Promise<void> };
   tasks: {
     dump(id: string, connId: string, db: string, opts: Record<string, unknown>): Promise<{ file: string; size: number } | null>;

@@ -5,6 +5,7 @@ const fs = require('fs');
 const path = require('path');
 const crypto = require('crypto');
 const { app, safeStorage } = require('electron');
+const { t } = require('./i18n.cjs');
 
 const defsFile = () => path.join(app.getPath('userData'), 'connections.json');
 const secretsFile = () => path.join(app.getPath('userData'), 'secrets.json');
@@ -24,7 +25,7 @@ function list() {
 
 function get(id) {
   const def = list().find((c) => c.id === id);
-  if (!def) throw new Error('Connessione non trovata.');
+  if (!def) throw new Error(t('Connessione non trovata.'));
   return def;
 }
 

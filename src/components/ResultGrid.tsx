@@ -1,6 +1,7 @@
 import { useEffect, useLayoutEffect, useMemo, useRef, useState } from 'react';
 import { useStore } from '../store';
 import type { Cell, Column } from '../types';
+import { t } from '../i18n';
 
 const RH = 22;      // row height
 const NUM_W = 48;   // row number column
@@ -287,7 +288,7 @@ export default function ResultGrid({ columns, rows, editing, onMenu }: Props) {
               onMouseEnter={() => { if (dragging.current) setFocus([i, j]); }}
               onDoubleClick={() => { if (!startEdit([i, j])) view([i, j]); }}
               onContextMenu={onMenu ? (e) => onMenu(e, selection()) : undefined}>
-              {v === undefined ? <span className="null">(predefinito)</span> : d === null ? <span className="null">NULL</span> : d}
+              {v === undefined ? <span className="null">{t('(predefinito)')}</span> : d === null ? <span className="null">NULL</span> : d}
             </div>
           );
         })}

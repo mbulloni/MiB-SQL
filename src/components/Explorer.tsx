@@ -1,6 +1,7 @@
 import { createContext, useContext, useState, type ReactNode } from 'react';
 import { api } from '../api';
-import { closeDoc, dropObject, insertText, newDoc, openCompare, openMaint, openNewObject, openObject, openServerTool, openDesigner, openEr, openQueryBuilder, qi, refreshExplorer, runDoc, selectTop, showDdl } from '../actions';
+import { t as tr, locale } from '../i18n';
+import { openDbTool, closeDoc, dropObject, insertText, newDoc, openCompare, openMaint, openNewObject, openObject, openServerTool, openDesigner, openEr, openQueryBuilder, qi, refreshExplorer, runDoc, selectTop, showDdl } from '../actions';
 import { loadDatabases, metaKey, useStore, type MetaEntry } from '../store';
 import type { ColumnInfo, ConnDef, DbObjects, EditableKind, ForeignKeyInfo, IndexInfo, ObjectKind } from '../types';
 import { openMenu, type MenuItem } from './ContextMenu';
@@ -58,9 +59,9 @@ function Node({ id, label, icon, depth, hint, title, leaf, onExpand, onDouble, m
 
 function Status({ entry, depth, empty }: { entry?: MetaEntry; depth: number; empty?: boolean }) {
   const pad = { paddingLeft: 22 + depth * 14 };
-  if (!entry || entry.loading) return <div className="node info" style={pad}>Caricamento…</div>;
+  if (!entry || entry.loading) return <div className="node info" style={pad}>{tr('Caricamento…')}</div>;
   if (entry.error) return <div className="node info error" style={pad} title={entry.error}>{entry.error}</div>;
-  if (empty) return <div className="node info" style={pad}>(vuoto)</div>;
+  if (empty) return <div className="node info" style={pad}>{tr('(vuoto)')}</div>;
   return null;
 }
 
@@ -69,13 +70,13 @@ const copy = (s: string) => navigator.clipboard.writeText(s);
 /** DROP / TRUNCATE after confirmation; designer tabs on a dropped table are closed. */
 async function destroy(c: string, db: string, table: string, how: 'drop' | 'truncate') {
   const drop = how === 'drop';
-  const ok = await api.confirm(drop ? `Eliminare la tabella ${db}.${table}?` : `Svuotare la tabella ${db}.${table}?`,
-    drop ? 'La tabella e tutti i suoi dati verranno eliminati definitivamente.' : 'Tutte le righe verranno eliminate definitivamente (TRUNCATE).', [drop ? 'Elimina' : 'Svuota', 'Annulla']);
+  const ok = await api.confirm(drop ? tr('Eliminare la tabella {0}.{1}?', db, table) : tr('Svuotare la tabella {0}.{1}?', db, table),
+    drop ? tr('La tabella e tutti i suoi dati verranno eliminati definitivamente.') : tr('Tutte le righe verranno eliminate definitivamente (TRUNCATE).'), [drop ? tr('Elimina') : tr('Svuota'), tr('Annulla')]);
   if (ok !== 0) return;
   try {
     await api.ddl.run(c, [`${drop ? 'DROP' : 'TRUNCATE'} TABLE ${qi(db)}.${qi(table)}`]);
   } catch (err) {
-    await api.confirm('Operazione non riuscita', (err as Error).message, ['OK']);
+    await api.confirm(tr('Operazione non riuscita'), (err as Error).message, ['OK']);
     return;
   }
   useStore.getState().dropMeta(`${c}/${db}/`);
@@ -93,7 +94,7 @@ function TableChildren({ c, db, t, depth, view }: { c: string; db: string; t: st
   const base = `${c}/${db}/t/${t}`;
   return (
     <>
-      <Node id={`${base}/cols`} label="Colonne" icon="folder" depth={depth} onExpand={() => load(metaKey.columns(c, db, t), () => api.meta.columns(c, db, t))}>
+      <Node id={`${base}/cols`} label={tr('Colonne')} icon="folder" depth={depth} onExpand={() => load(metaKey.columns(c, db, t), () => api.meta.columns(c, db, t))}>
         {() => cols?.data ? cols.data.map((col) => (
           <Node key={col.name} id={`${base}/c/${col.name}`} leaf depth={depth + 1} icon={col.key === 'PRI' ? 'key' : 'column'}
             label={col.name} hint={`${col.type}${col.nullable ? '' : ' NOT NULL'}`}
@@ -103,13 +104,13 @@ function TableChildren({ c, db, t, depth, view }: { c: string; db: string; t: st
         )) : <Status entry={cols} depth={depth + 1} />}
       </Node>
       {!view && <>
-        <Node id={`${base}/idx`} label="Indici" icon="folder" depth={depth} onExpand={() => load(metaKey.indexes(c, db, t), () => api.meta.indexes(c, db, t))}>
+        <Node id={`${base}/idx`} label={tr('Indici')} icon="folder" depth={depth} onExpand={() => load(metaKey.indexes(c, db, t), () => api.meta.indexes(c, db, t))}>
           {() => idx?.data ? (idx.data.length ? idx.data.map((ix) => (
             <Node key={ix.name} id={`${base}/i/${ix.name}`} leaf depth={depth + 1} icon={ix.primary ? 'key' : 'index'} label={ix.name}
               hint={`${ix.unique && !ix.primary ? 'UNIQUE ' : ''}(${ix.columns.join(', ')})`} menu={[{ label: 'Copia nome', action: () => copy(ix.name) }]} />
           )) : <Status entry={idx} depth={depth + 1} empty />) : <Status entry={idx} depth={depth + 1} />}
         </Node>
-        <Node id={`${base}/fk`} label="Chiavi esterne" icon="folder" depth={depth} onExpand={() => load(metaKey.foreignKeys(c, db, t), () => api.meta.foreignKeys(c, db, t))}>
+        <Node id={`${base}/fk`} label={tr('Chiavi esterne')} icon="folder" depth={depth} onExpand={() => load(metaKey.foreignKeys(c, db, t), () => api.meta.foreignKeys(c, db, t))}>
           {() => fks?.data ? (fks.data.length ? fks.data.map((fk) => (
             <Node key={fk.name} id={`${base}/f/${fk.name}`} leaf depth={depth + 1} icon="fk" label={fk.name}
               hint={`(${fk.columns.join(', ')}) → ${fk.refDb !== db ? fk.refDb + '.' : ''}${fk.refTable}(${fk.refColumns.join(', ')})`}
@@ -123,12 +124,12 @@ function TableChildren({ c, db, t, depth, view }: { c: string; db: string; t: st
 }
 
 const FOLDERS: { key: keyof DbObjects; label: string; icon: string; kind: ObjectKind; add: string }[] = [
-  { key: 'tables', label: 'Tabelle', icon: 'table', kind: 'table', add: 'Nuova tabella…' },
-  { key: 'views', label: 'Viste', icon: 'view', kind: 'view', add: 'Nuova vista…' },
-  { key: 'procedures', label: 'Procedure', icon: 'procedure', kind: 'procedure', add: 'Nuova procedura…' },
-  { key: 'functions', label: 'Funzioni', icon: 'function', kind: 'function', add: 'Nuova funzione…' },
-  { key: 'triggers', label: 'Trigger', icon: 'trigger', kind: 'trigger', add: 'Nuovo trigger…' },
-  { key: 'events', label: 'Eventi', icon: 'event', kind: 'event', add: 'Nuovo evento…' },
+  { key: 'tables', label: tr('Tabelle'), icon: 'table', kind: 'table', add: tr('Nuova tabella…') },
+  { key: 'views', label: tr('Viste'), icon: 'view', kind: 'view', add: tr('Nuova vista…') },
+  { key: 'procedures', label: tr('Procedure'), icon: 'procedure', kind: 'procedure', add: tr('Nuova procedura…') },
+  { key: 'functions', label: tr('Funzioni'), icon: 'function', kind: 'function', add: tr('Nuova funzione…') },
+  { key: 'triggers', label: 'Trigger', icon: 'trigger', kind: 'trigger', add: tr('Nuovo trigger…') },
+  { key: 'events', label: tr('Eventi'), icon: 'event', kind: 'event', add: tr('Nuovo evento…') },
 ];
 
 function DbChildren({ c, db, depth }: { c: string; db: string; depth: number }) {
@@ -147,16 +148,16 @@ function DbChildren({ c, db, depth }: { c: string; db: string; depth: number }) 
             {() => items.length ? items.map((o) => {
               const qn = `${qi(db)}.${qi(o.name)}`;
               const common: MenuItem[] = [
-                { label: 'Mostra DDL', action: () => showDdl(c, db, F.kind, o.name) },
-                { label: 'Copia nome', action: () => copy(o.name) },
-                { label: 'Inserisci nell\'editor', action: () => insertText(qn) },
+                { label: tr('Mostra DDL'), action: () => showDdl(c, db, F.kind, o.name) },
+                { label: tr('Copia nome'), action: () => copy(o.name) },
+                { label: tr('Inserisci nell\'editor'), action: () => insertText(qn) },
               ];
               const id = `${c}/${db}/${F.key}/${o.name}`;
               if (F.kind === 'table' || F.kind === 'view') {
                 const t = o as DbObjects['tables'][number];
                 return (
                   <Node key={o.name} id={id} label={o.name} icon={F.icon} depth={depth + 1} drag={qn}
-                    hint={t.rows !== null && t.rows !== undefined ? `~${t.rows.toLocaleString('it-IT')}` : undefined}
+                    hint={t.rows !== null && t.rows !== undefined ? `~${t.rows.toLocaleString(locale())}` : undefined}
                     title={t.comment || undefined}
                     onDouble={() => selectTop(c, db, o.name)}
                     menu={[
@@ -184,16 +185,16 @@ function DbChildren({ c, db, depth }: { c: string; db: string; depth: number }) 
               const kind = F.kind as EditableKind;
               const routine = kind === 'procedure' || kind === 'function';
               const extra: MenuItem[] = [
-                { label: 'Modifica…', action: () => openObject(c, db, kind, o.name) },
-                ...(routine ? [{ label: 'Esegui con parametri…', action: () => useStore.getState().set({ callDialog: { connId: c, db, kind, name: o.name } }) }] : []),
-                ...(kind === 'procedure' ? [{ label: 'Genera CALL', action: () => newDoc({ connId: c, db, sql: `CALL ${qn}();\n` }) }] : []),
-                { label: 'Elimina…', danger: true, action: () => dropObject(c, db, kind, o.name) },
+                { label: tr('Modifica…'), action: () => openObject(c, db, kind, o.name) },
+                ...(routine ? [{ label: tr('Esegui con parametri…'), action: () => useStore.getState().set({ callDialog: { connId: c, db, kind, name: o.name } }) }] : []),
+                ...(kind === 'procedure' ? [{ label: tr('Genera CALL'), action: () => newDoc({ connId: c, db, sql: `CALL ${qn}();\n` }) }] : []),
+                { label: tr('Elimina…'), danger: true, action: () => dropObject(c, db, kind, o.name) },
                 'sep',
               ];
               const hint = F.kind === 'trigger' ? `${(o as DbObjects['triggers'][number]).timing} ${(o as DbObjects['triggers'][number]).event} ${(o as DbObjects['triggers'][number]).table}`
                 : F.kind === 'event' ? (o as DbObjects['events'][number]).status : undefined;
               return <Node key={o.name} id={id} leaf label={o.name} icon={F.icon} depth={depth + 1} hint={hint} drag={qn}
-                title="Doppio clic: apri nell'editor per modificarlo"
+                title={tr('Doppio clic: apri nell\'editor per modificarlo')}
                 onDouble={() => openObject(c, db, kind, o.name)} menu={[...extra, ...common]} />;
             }) : <Status entry={entry} depth={depth + 1} empty />}
           </Node>
@@ -226,16 +227,18 @@ function ConnNode({ conn }: { conn: ConnDef }) {
     await s.loadConns();
   };
   const menu: MenuItem[] = [
-    state === 'open' ? { label: 'Disconnetti', action: disconnect } : { label: 'Connetti', action: () => { connect().then((ok) => ok && toggle(conn.id, true)); } },
-    { label: 'Nuovo SQL', action: () => newDoc({ connId: conn.id, db: conn.database || null }) },
-    { label: 'Monitor sessioni', disabled: state !== 'open', action: () => openServerTool(conn.id, 'monitor') },
-    { label: 'Utenti e privilegi', disabled: state !== 'open', action: () => openServerTool(conn.id, 'users') },
-    { label: 'Esegui file SQL…', disabled: state !== 'open', action: () => s.set({ task: { kind: 'restore', connId: conn.id, db: null } }) },
-    { label: 'Aggiorna', action: () => { refreshExplorer(conn.id); if (state === 'open') loadDatabases(conn.id, true); }, disabled: state !== 'open' },
+    state === 'open' ? { label: tr('Disconnetti'), action: disconnect } : { label: tr('Connetti'), action: () => { connect().then((ok) => ok && toggle(conn.id, true)); } },
+    { label: tr('Nuovo SQL'), action: () => newDoc({ connId: conn.id, db: conn.database || null }) },
+    { label: tr('Prestazioni e ottimizzazione'), action: () => openServerTool(conn.id, 'perf') },
+    { label: tr('Processi e transazioni'), action: () => openServerTool(conn.id, 'procs') },
+    { label: tr('Monitor sessioni'), disabled: state !== 'open', action: () => openServerTool(conn.id, 'monitor') },
+    { label: tr('Utenti e privilegi'), disabled: state !== 'open', action: () => openServerTool(conn.id, 'users') },
+    { label: tr('Esegui file SQL…'), disabled: state !== 'open', action: () => s.set({ task: { kind: 'restore', connId: conn.id, db: null } }) },
+    { label: tr('Aggiorna'), action: () => { refreshExplorer(conn.id); if (state === 'open') loadDatabases(conn.id, true); }, disabled: state !== 'open' },
     'sep',
-    { label: 'Modifica connessione…', action: () => s.set({ connDialog: { def: conn } }) },
-    { label: 'Duplica', action: () => s.set({ connDialog: { def: { ...conn, id: undefined, name: `${conn.name} (copia)` } } }) },
-    { label: 'Elimina', danger: true, action: remove },
+    { label: tr('Modifica connessione…'), action: () => s.set({ connDialog: { def: conn } }) },
+    { label: tr('Duplica'), action: () => s.set({ connDialog: { def: { ...conn, id: undefined, name: `${conn.name} (copia)` } } }) },
+    { label: tr('Elimina'), danger: true, action: remove },
   ];
   const info = s.connState[conn.id]?.info;
   const err = s.connState[conn.id]?.error;
@@ -252,12 +255,15 @@ function ConnNode({ conn }: { conn: ConnDef }) {
         <Node key={db} id={`${conn.id}/${db}`} label={db} icon="database" depth={1} dim={SYSTEM_DBS.has(db)} drag={qi(db)}
           onExpand={() => expandDb(db)}
           menu={[
-            { label: 'Nuovo SQL', action: () => newDoc({ connId: conn.id, db }) },
+            { label: tr('Nuovo SQL'), action: () => newDoc({ connId: conn.id, db }) },
             { label: 'Nuova tabella…', action: () => openDesigner(conn.id, db, null) },
             { label: 'Diagramma ER (editor visuale)', action: () => openEr(conn.id, db) },
             { label: 'Query Builder', action: () => openQueryBuilder(conn.id, db) },
             { label: 'Confronta con…', action: () => openCompare(conn.id, db) },
             { label: 'Manutenzione tabelle…', action: () => openMaint(conn.id, db) },
+            { label: tr('Genera dati di test…'), action: () => openDbTool(conn.id, db, 'datagen') },
+            { label: tr('Documentazione del database…'), action: () => openDbTool(conn.id, db, 'docgen') },
+            { label: tr('Indici: duplicati, inutilizzati, mancanti'), action: () => openServerTool(conn.id, 'perf', { tab: 'indexes', db }) },
             'sep',
             { label: 'Backup…', action: () => s.set({ task: { kind: 'backup', connId: conn.id, db } }) },
             { label: 'Ripristina / esegui file SQL…', action: () => s.set({ task: { kind: 'restore', connId: conn.id, db } }) },
@@ -290,17 +296,17 @@ export default function Explorer() {
     <Tree.Provider value={{ open, toggle, filter }}>
       <div className="explorer">
         <div className="panel-title">
-          Database Explorer
+          {tr('Database Explorer')}
           <div className="spacer" />
-          <button className="icon-btn" title="Nuova connessione" onClick={() => setStore({ connDialog: { def: {} } })}><Icon name="addConn" /></button>
-          <button className="icon-btn" title="Aggiorna" disabled={!selected} onClick={() => { if (selected) { refreshExplorer(selected); loadDatabases(selected, true); } }}><Icon name="refresh" /></button>
+          <button className="icon-btn" title={tr('Nuova connessione')} onClick={() => setStore({ connDialog: { def: {} } })}><Icon name="addConn" /></button>
+          <button className="icon-btn" title={tr('Aggiorna')} disabled={!selected} onClick={() => { if (selected) { refreshExplorer(selected); loadDatabases(selected, true); } }}><Icon name="refresh" /></button>
         </div>
-        <input className="filter" placeholder="Filtra oggetti…" value={filter} onChange={(e) => setFilter(e.target.value)} />
+        <input className="filter" placeholder={tr('Filtra oggetti…')} value={filter} onChange={(e) => setFilter(e.target.value)} />
         <div className="tree">
           {conns.length === 0 && (
             <div className="tree-empty">
-              Nessuna connessione.
-              <button onClick={() => setStore({ connDialog: { def: {} } })}>Nuova connessione…</button>
+              {tr('Nessuna connessione.')}
+              <button onClick={() => setStore({ connDialog: { def: {} } })}>{tr('Nuova connessione…')}</button>
             </div>
           )}
           {conns.map((c) => <ConnNode key={c.id} conn={c} />)}

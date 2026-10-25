@@ -8,6 +8,7 @@ const mariadb = require('mariadb');
 const { Client: SshClient } = require('ssh2');
 const connections = require('./connections.cjs');
 const { split, statementAt } = require('./sqlsplit.cjs');
+const { t } = require('./i18n.cjs');
 
 const MAX_ROWS = 50000;
 // statements answered by exactly one result set: streamed so only MAX_ROWS stay in memory
@@ -87,11 +88,11 @@ function errorInfo(err) {
 }
 
 const NETWORK = {
-  ENOTFOUND: (e) => `Host non trovato: ${e.hostname ?? ''}`,
-  ECONNREFUSED: (e) => `Connessione rifiutata da ${e.address ?? ''}:${e.port ?? ''}: il server non è in ascolto.`,
-  ETIMEDOUT: () => 'Timeout di connessione: server irraggiungibile.',
-  EHOSTUNREACH: () => 'Host irraggiungibile.',
-  ENOENT: (e) => `File non trovato: ${e.path ?? ''}`,
+  ENOTFOUND: (e) => t('Host non trovato: {0}', e.hostname ?? ''),
+  ECONNREFUSED: (e) => t('Connessione rifiutata da {0}:{1}: il server non è in ascolto.', e.address ?? '', e.port ?? ''),
+  ETIMEDOUT: () => t('Timeout di connessione: server irraggiungibile.'),
+  EHOSTUNREACH: () => t('Host irraggiungibile.'),
+  ENOENT: (e) => t('File non trovato: {0}', e.path ?? ''),
 };
 
 class DbError extends Error {
@@ -157,7 +158,7 @@ async function close(connId) {
 
 function pool(connId) {
   const p = pools.get(connId);
-  if (!p) throw new Error('Connessione non aperta.');
+  if (!p) throw new Error(t('Connessione non aperta.'));
   return p;
 }
 
@@ -200,7 +201,7 @@ async function revive(s) {
 
 async function useDb(sid, db) {
   const s = sessions.get(sid);
-  if (!s) throw new Error('Sessione chiusa.');
+  if (!s) throw new Error(t('Sessione chiusa.'));
   await revive(s);
   try { await s.conn.query(`USE \`${db.replace(/`/g, '``')}\``); } catch (err) { throw new DbError(err); }
   s.db = db;
@@ -254,8 +255,8 @@ function resultSets(res) {
  */
 async function exec(sid, text, { mode = 'all', cursor = 0, selStart = 0, selEnd = 0, continueOnError = false, maxRows = MAX_ROWS } = {}) {
   const s = sessions.get(sid);
-  if (!s) throw new Error('Sessione chiusa.');
-  if (s.busy) throw new Error('Una query è già in esecuzione in questo documento.');
+  if (!s) throw new Error(t('Sessione chiusa.'));
+  if (s.busy) throw new Error(t('Una query è già in esecuzione in questo documento.'));
   let stmts;
   if (mode === 'selection') stmts = split(text.slice(selStart, selEnd)).map((x) => ({ ...x, start: x.start + selStart, end: x.end + selStart }));
   else if (mode === 'current' || mode === 'explain') { const one = statementAt(text, cursor); stmts = one ? [one] : []; }
@@ -310,7 +311,7 @@ async function exec(sid, text, { mode = 'all', cursor = 0, selStart = 0, selEnd 
       } catch (err) {
         entry.ms = Math.round(performance.now() - t0);
         entry.error = errorInfo(err);
-        if (s.cancelled) entry.error.message = 'Esecuzione annullata dall\'utente.';
+        if (s.cancelled) entry.error.message = t('Esecuzione annullata dall\'utente.');
       }
       out.push(entry);
       if (entry.error && (entry.error.fatal || !continueOnError)) break;
@@ -346,7 +347,7 @@ async function apply(connId, stmts) {
       const st = stmts[at];
       const r = await c.query({ sql: st.sql, rowsAsArray: false }, st.params);
       if (st.expectOne && r.affectedRows !== 1) {
-        throw new Error(`${r.affectedRows} righe trovate invece di 1: la riga è stata modificata o eliminata da un altro utente.`);
+        throw new Error(t('{0} righe trovate invece di 1: la riga è stata modificata o eliminata da un altro utente.', r.affectedRows));
       }
       out.push({ affectedRows: r.affectedRows, insertId: r.insertId ? String(r.insertId) : null });
     }
@@ -355,7 +356,7 @@ async function apply(connId, stmts) {
   } catch (err) {
     await c.rollback().catch(() => {});
     const e = new DbError(err);
-    e.message = `Istruzione ${at + 1}: ${e.message.replace(/[.\s]*$/, '.')} Nessuna modifica applicata.`;
+    e.message = t('Istruzione {0}: {1} Nessuna modifica applicata.', at + 1, e.message.replace(/[.\s]*$/, '.'));
     throw e;
   } finally {
     c.release();
@@ -374,8 +375,8 @@ async function runStatements(connId, sqls) {
     return at;
   } catch (err) {
     const e = new DbError(err);
-    const done = at === 1 ? ' (la prima è stata eseguita)' : at > 1 ? ` (le prime ${at} sono state eseguite)` : '';
-    e.message = `Istruzione ${at + 1} di ${sqls.length}: ${e.message}${done}`;
+    const done = at === 1 ? t(' (la prima è stata eseguita)') : at > 1 ? t(' (le prime {0} sono state eseguite)', at) : '';
+    e.message = t('Istruzione {0} di {1}: {2}{3}', at + 1, sqls.length, e.message, done);
     throw e;
   } finally {
     c.release();
@@ -400,10 +401,10 @@ async function streamQuery(connId, db, sql, onColumns, onRow) {
     stream.on('fields', (meta) => { columns = meta.map(column); onColumns(columns); });
     let n = 0;
     for await (const row of stream) {
-      if (!columns) throw new Error('La query non restituisce righe.');
+      if (!columns) throw new Error(t('La query non restituisce righe.'));
       await onRow(row.map((v) => cell(v, Infinity)), ++n);
     }
-    if (!columns) throw new Error('La query non restituisce righe.');
+    if (!columns) throw new Error(t('La query non restituisce righe.'));
     return n;
   } catch (err) {
     throw err instanceof DbError || !err.sqlMessage ? err : new DbError(err);
@@ -446,10 +447,10 @@ const PROFILE_VARS = ['Handler_read_first', 'Handler_read_key', 'Handler_read_ne
  */
 async function profile(sid, text, cursor) {
   const s = sessions.get(sid);
-  if (!s) throw new Error('Sessione chiusa.');
-  if (s.busy) throw new Error('Una query è già in esecuzione in questo documento.');
+  if (!s) throw new Error(t('Sessione chiusa.'));
+  if (s.busy) throw new Error(t('Una query è già in esecuzione in questo documento.'));
   const st = statementAt(text, cursor);
-  if (!st) throw new Error('Nessuna istruzione sotto il cursore.');
+  if (!st) throw new Error(t('Nessuna istruzione sotto il cursore.'));
   s.busy = true;
   try {
     await revive(s);
@@ -543,4 +544,4 @@ async function shutdown() {
   for (const id of [...pools.keys()]) await close(id);
 }
 
-module.exports = { test, open, close, info, meta, openSession, closeSession, useDb, exec, cancel, apply, runStatements, selectRows, streamQuery, withConnection, withDedicated, monitorSnapshot, kill, profile, cell, column, DbError, shutdown, split };
+module.exports = { MONITOR_TAG, test, open, close, info, meta, openSession, closeSession, useDb, exec, cancel, apply, runStatements, selectRows, streamQuery, withConnection, withDedicated, monitorSnapshot, kill, profile, cell, column, DbError, shutdown, split };

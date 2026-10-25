@@ -12,6 +12,11 @@ const assistant = require('./assistant.cjs');
 const library = require('./library.cjs');
 const objects = require('./objects.cjs');
 const maint = require('./maint.cjs');
+const procs = require('./procs.cjs');
+const perf = require('./perf.cjs');
+const datagen = require('./datagen.cjs');
+const i18n = require('./i18n.cjs');
+const { t } = require('./i18n.cjs');
 
 app.commandLine.appendSwitch('no-sandbox');
 // Separate profile for tests and screenshots, so they never touch the user's saved connections.
@@ -50,6 +55,8 @@ function createWindow() {
   if (process.env.VITE_DEV) win.loadURL('http://localhost:5174');
   else win.loadFile(path.join(__dirname, '..', 'dist', 'index.html'));
   if (process.env.MIBSQL_SHOT) screenshotMode(process.env.MIBSQL_SHOT, process.env.MIBSQL_SCRIPT);
+  // tests: MIBSQL_LOG=1 copies the renderer's console (and uncaught errors) to stdout
+  if (process.env.MIBSQL_LOG) win.webContents.on('console-message', (e) => console.log(`[renderer] ${e.message ?? ''}`));
   // `mib-sql script.sql`: open the file once the UI is ready.
   const arg = process.argv.slice(1).find((a) => /\.sql$/i.test(a) && fs.existsSync(a));
   if (arg) win.webContents.once('did-finish-load', () => setTimeout(() => win.webContents.send('file:openArg', readSql(path.resolve(arg))), 300));
@@ -132,7 +139,7 @@ async function exportTarget(format, suggested) {
   // tests: write to <MIBSQL_SAVE_AS>.<ext> without the native dialog
   if (process.env.MIBSQL_SAVE_AS) return `${process.env.MIBSQL_SAVE_AS}.${exporter.EXT[format]}`;
   const base = (suggested || 'risultato').replace(/[\\/:*?"<>|]+/g, '_');
-  const r = await dialog.showSaveDialog(win, { defaultPath: `${base}.${exporter.EXT[format]}`, filters: exporter.FILTERS[format] });
+  const r = await dialog.showSaveDialog(win, { defaultPath: `${base}.${exporter.EXT[format]}`, filters: exporter.FILTERS()[format] });
   if (r.canceled) return null;
   return path.extname(r.filePath) ? r.filePath : `${r.filePath}.${exporter.EXT[format]}`;
 }
@@ -169,7 +176,7 @@ handle('file:readHex', async () => {
   const file = process.env.MIBSQL_OPEN || (await dialog.showOpenDialog(win, { properties: ['openFile'] })).filePaths?.[0];
   if (!file) return null;
   const size = fs.statSync(file).size;
-  if (size > MAX_BINARY) throw new Error(`File troppo grande (${Math.round(size / 1e6)} MB): il limite è 16 MB.`);
+  if (size > MAX_BINARY) throw new Error(t('File troppo grande ({0} MB): il limite è 16 MB.', Math.round(size / 1e6)));
   return '0x' + fs.readFileSync(file).toString('hex').toUpperCase();
 });
 handle('file:writeHex', async (hex, suggested) => {
@@ -198,6 +205,23 @@ handle('object:currentUser', (connId) => objects.currentUser(connId));
 handle('maint:stats', (connId, db) => maint.tableStats(connId, db));
 handle('maint:run', (id, connId, db, tables, op, opts) => maint.run(id, connId, db, tables, op, opts, progress(id)));
 handle('maint:stop', (id) => maint.stop(id));
+handle('procs:snapshot', (connId) => procs.snapshot(connId));
+handle('procs:explainFor', (connId, id, flavor) => procs.explainFor(connId, id, flavor));
+handle('procs:kill', (connId, ids, queryOnly) => procs.kill(connId, ids, queryOnly));
+handle('procs:innodbStatus', (connId) => procs.innodbStatus(connId));
+handle('perf:overview', (connId) => perf.overview(connId));
+handle('perf:topQueries', (connId, source) => perf.topQueries(connId, source));
+handle('perf:resetTop', (connId, source) => perf.resetTop(connId, source));
+handle('perf:enableSlowLog', (connId, seconds) => perf.enableSlowLog(connId, seconds));
+handle('perf:indexData', (connId, db) => perf.indexData(connId, db));
+handle('perf:setVariable', (connId, name, value, persist) => perf.setVariable(connId, name, value, persist));
+handle('perf:explain', (connId, db, sql) => perf.explain(connId, db, sql));
+handle('datagen:tables', (connId, db) => datagen.tables(connId, db));
+handle('datagen:values', (connId, db, table, column, limit) => datagen.values(connId, db, table, column, limit));
+handle('datagen:tuples', (connId, db, table, columns) => datagen.tuples(connId, db, table, columns));
+handle('datagen:clear', (connId, db, tables, truncate) => datagen.clear(connId, db, tables, truncate));
+handle('datagen:counts', (connId, db, tables) => datagen.counts(connId, db, tables));
+handle('app:setLang', (l) => i18n.setLang(l));
 handle('monitor:snapshot', (connId) => server.monitorSnapshot(connId));
 handle('monitor:kill', (connId, id, queryOnly) => server.kill(connId, id, queryOnly));
 
@@ -209,7 +233,7 @@ handle('backup:dump', async (id, connId, db, opts) => {
   const stamp = new Date().toISOString().slice(0, 16).replace(/[:T]/g, '-');
   let file = process.env.MIBSQL_SAVE_AS ? `${process.env.MIBSQL_SAVE_AS}.${ext}` : null;
   if (!file) {
-    const r = await dialog.showSaveDialog(win, { defaultPath: `${db}-${stamp}.${ext}`, filters: [{ name: opts.gzip ? 'SQL compresso' : 'Script SQL', extensions: opts.gzip ? ['gz'] : ['sql'] }] });
+    const r = await dialog.showSaveDialog(win, { defaultPath: `${db}-${stamp}.${ext}`, filters: [{ name: opts.gzip ? t('SQL compresso') : t('Script SQL'), extensions: opts.gzip ? ['gz'] : ['sql'] }] });
     if (r.canceled) return null;
     file = r.filePath.endsWith(`.${ext}`) ? r.filePath : `${r.filePath.replace(/\.sql$|\.gz$/, '')}.${ext}`;
   }
@@ -218,8 +242,8 @@ handle('backup:dump', async (id, connId, db, opts) => {
 
 handle('file:pick', async (kind) => {
   const filters = {
-    sql: [{ name: 'Script SQL', extensions: ['sql', 'gz'] }, { name: 'Tutti i file', extensions: ['*'] }],
-    data: [{ name: 'Dati (CSV, Excel, JSON)', extensions: ['csv', 'tsv', 'txt', 'xlsx', 'json', 'ndjson', 'jsonl'] }, { name: 'Tutti i file', extensions: ['*'] }],
+    sql: [{ name: t('Script SQL'), extensions: ['sql', 'gz'] }, { name: t('Tutti i file'), extensions: ['*'] }],
+    data: [{ name: t('Dati (CSV, Excel, JSON)'), extensions: ['csv', 'tsv', 'txt', 'xlsx', 'json', 'ndjson', 'jsonl'] }, { name: t('Tutti i file'), extensions: ['*'] }],
   }[kind];
   if (process.env.MIBSQL_OPEN) return process.env.MIBSQL_OPEN;
   const r = await dialog.showOpenDialog(win, { properties: ['openFile'], filters });
@@ -229,16 +253,16 @@ handle('backup:restore', (id, connId, db, file, opts) => backup.restore(connId, 
 handle('import:preview', (file, opts) => importer.preview(file, opts));
 handle('import:run', (id, connId, file, opts) => importer.importFile(connId, file, opts, progress(id)));
 
-const SQL_FILTERS = [{ name: 'Script SQL', extensions: ['sql'] }, { name: 'Tutti i file', extensions: ['*'] }];
+const SQL_FILTERS = () => [{ name: t('Script SQL'), extensions: ['sql'] }, { name: t('Tutti i file'), extensions: ['*'] }];
 
 handle('file:open', async () => {
-  const r = await dialog.showOpenDialog(win, { properties: ['openFile', 'multiSelections'], filters: SQL_FILTERS });
+  const r = await dialog.showOpenDialog(win, { properties: ['openFile', 'multiSelections'], filters: SQL_FILTERS() });
   return r.canceled ? [] : r.filePaths.map(readSql);
 });
 handle('file:save', async (content, file, suggested) => {
   let target = file;
   if (!target) {
-    const r = await dialog.showSaveDialog(win, { defaultPath: suggested || 'query.sql', filters: SQL_FILTERS });
+    const r = await dialog.showSaveDialog(win, { defaultPath: suggested || 'query.sql', filters: SQL_FILTERS() });
     if (r.canceled) return null;
     target = r.filePath.endsWith('.sql') || path.extname(r.filePath) ? r.filePath : r.filePath + '.sql';
   }

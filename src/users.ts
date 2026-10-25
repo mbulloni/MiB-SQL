@@ -1,3 +1,4 @@
+import { t } from './i18n.ts';
 // Users and privileges: parse SHOW GRANTS, edit privileges per level, produce GRANT/REVOKE. Pure, for tests.
 
 export interface Level {
@@ -9,11 +10,11 @@ export interface Level {
 export interface Grants { levels: Level[]; roles: string[]; other: string[] }
 
 export const PRIV_GROUPS: { label: string; privs: string[]; global?: boolean }[] = [
-  { label: 'Dati', privs: ['SELECT', 'INSERT', 'UPDATE', 'DELETE'] },
-  { label: 'Struttura', privs: ['CREATE', 'ALTER', 'DROP', 'INDEX', 'REFERENCES', 'CREATE VIEW', 'SHOW VIEW', 'TRIGGER'] },
-  { label: 'Routine ed eventi', privs: ['CREATE ROUTINE', 'ALTER ROUTINE', 'EXECUTE', 'EVENT'] },
-  { label: 'Altro', privs: ['LOCK TABLES', 'CREATE TEMPORARY TABLES'] },
-  { label: 'Amministrazione', global: true, privs: ['PROCESS', 'RELOAD', 'SHUTDOWN', 'FILE', 'SHOW DATABASES', 'CREATE USER', 'REPLICATION CLIENT', 'REPLICATION SLAVE', 'SUPER'] },
+  { label: t('Dati'), privs: ['SELECT', 'INSERT', 'UPDATE', 'DELETE'] },
+  { label: t('Struttura'), privs: ['CREATE', 'ALTER', 'DROP', 'INDEX', 'REFERENCES', 'CREATE VIEW', 'SHOW VIEW', 'TRIGGER'] },
+  { label: t('Routine ed eventi'), privs: ['CREATE ROUTINE', 'ALTER ROUTINE', 'EXECUTE', 'EVENT'] },
+  { label: t('Altro'), privs: ['LOCK TABLES', 'CREATE TEMPORARY TABLES'] },
+  { label: t('Amministrazione'), global: true, privs: ['PROCESS', 'RELOAD', 'SHUTDOWN', 'FILE', 'SHOW DATABASES', 'CREATE USER', 'REPLICATION CLIENT', 'REPLICATION SLAVE', 'SUPER'] },
 ];
 const TABLE_PRIVS = new Set(['SELECT', 'INSERT', 'UPDATE', 'DELETE', 'CREATE', 'ALTER', 'DROP', 'INDEX', 'REFERENCES', 'CREATE VIEW', 'SHOW VIEW', 'TRIGGER']);
 

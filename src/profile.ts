@@ -1,3 +1,4 @@
+import { t, locale } from './i18n.ts';
 // Query profiler: readable plan rows from MariaDB's ANALYZE FORMAT=JSON and tuning hints from the session
 // counters. Pure functions for tests.
 
@@ -51,7 +52,7 @@ export function planRows(plan: Obj): PlanRow[] {
     for (const [k, v] of Object.entries(o)) {
       if (k === 'filesort' || k === 'temporary_table' || k === 'subqueries' || k === 'materialized' || k === 'union_result' || k === 'duplicates_removal' || k === 'window_functions_computation') {
         const op = v as Obj;
-        const label = { filesort: `ordinamento (${String((op as Obj)?.sort_key ?? '')})`, temporary_table: 'tabella temporanea', subqueries: 'sottoquery', materialized: 'materializzazione', union_result: 'UNION', duplicates_removal: 'rimozione duplicati', window_functions_computation: 'funzioni finestra' }[k];
+        const label = { filesort: `ordinamento (${String((op as Obj)?.sort_key ?? '')})`, temporary_table: t('tabella temporanea'), subqueries: 'sottoquery', materialized: 'materializzazione', union_result: 'UNION', duplicates_removal: 'rimozione duplicati', window_functions_computation: 'funzioni finestra' }[k];
         out.push({ depth, label, ms: num(op?.r_total_time_ms), rRows: num(op?.r_output_rows) });
         visit(v, depth + 1);
       } else if (typeof v === 'object') {
@@ -69,48 +70,48 @@ const get = (status: Profile['status'], k: string) => status.find((s) => s.name 
 export function hints(p: Profile): { level: 'warn' | 'info'; text: string }[] {
   const out: { level: 'warn' | 'info'; text: string }[] = [];
   const s = p.status;
-  if (get(s, 'Select_full_join')) out.push({ level: 'warn', text: 'Join senza indice (Select_full_join): aggiungere un indice sulle colonne di join.' });
-  if (get(s, 'Created_tmp_disk_tables')) out.push({ level: 'warn', text: 'Tabella temporanea su disco: il risultato intermedio non sta in memoria (tmp_table_size) o contiene TEXT/BLOB.' });
-  if (get(s, 'Sort_merge_passes')) out.push({ level: 'warn', text: "Ordinamento a più passaggi (Sort_merge_passes): valutare un indice sull'ORDER BY o sort_buffer_size." });
+  if (get(s, 'Select_full_join')) out.push({ level: 'warn', text: t('Join senza indice (Select_full_join): aggiungere un indice sulle colonne di join.') });
+  if (get(s, 'Created_tmp_disk_tables')) out.push({ level: 'warn', text: t('Tabella temporanea su disco: il risultato intermedio non sta in memoria (tmp_table_size) o contiene TEXT/BLOB.') });
+  if (get(s, 'Sort_merge_passes')) out.push({ level: 'warn', text: t('Ordinamento a più passaggi (Sort_merge_passes): valutare un indice sull\'ORDER BY o sort_buffer_size.') });
   const scanned = get(s, 'Handler_read_rnd_next');
   const returned = Math.max(1, p.rows || p.affectedRows || 1);
-  if (scanned > 10000 && scanned / returned > 100) out.push({ level: 'warn', text: `Letture sequenziali: ${scanned.toLocaleString('it-IT')} righe scorse per ${returned.toLocaleString('it-IT')} restituite. Una condizione su colonna indicizzata ridurrebbe la scansione.` });
+  if (scanned > 10000 && scanned / returned > 100) out.push({ level: 'warn', text: t('Letture sequenziali: {0} righe scorse per {1} restituite. Una condizione su colonna indicizzata ridurrebbe la scansione.', scanned.toLocaleString(locale()), returned.toLocaleString(locale())) });
   if (p.plan?.format === 'json') {
     for (const r of planRows(p.plan.data)) {
-      if (r.access === 'ALL' && (r.rRows ?? 0) > 1000) out.push({ level: 'warn', text: `Scansione completa di ${r.label} (${Math.round(r.rRows!).toLocaleString('it-IT')} righe per ciclo).` });
-      else if (r.warn && r.rows !== undefined && r.rRows !== undefined) out.push({ level: 'info', text: `Stima delle righe di ${r.label} lontana dal reale (${r.rows} stimate, ${Math.round(r.rRows)} reali): ANALYZE TABLE aggiorna le statistiche.` });
+      if (r.access === 'ALL' && (r.rRows ?? 0) > 1000) out.push({ level: 'warn', text: t('Scansione completa di {0} ({1} righe per ciclo).', r.label, Math.round(r.rRows!).toLocaleString(locale())) });
+      else if (r.warn && r.rows !== undefined && r.rRows !== undefined) out.push({ level: 'info', text: t('Stima delle righe di {0} lontana dal reale ({1} stimate, {2} reali): ANALYZE TABLE aggiorna le statistiche.', r.label, r.rows, Math.round(r.rRows)) });
     }
   }
-  if (get(s, 'Created_tmp_tables') && !get(s, 'Created_tmp_disk_tables')) out.push({ level: 'info', text: 'Tabella temporanea in memoria (GROUP BY/ORDER BY/DISTINCT su colonne diverse).' });
-  if (!out.length) out.push({ level: 'info', text: 'Nessun problema evidente: la query usa indici e non crea strutture temporanee su disco.' });
+  if (get(s, 'Created_tmp_tables') && !get(s, 'Created_tmp_disk_tables')) out.push({ level: 'info', text: t('Tabella temporanea in memoria (GROUP BY/ORDER BY/DISTINCT su colonne diverse).') });
+  if (!out.length) out.push({ level: 'info', text: t('Nessun problema evidente: la query usa indici e non crea strutture temporanee su disco.') });
   return out;
 }
 
 /** Explanation of a status counter (shown next to its value). */
 export const COUNTERS: Record<string, string> = {
   Handler_read_key: 'letture tramite indice',
-  Handler_read_next: "righe successive lette nell'ordine dell'indice",
-  Handler_read_first: 'prime voci di un indice (scansione di indice)',
-  Handler_read_rnd: 'letture per posizione (dopo un ordinamento)',
-  Handler_read_rnd_next: 'righe lette in scansione sequenziale',
-  Handler_write: 'righe scritte (anche in tabelle temporanee)',
-  Handler_update: 'righe aggiornate',
-  Handler_delete: 'righe eliminate',
-  Sort_rows: 'righe ordinate',
-  Sort_scan: 'ordinamenti con scansione completa',
-  Sort_range: 'ordinamenti su intervalli',
-  Sort_merge_passes: 'passaggi di fusione dell\'ordinamento',
-  Created_tmp_tables: 'tabelle temporanee in memoria',
-  Created_tmp_disk_tables: 'tabelle temporanee su disco',
-  Select_scan: 'scansioni complete della prima tabella',
+  Handler_read_next: t('righe successive lette nell\'ordine dell\'indice'),
+  Handler_read_first: t('prime voci di un indice (scansione di indice)'),
+  Handler_read_rnd: t('letture per posizione (dopo un ordinamento)'),
+  Handler_read_rnd_next: t('righe lette in scansione sequenziale'),
+  Handler_write: t('righe scritte (anche in tabelle temporanee)'),
+  Handler_update: t('righe aggiornate'),
+  Handler_delete: t('righe eliminate'),
+  Sort_rows: t('righe ordinate'),
+  Sort_scan: t('ordinamenti con scansione completa'),
+  Sort_range: t('ordinamenti su intervalli'),
+  Sort_merge_passes: t('passaggi di fusione dell\'ordinamento'),
+  Created_tmp_tables: t('tabelle temporanee in memoria'),
+  Created_tmp_disk_tables: t('tabelle temporanee su disco'),
+  Select_scan: t('scansioni complete della prima tabella'),
   Select_full_join: 'join senza indice',
-  Select_range: 'join con intervallo sulla prima tabella',
-  Select_full_range_join: 'join con ricerca per intervallo',
-  Rows_read: 'righe lette dai motori',
-  Rows_sent: 'righe inviate al client',
-  Rows_tmp_read: 'righe lette da tabelle temporanee',
-  Bytes_sent: 'byte inviati al client',
-  Innodb_rows_read: 'righe lette da InnoDB (globale)',
-  Innodb_buffer_pool_read_requests: 'letture logiche del buffer pool (globale)',
-  Innodb_buffer_pool_reads: 'letture da disco (globale)',
+  Select_range: t('join con intervallo sulla prima tabella'),
+  Select_full_range_join: t('join con ricerca per intervallo'),
+  Rows_read: t('righe lette dai motori'),
+  Rows_sent: t('righe inviate al client'),
+  Rows_tmp_read: t('righe lette da tabelle temporanee'),
+  Bytes_sent: t('byte inviati al client'),
+  Innodb_rows_read: t('righe lette da InnoDB (globale)'),
+  Innodb_buffer_pool_read_requests: t('letture logiche del buffer pool (globale)'),
+  Innodb_buffer_pool_reads: t('letture da disco (globale)'),
 };

@@ -5,9 +5,10 @@ import {
 } from '../users';
 import { loadDatabases, metaKey, useStore, type MetaEntry } from '../store';
 import type { DbObjects, Doc } from '../types';
+import { t } from '../i18n';
 
 type Acct = { user: string; host: string; role: boolean };
-const label = (on: string) => (on === '*.*' ? 'Globali (*.*)' : on.replace(/`/g, ''));
+const label = (on: string) => (on === '*.*' ? t('Globali (*.*)') : on.replace(/`/g, ''));
 const ALL = 'ALL PRIVILEGES';
 
 export default function Users({ doc }: { doc: Doc }) {
@@ -65,7 +66,7 @@ export default function Users({ doc }: { doc: Doc }) {
     if ((await api.confirm(what, sqls.map(maskPasswords).join(';\n') + ';', ['Esegui', 'Annulla'])) !== 0) return false;
     try {
       await api.ddl.run(connId, sqls);
-      setOk('Modifiche applicate.');
+      setOk(t('Modifiche applicate.'));
       setError(null);
       return true;
     } catch (err) { setError((err as Error).message); return false; }
@@ -86,29 +87,29 @@ export default function Users({ doc }: { doc: Doc }) {
     <div className="users">
       <div className="users-list">
         <div className="users-bar">
-          <input className="search" placeholder="Filtra account…" value={filter} onChange={(e) => setFilter(e.target.value)} />
-          <button onClick={() => setCreating({ user: '', host: '%', password: '' })}>+ Nuovo</button>
+          <input className="search" placeholder={t('Filtra account…')} value={filter} onChange={(e) => setFilter(e.target.value)} />
+          <button onClick={() => setCreating({ user: '', host: '%', password: '' })}>{t('+ Nuovo')}</button>
         </div>
-        {list?.limited && <div className="status error">Senza privilegi su mysql.user: è visibile solo l'account corrente.</div>}
+        {list?.limited && <div className="status error">{t('Senza privilegi su mysql.user: è visibile solo l\'account corrente.')}</div>}
         {shown.map((u) => (
           <div key={`${u.user}@${u.host}`} className={`cmp-item${sel?.user === u.user && sel?.host === u.host ? ' sel' : ''}`} onMouseDown={() => open(u)}>
             <span className="name">{u.user || '(anonimo)'}<span className="muted">@{u.host}</span></span>
-            {u.role && <span className="badge st-equal">ruolo</span>}
+            {u.role && <span className="badge st-equal">{t('ruolo')}</span>}
           </div>
         ))}
       </div>
       <div className="users-detail">
         {creating ? (
           <div className="form user-new">
-            <h4>Nuovo account</h4>
+            <h4>{t('Nuovo account')}</h4>
             <div className="row">
-              <label className="grow">Utente<input autoFocus value={creating.user} onChange={(e) => setCreating({ ...creating, user: e.target.value })} /></label>
-              <label>Host<input value={creating.host} title="% = qualsiasi host, localhost = solo locale" onChange={(e) => setCreating({ ...creating, host: e.target.value })} /></label>
+              <label className="grow">{t('Utente')}<input autoFocus value={creating.user} onChange={(e) => setCreating({ ...creating, user: e.target.value })} /></label>
+              <label>{t('Host')}<input value={creating.host} title={t('% = qualsiasi host, localhost = solo locale')} onChange={(e) => setCreating({ ...creating, host: e.target.value })} /></label>
             </div>
-            <label>Password<input type="password" value={creating.password} onChange={(e) => setCreating({ ...creating, password: e.target.value })} /></label>
+            <label>{t('Password')}<input type="password" value={creating.password} onChange={(e) => setCreating({ ...creating, password: e.target.value })} /></label>
             {error && <div className="status error">{error}</div>}
             <div className="row">
-              <button onClick={() => { setCreating(null); setError(null); }}>Annulla</button>
+              <button onClick={() => { setCreating(null); setError(null); }}>{t('Annulla')}</button>
               <button className="primary" disabled={!creating.user} onClick={async () => {
                 if (await run([createUser(creating.user, creating.host, creating.password)], `Creare ${creating.user}@${creating.host}?`)) {
                   const a = { user: creating.user, host: creating.host, role: false };
@@ -116,15 +117,15 @@ export default function Users({ doc }: { doc: Doc }) {
                   await loadUsers();
                   open(a);
                 }
-              }}>Crea account</button>
+              }}>{t('Crea account')}</button>
             </div>
           </div>
-        ) : !sel ? <div className="empty">Seleziona un account.</div> : <>
+        ) : !sel ? <div className="empty">{t('Seleziona un account.')}</div> : <>
           <div className="users-head">
             <h4>{sel.user}<span className="muted">@{sel.host}</span></h4>
-            <label className="pw">Nuova password<input type="password" value={password} placeholder="invariata" onChange={(e) => setPw(e.target.value)} /></label>
+            <label className="pw">{t('Nuova password')}<input type="password" value={password} placeholder="invariata" onChange={(e) => setPw(e.target.value)} /></label>
             <div className="spacer" />
-            <button className="danger" onClick={async () => { if (await run([dropUser(sel.user, sel.host)], `Eliminare l'account ${sel.user}@${sel.host}?`)) { setSel(null); loadUsers(); } }}>Elimina account</button>
+            <button className="danger" onClick={async () => { if (await run([dropUser(sel.user, sel.host)], `Eliminare l'account ${sel.user}@${sel.host}?`)) { setSel(null); loadUsers(); } }}>{t('Elimina account')}</button>
           </div>
           <div className="priv-body">
             <div className="levels">
@@ -136,11 +137,11 @@ export default function Users({ doc }: { doc: Doc }) {
               ))}
               <div className="add-level">
                 <select value={addDb} onChange={(e) => { setAddDb(e.target.value); setAddTable(''); if (e.target.value) useStore.getState().loadMeta(metaKey.objects(connId, e.target.value), () => api.meta.objects(connId, e.target.value)); }}>
-                  <option value="">+ database…</option>
+                  <option value="">{t('+ database…')}</option>
                   {(dbs?.data ?? []).map((d) => <option key={d}>{d}</option>)}
                 </select>
                 {addDb && <select value={addTable} onChange={(e) => setAddTable(e.target.value)}>
-                  <option value="">(tutto il database)</option>
+                  <option value="">{t('(tutto il database)')}</option>
                   {(tables?.data?.tables ?? []).map((t) => <option key={t.name}>{t.name}</option>)}
                 </select>}
                 {addDb && <button onClick={() => {
@@ -149,13 +150,13 @@ export default function Users({ doc }: { doc: Doc }) {
                   setLvl(on);
                   setAddDb('');
                   setAddTable('');
-                }}>Aggiungi</button>}
+                }}>{t('Aggiungi')}</button>}
               </div>
             </div>
             <div className="privs">
               {level && <>
                 <div className="priv-title">{label(level.on)}
-                  <label className="check"><input type="checkbox" checked={level.privs.includes(ALL)} onChange={(e) => toggle(ALL, e.target.checked)} /> Tutti i privilegi</label>
+                  <label className="check"><input type="checkbox" checked={level.privs.includes(ALL)} onChange={(e) => toggle(ALL, e.target.checked)} />{' '}{t('Tutti i privilegi')}</label>
                   <label className="check"><input type="checkbox" checked={level.grantOption} onChange={(e) => setLevels(levels.map((l) => (l.on === lvl ? { ...l, grantOption: e.target.checked } : l)))} /> GRANT OPTION</label>
                 </div>
                 {PRIV_GROUPS.map((g) => {
@@ -168,7 +169,7 @@ export default function Users({ doc }: { doc: Doc }) {
                     </fieldset>
                   );
                 })}
-                {level.privs.filter((p) => p !== ALL && !offered.includes(p)).length > 0 && <p className="note">Altri privilegi: {level.privs.filter((p) => p !== ALL && !offered.includes(p)).join(', ')}</p>}
+                {level.privs.filter((p) => p !== ALL && !offered.includes(p)).length > 0 && <p className="note">{t('Altri privilegi:')}{' '}{level.privs.filter((p) => p !== ALL && !offered.includes(p)).join(', ')}</p>}
               </>}
               <details>
                 <summary>SHOW GRANTS</summary>
@@ -179,8 +180,8 @@ export default function Users({ doc }: { doc: Doc }) {
           <div className="designer-foot">
             {error ? <div className="status error">{error}</div> : ok ? <div className="status ok">{ok}</div> : <span className="muted">{statements.length} {statements.length === 1 ? 'istruzione' : 'istruzioni'}</span>}
             <div className="spacer" />
-            <button disabled={!statements.length} onClick={() => { setLevels(structuredClone(orig)); setPw(''); }}>Annulla modifiche</button>
-            <button className="primary" disabled={!statements.length} onClick={async () => { if (await run(statements, `Applicare a ${sel.user}@${sel.host}?`)) open(sel); }}>Applica</button>
+            <button disabled={!statements.length} onClick={() => { setLevels(structuredClone(orig)); setPw(''); }}>{t('Annulla modifiche')}</button>
+            <button className="primary" disabled={!statements.length} onClick={async () => { if (await run(statements, `Applicare a ${sel.user}@${sel.host}?`)) open(sel); }}>{t('Applica')}</button>
           </div>
           {statements.length > 0 && <pre className="script users-preview">{statements.map(maskPasswords).join(';\n')};</pre>}
         </>}

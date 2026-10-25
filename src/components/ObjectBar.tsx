@@ -4,6 +4,7 @@ import { applyObject, dropObject, OBJECT_LABEL, replaceDocText } from '../action
 import { formatText, markSaved, modelOf } from '../editor';
 import { useStore } from '../store';
 import type { Doc } from '../types';
+import { t } from '../i18n';
 
 const users = new Map<string, Promise<string>>(); // connection -> CURRENT_USER()
 const DEFINER = /DEFINER\s*=\s*((?:'(?:[^'\\]|\\.)*'|`(?:[^`]|``)+`|"[^"]*"|[\w$.%-]+)(?:\s*@\s*(?:'(?:[^'\\]|\\.)*'|`(?:[^`]|``)+`|"[^"]*"|[\w$.%-]+))?|CURRENT_USER(?:\s*\(\s*\))?)\s+/i;
@@ -46,28 +47,28 @@ export default function ObjectBar({ doc }: { doc: Doc }) {
       modelOf(doc.id).setValue(sql);
       markSaved(doc.id);
       useStore.getState().updateDoc(doc.id, { dirty: false });
-    } catch (err) { await api.confirm('Ricarica non riuscita', (err as Error).message, ['OK']); }
+    } catch (err) { await api.confirm(t('Ricarica non riuscita'), (err as Error).message, ['OK']); }
   };
   const routine = obj.kind === 'procedure' || obj.kind === 'function';
 
   return (
     <div className="obj-bar">
       <span className="obj-kind">{OBJECT_LABEL[obj.kind]}</span>
-      <b>{obj.name ?? '(nuova definizione)'}</b>
+      <b>{obj.name ?? t('(nuova definizione)')}</b>
       <span className="muted">{doc.db}</span>
       <button className="primary" disabled={doc.running || !doc.connId || !doc.db} onClick={() => applyObject(doc.id)}
-        title={obj.name ? 'Applica la definizione al server (F5 o Ctrl+S): CREATE OR REPLACE, oppure DROP + CREATE dove non esiste' : 'Crea l\'oggetto sul server (F5 o Ctrl+S)'}>
-        {obj.name ? 'Applica' : 'Crea'}
+        title={obj.name ? t('Applica la definizione al server (F5 o Ctrl+S): CREATE OR REPLACE, oppure DROP + CREATE dove non esiste') : t('Crea l\'oggetto sul server (F5 o Ctrl+S)')}>
+        {obj.name ? t('Applica') : t('Crea')}
       </button>
-      {obj.name && <button disabled={doc.running} onClick={reload} title="Rileggi la definizione dal server">Ricarica</button>}
-      {obj.name && routine && <button onClick={() => useStore.getState().set({ callDialog: { connId: doc.connId!, db: doc.db!, kind: obj.kind as 'procedure' | 'function', name: obj.name! } })}>Esegui…</button>}
-      {obj.name && <button className="danger" onClick={() => dropObject(doc.connId!, doc.db!, obj.kind, obj.name!)}>Elimina…</button>}
+      {obj.name && <button disabled={doc.running} onClick={reload} title={t('Rileggi la definizione dal server')}>{t('Ricarica')}</button>}
+      {obj.name && routine && <button onClick={() => useStore.getState().set({ callDialog: { connId: doc.connId!, db: doc.db!, kind: obj.kind as 'procedure' | 'function', name: obj.name! } })}>{t('Esegui…')}</button>}
+      {obj.name && <button className="danger" onClick={() => dropObject(doc.connId!, doc.db!, obj.kind, obj.name!)}>{t('Elimina…')}</button>}
       {foreign && (
-        <span className="obj-warn" title="Creare un oggetto con il DEFINER di un altro account richiede il privilegio SET USER (MariaDB) o SET_USER_ID/SUPER (MySQL)">
-          DEFINER {bare(definer!)} diverso dal tuo utente ({me}) <button onClick={removeDefiner}>Usa il mio utente</button>
+        <span className="obj-warn" title={t('Creare un oggetto con il DEFINER di un altro account richiede il privilegio SET USER (MariaDB) o SET_USER_ID/SUPER (MySQL)')}>
+          DEFINER {bare(definer!)}{' '}{t('diverso dal tuo utente (')}{me}) <button onClick={removeDefiner}>{t('Usa il mio utente')}</button>
         </span>
       )}
-      {obj.kind === 'event' && scheduler && scheduler !== 'ON' && <span className="obj-warn" title="SET GLOBAL event_scheduler = ON (richiede privilegi) o event_scheduler=ON nella configurazione del server">Lo scheduler degli eventi è {scheduler}: gli eventi non partono</span>}
+      {obj.kind === 'event' && scheduler && scheduler !== 'ON' && <span className="obj-warn" title={t('SET GLOBAL event_scheduler = ON (richiede privilegi) o event_scheduler=ON nella configurazione del server')}>{t('Lo scheduler degli eventi è')}{' '}{scheduler}{t(': gli eventi non partono')}</span>}
     </div>
   );
 }

@@ -1,3 +1,4 @@
+import { t as tr } from './i18n.ts';
 // Table designer model and DDL generation. Pure functions (no React, no IPC) so they run in tests.
 // Indexes and foreign keys refer to columns by id: renaming a column does not count as an index change,
 // and ALTER TABLE renames it inside indexes and foreign keys by itself.
@@ -295,69 +296,69 @@ export function alterSql(orig: TableDef, cur: TableDef): string[] {
 /** Problems that would make the DDL fail or do something unintended. */
 export function validate(t: TableDef): string[] {
   const errs: string[] = [];
-  if (!t.name.trim()) errs.push('Nome tabella obbligatorio.');
-  if (!t.columns.length) errs.push('La tabella deve avere almeno una colonna.');
+  if (!t.name.trim()) errs.push(tr('Nome tabella obbligatorio.'));
+  if (!t.columns.length) errs.push(tr('La tabella deve avere almeno una colonna.'));
   const seen = new Set<string>();
   for (const [i, c] of t.columns.entries()) {
     const label = c.name.trim() || `colonna ${i + 1}`;
-    if (!c.name.trim()) errs.push(`Colonna ${i + 1}: nome obbligatorio.`);
-    else if (seen.has(c.name.toLowerCase())) errs.push(`Colonna «${c.name}» ripetuta.`);
+    if (!c.name.trim()) errs.push(tr('Colonna {0}: nome obbligatorio.', i + 1));
+    else if (seen.has(c.name.toLowerCase())) errs.push(tr('Colonna «{0}» ripetuta.', c.name));
     seen.add(c.name.toLowerCase());
-    if (!c.type.trim()) errs.push(`${label}: tipo obbligatorio.`);
-    if (c.collation && !isTextType(c.type)) errs.push(`${label}: collation solo per tipi testo.`);
-    if (c.generated && !c.generated.expr.trim()) errs.push(`${label}: espressione della colonna generata obbligatoria.`);
-    if (c.autoIncrement && !t.indexes.some((ix) => ix.columns[0]?.col === c.id)) errs.push(`${label}: AUTO_INCREMENT richiede che la colonna sia la prima di un indice.`);
+    if (!c.type.trim()) errs.push(tr('{0}: tipo obbligatorio.', label));
+    if (c.collation && !isTextType(c.type)) errs.push(tr('{0}: collation solo per tipi testo.', label));
+    if (c.generated && !c.generated.expr.trim()) errs.push(tr('{0}: espressione della colonna generata obbligatoria.', label));
+    if (c.autoIncrement && !t.indexes.some((ix) => ix.columns[0]?.col === c.id)) errs.push(tr('{0}: AUTO_INCREMENT richiede che la colonna sia la prima di un indice.', label));
   }
-  if (t.columns.filter((c) => c.autoIncrement).length > 1) errs.push('Una sola colonna AUTO_INCREMENT per tabella.');
-  if (t.indexes.filter((ix) => ix.kind === 'PRIMARY').length > 1) errs.push('Una sola chiave primaria per tabella.');
+  if (t.columns.filter((c) => c.autoIncrement).length > 1) errs.push(tr('Una sola colonna AUTO_INCREMENT per tabella.'));
+  if (t.indexes.filter((ix) => ix.kind === 'PRIMARY').length > 1) errs.push(tr('Una sola chiave primaria per tabella.'));
   const ids = new Set(t.columns.map((c) => c.id));
   const names = new Set<string>();
   for (const ix of t.indexes) {
-    const label = ix.kind === 'PRIMARY' ? 'Chiave primaria' : `Indice «${ix.name || '?'}»`;
+    const label = ix.kind === 'PRIMARY' ? tr('Chiave primaria') : tr('Indice «{0}»', ix.name || '?');
     if (ix.kind !== 'PRIMARY') {
-      if (!ix.name.trim()) errs.push('Indice senza nome.');
+      if (!ix.name.trim()) errs.push(tr('Indice senza nome.'));
       else if (names.has(ix.name.toLowerCase())) errs.push(`${label} ripetuto.`);
       names.add(ix.name.toLowerCase());
     }
-    if (!ix.columns.length) errs.push(`${label}: nessuna colonna.`);
-    if (ix.columns.some((c) => !ids.has(c.col))) errs.push(`${label}: colonna eliminata.`);
-    if (ix.kind === 'PRIMARY' && ix.columns.some((c) => t.columns.find((x) => x.id === c.col)?.nullable)) errs.push('Le colonne della chiave primaria devono essere NOT NULL.');
+    if (!ix.columns.length) errs.push(tr('{0}: nessuna colonna.', label));
+    if (ix.columns.some((c) => !ids.has(c.col))) errs.push(tr('{0}: colonna eliminata.', label));
+    if (ix.kind === 'PRIMARY' && ix.columns.some((c) => t.columns.find((x) => x.id === c.col)?.nullable)) errs.push(tr('Le colonne della chiave primaria devono essere NOT NULL.'));
   }
   const fkNames = new Set<string>();
   for (const fk of t.foreignKeys) {
-    const label = `Chiave esterna «${fk.name || '?'}»`;
-    if (!fk.name.trim()) errs.push('Chiave esterna senza nome.');
+    const label = tr('Chiave esterna «{0}»', fk.name || '?');
+    if (!fk.name.trim()) errs.push(tr('Chiave esterna senza nome.'));
     else if (fkNames.has(fk.name.toLowerCase())) errs.push(`${label} ripetuta.`);
     fkNames.add(fk.name.toLowerCase());
-    if (!fk.refTable) errs.push(`${label}: tabella riferita obbligatoria.`);
-    if (!fk.columns.length) errs.push(`${label}: nessuna colonna.`);
-    if (fk.columns.length !== fk.refColumns.length) errs.push(`${label}: numero di colonne diverso da quelle riferite.`);
-    if (fk.columns.some((c) => !ids.has(c))) errs.push(`${label}: colonna eliminata.`);
+    if (!fk.refTable) errs.push(tr('{0}: tabella riferita obbligatoria.', label));
+    if (!fk.columns.length) errs.push(tr('{0}: nessuna colonna.', label));
+    if (fk.columns.length !== fk.refColumns.length) errs.push(tr('{0}: numero di colonne diverso da quelle riferite.', label));
+    if (fk.columns.some((c) => !ids.has(c))) errs.push(tr('{0}: colonna eliminata.', label));
     if (fk.onDelete === 'SET NULL' || fk.onUpdate === 'SET NULL') {
-      if (fk.columns.some((c) => !t.columns.find((x) => x.id === c)?.nullable)) errs.push(`${label}: SET NULL richiede colonne che ammettono NULL.`);
+      if (fk.columns.some((c) => !t.columns.find((x) => x.id === c)?.nullable)) errs.push(tr('{0}: SET NULL richiede colonne che ammettono NULL.', label));
     }
   }
   const p = t.partitioning;
   if (p && !p.subpartitioned) {
-    if (!p.expr.trim() && !p.method.endsWith('KEY')) errs.push('Partizioni: espressione obbligatoria.');
+    if (!p.expr.trim() && !p.method.endsWith('KEY')) errs.push(tr('Partizioni: espressione obbligatoria.'));
     if (byList(p.method)) {
-      if (!p.partitions.length) errs.push('Partizioni: serve almeno una partizione.');
+      if (!p.partitions.length) errs.push(tr('Partizioni: serve almeno una partizione.'));
       const names = new Set<string>();
       p.partitions.forEach((x, i) => {
-        if (!x.name.trim()) errs.push(`Partizione ${i + 1}: nome obbligatorio.`);
-        else if (names.has(x.name.toLowerCase())) errs.push(`Partizione «${x.name}» ripetuta.`);
+        if (!x.name.trim()) errs.push(tr('Partizione {0}: nome obbligatorio.', i + 1));
+        else if (names.has(x.name.toLowerCase())) errs.push(tr('Partizione «{0}» ripetuta.', x.name));
         names.add(x.name.toLowerCase());
-        if (!x.values.trim()) errs.push(`Partizione «${x.name || i + 1}»: valori obbligatori.`);
-        if (p.method.startsWith('RANGE') && /^maxvalue$/i.test(x.values.trim()) && i !== p.partitions.length - 1) errs.push('Partizioni: MAXVALUE solo nell\'ultima partizione.');
+        if (!x.values.trim()) errs.push(tr('Partizione «{0}»: valori obbligatori.', x.name || i + 1));
+        if (p.method.startsWith('RANGE') && /^maxvalue$/i.test(x.values.trim()) && i !== p.partitions.length - 1) errs.push(tr('Partizioni: MAXVALUE solo nell\'ultima partizione.'));
       });
-    } else if (!(p.count >= 1 && p.count <= 8192)) errs.push('Partizioni: numero tra 1 e 8192.');
+    } else if (!(p.count >= 1 && p.count <= 8192)) errs.push(tr('Partizioni: numero tra 1 e 8192.'));
   }
   const ckNames = new Set<string>();
   for (const k of t.checks ?? []) {
-    if (!k.name.trim()) errs.push('Vincolo CHECK senza nome.');
-    else if (ckNames.has(k.name.toLowerCase())) errs.push(`Vincolo CHECK «${k.name}» ripetuto.`);
+    if (!k.name.trim()) errs.push(tr('Vincolo CHECK senza nome.'));
+    else if (ckNames.has(k.name.toLowerCase())) errs.push(tr('Vincolo CHECK «{0}» ripetuto.', k.name));
     ckNames.add(k.name.toLowerCase());
-    if (!k.expr.trim()) errs.push(`Vincolo CHECK «${k.name || '?'}»: espressione obbligatoria.`);
+    if (!k.expr.trim()) errs.push(tr('Vincolo CHECK «{0}»: espressione obbligatoria.', k.name || '?'));
   }
   return errs;
 }

@@ -6,6 +6,7 @@ const zlib = require('zlib');
 const server = require('./server.cjs');
 const { literal } = require('./export.cjs');
 const { Splitter } = require('./sqlsplit.cjs');
+const { t } = require('./i18n.cjs');
 
 const qi = (s) => '`' + String(s).replace(/`/g, '``') + '`';
 const SPATIAL = /^(geometry|point|linestring|polygon|multipoint|multilinestring|multipolygon|geometrycollection|geomcollection)$/i;
@@ -64,9 +65,9 @@ async function dump(connId, db, file, opts, onProgress = () => {}) {
         const base = tables.filter((t) => t.type !== 'VIEW' && (!o.tables || o.tables.includes(t.name)));
         const views = o.routines ? tables.filter((t) => t.type === 'VIEW' && (!o.tables || o.tables.includes(t.name))) : [];
         await out.write([
-          `-- MiB-SQL dump of ${db}`,
-          `-- Server: ${ver.v}`,
-          `-- Created: ${new Date().toISOString()}`,
+          t('-- MiB-SQL dump of {0}', db),
+          t('-- Server: {0}', ver.v),
+          t('-- Created: {0}', new Date().toISOString()),
           '',
           '/*!40101 SET NAMES utf8mb4 */;',
           "SET TIME_ZONE = '+00:00';",
@@ -141,7 +142,7 @@ async function dump(connId, db, file, opts, onProgress = () => {}) {
               const [row] = await c.query(`SHOW CREATE ${word} ${qi(db)}.${qi(r.name)}`);
               const text = row[col];
               if (text === null || text === undefined) {
-                await out.write(`-- ${word} ${r.name}: definizione non leggibile (privilegi insufficienti)\n\n`);
+                await out.write(t('-- {0} {1}: definizione non leggibile (privilegi insufficienti)\n\n', word, r.name));
                 continue;
               }
               await out.write(`DROP ${word} IF EXISTS ${qi(r.name)};\nDELIMITER ;;\n${fix(String(text))};;\nDELIMITER ;\n\n`);
@@ -190,7 +191,7 @@ async function restore(connId, db, file, opts = {}, onProgress = () => {}) {
       } catch (err) {
         const message = err.sqlMessage || err.message; // the driver decodes server messages as UTF-8 already
         errors.push({ statement: statements + errors.length + 1, message, sql: utf8(sql.slice(0, 300)) });
-        if (!opts.continueOnError || errors.length >= 1000) throw Object.assign(new Error(`Istruzione ${statements + errors.length}: ${message}`), { partial: true });
+        if (!opts.continueOnError || errors.length >= 1000) throw Object.assign(new Error(t('Istruzione {0}: {1}', statements + errors.length, message)), { partial: true });
       }
     };
     try {
@@ -203,7 +204,7 @@ async function restore(connId, db, file, opts = {}, onProgress = () => {}) {
       // the connection is closed afterwards: session settings left by the script die with it
     }
   }).catch((err) => {
-    if (err.partial) { err.message += ` (${statements} istruzioni eseguite prima dell'errore)`; err.statements = statements; err.errors = errors; }
+    if (err.partial) { err.message += t(' ({0} istruzioni eseguite prima dell\'errore)', statements); err.statements = statements; err.errors = errors; }
     throw err;
   });
   onProgress({ bytes: total, total, statements, errors: errors.length });

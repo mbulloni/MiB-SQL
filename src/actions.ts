@@ -3,8 +3,9 @@ import { api, type SqlFile } from './api';
 import { clearMarkers, disposeModel, formatText, markErrors, markSaved, modelOf, monaco } from './editor';
 import { editCount } from './edits';
 import { emptyQuery, toSql } from './qb';
-import { designByDoc, editsBySet, metaKey, setUntitled, useStore } from './store';
+import { designByDoc, editsBySet, metaKey, SERVER_KINDS, setUntitled, useStore } from './store';
 import { maskPasswords } from './users';
+import { setLang, t, locale } from './i18n';
 import type { Doc, EditableKind, ExecMode, Message, ObjectKind, StmtResult } from './types';
 
 const st = () => useStore.getState();
@@ -31,7 +32,7 @@ export function newDoc(opts: { connId?: string | null; db?: string | null; sql?:
 export function openDesigner(connId: string, db: string, table: string | null) {
   const existing = table && st().docs.find((d) => d.kind === 'table' && d.connId === connId && d.db === db && d.design?.table === table);
   if (existing) { st().set({ activeDoc: existing.id }); return existing; }
-  const doc = st().addDoc({ kind: 'table', connId, db, design: { table }, title: table ?? 'Nuova tabella', dirty: !table });
+  const doc = st().addDoc({ kind: 'table', connId, db, design: { table }, title: table ?? t('Nuova tabella'), dirty: !table });
   persist();
   return doc;
 }
@@ -46,11 +47,14 @@ export function openEr(connId: string, db: string) {
 }
 
 /** Server-wide tools of a connection (session monitor, users): one tab per connection and kind. */
-export function openServerTool(connId: string, kind: 'monitor' | 'users') {
+export type ServerTool = 'monitor' | 'users' | 'procs' | 'perf';
+const SERVER_TOOL_TITLE: Record<ServerTool, () => string> = { monitor: () => 'Monitor', users: () => t('Utenti'), procs: () => t('Processi'), perf: () => t('Prestazioni') };
+
+export function openServerTool(connId: string, kind: ServerTool, perf?: Doc['perf']) {
   const existing = st().docs.find((d) => d.kind === kind && d.connId === connId);
-  if (existing) { st().set({ activeDoc: existing.id }); return existing; }
+  if (existing) { st().set({ activeDoc: existing.id }); if (perf) st().updateDoc(existing.id, { perf }); return existing; }
   const name = st().conns.find((c) => c.id === connId)?.name ?? '';
-  const doc = st().addDoc({ kind, connId, db: null, title: `${kind === 'monitor' ? 'Monitor' : 'Utenti'} ${name}` });
+  const doc = st().addDoc({ kind, connId, db: null, title: `${SERVER_TOOL_TITLE[kind]()} ${name}`, ...(perf ? { perf } : {}) });
   persist();
   return doc;
 }
@@ -63,13 +67,22 @@ export function visualTarget(): { connId: string; db: string } | null {
 }
 
 /** Opens a visual tool on the current database, or asks which database when none is selected. */
-export function openVisual(kind: import('./store').VisualKind, target = visualTarget()) {
-  if (!target) { st().set({ pickTarget: { kind } }); return; }
-  const { connId, db } = target;
+export function openVisual(kind: import('./store').VisualKind, target: { connId: string; db: string | null } | null = visualTarget()) {
+  if (SERVER_KINDS.has(kind)) {
+    // server tools: the active document's or the explorer's connection when it is open, else ask
+    const s = st();
+    const connId = target?.connId ?? activeDoc()?.connId ?? s.selectedConn;
+    if (connId && (target || s.connState[connId]?.status === 'open')) { openServerTool(connId, kind as ServerTool); return; }
+    s.set({ pickTarget: { kind } });
+    return;
+  }
+  if (!target?.db) { st().set({ pickTarget: { kind } }); return; }
+  const { connId, db } = target as { connId: string; db: string };
   if (kind === 'er') openEr(connId, db);
   else if (kind === 'query') openQueryBuilder(connId, db);
   else if (kind === 'table') openDesigner(connId, db, null);
   else if (kind === 'maint') openMaint(connId, db);
+  else if (kind === 'datagen' || kind === 'docgen') openDbTool(connId, db, kind);
   else openCompare(connId, db);
 }
 
@@ -77,7 +90,7 @@ export function openVisual(kind: import('./store').VisualKind, target = visualTa
 export function openHistory() {
   const existing = st().docs.find((d) => d.kind === 'history');
   if (existing) { st().set({ activeDoc: existing.id }); return existing; }
-  const doc = st().addDoc({ kind: 'history', title: 'Cronologia query' });
+  const doc = st().addDoc({ kind: 'history', title: t('Cronologia query') });
   persist();
   return doc;
 }
@@ -86,14 +99,23 @@ export function openHistory() {
 export function openMaint(connId: string, db: string, tables: string[] = []) {
   const existing = st().docs.find((d) => d.kind === 'maint' && d.connId === connId && d.db === db);
   if (existing) { st().updateDoc(existing.id, { maint: { tables } }); st().set({ activeDoc: existing.id }); return existing; }
-  const doc = st().addDoc({ kind: 'maint', connId, db, title: `Manutenzione ${db}`, maint: { tables } });
+  const doc = st().addDoc({ kind: 'maint', connId, db, title: t('Manutenzione {0}', db), maint: { tables } });
+  persist();
+  return doc;
+}
+
+/** Test data generator and documentation generator of a database (one tab per connection/database and kind). */
+export function openDbTool(connId: string, db: string, kind: 'datagen' | 'docgen') {
+  const existing = st().docs.find((d) => d.kind === kind && d.connId === connId && d.db === db);
+  if (existing) { st().set({ activeDoc: existing.id }); return existing; }
+  const doc = st().addDoc({ kind, connId, db, title: `${kind === 'datagen' ? t('Dati di test') : t('Documentazione')} ${db}` });
   persist();
   return doc;
 }
 
 /** Schema/data compare, the database as source. */
 export function openCompare(connId: string, db: string) {
-  const doc = st().addDoc({ kind: 'compare', connId, db, title: `Confronto ${db}`, cmp: { src: { connId, db }, tgt: { connId, db: null } } });
+  const doc = st().addDoc({ kind: 'compare', connId, db, title: t('Confronto {0}', db), cmp: { src: { connId, db }, tgt: { connId, db: null } } });
   persist();
   return doc;
 }
@@ -134,8 +156,8 @@ export async function saveDoc(id = st().activeDoc, as = false) {
 export async function closeDoc(id = st().activeDoc) {
   const doc = id ? docById(id) : undefined;
   if (!doc) return;
-  if (!(await discardEdits(doc, 'Chiudere il documento'))) return;
-  if (doc.kind === 'er' || doc.kind === 'compare' || doc.kind === 'monitor' || doc.kind === 'users' || doc.kind === 'history' || doc.kind === 'maint') {
+  if (!(await discardEdits(doc, t('Chiudere il documento')))) return;
+  if (doc.kind !== 'sql' && doc.kind !== 'table' && doc.kind !== 'query') {
     st().removeDoc(doc.id);
     persist();
     return;
@@ -148,11 +170,11 @@ export async function closeDoc(id = st().activeDoc) {
     return;
   }
   if (doc.dirty && doc.obj) {
-    const r = await api.confirm(`Applicare le modifiche a ${doc.title}?`, `La definizione modificata non è stata applicata al server.`, ['Applica', 'Scarta', 'Annulla']);
+    const r = await api.confirm(t('Applicare le modifiche a {0}?', doc.title), t('La definizione modificata non è stata applicata al server.'), [t('Applica'), t('Scarta'), t('Annulla')]);
     if (r === 2) return;
     if (r === 0 && !(await applyObject(doc.id))) return;
   } else if (doc.dirty) {
-    const r = await api.confirm(`Salvare le modifiche a ${doc.title}?`, 'Le modifiche non salvate andranno perse.', ['Salva', 'Non salvare', 'Annulla']);
+    const r = await api.confirm(t('Salvare le modifiche a {0}?', doc.title), t('Le modifiche non salvate andranno perse.'), [t('Salva'), t('Non salvare'), t('Annulla')]);
     if (r === 2) return;
     if (r === 0 && !(await saveDoc(doc.id))) return;
   }
@@ -179,16 +201,16 @@ export async function setDocTarget(id: string, connId: string | null, db: string
   persist();
 }
 
-const now = () => new Date().toLocaleTimeString('it-IT');
+const now = () => new Date().toLocaleTimeString(locale());
 
 export function logMessage(id: string, level: Message['level'], text: string, extra: Partial<Message> = {}) {
   st().updateDoc(id, (d) => ({ messages: [...d.messages, { at: now(), level, text, ...extra }].slice(-1000) }));
 }
 
 async function ensureSession(doc: Doc) {
-  if (!doc.connId) throw new Error('Nessuna connessione selezionata per questo documento.');
+  if (!doc.connId) throw new Error(t('Nessuna connessione selezionata per questo documento.'));
   if (st().connState[doc.connId]?.status !== 'open' && !(await st().openConn(doc.connId))) {
-    throw new Error(st().connState[doc.connId]?.error ?? 'Connessione non aperta.');
+    throw new Error(st().connState[doc.connId]?.error ?? t('Connessione non aperta.'));
   }
   const fresh = docById(doc.id)!;
   if (fresh.sessionId) return fresh.sessionId;
@@ -197,13 +219,13 @@ async function ensureSession(doc: Doc) {
   return s.id;
 }
 
-const plural = (n: number, one: string, many: string) => `${n.toLocaleString('it-IT')} ${n === 1 ? one : many}`;
+const plural = (n: number, one: string, many: string) => `${n.toLocaleString(locale())} ${n === 1 ? one : many}`;
 const DDL_RE = /^\s*(create|alter|drop|rename|truncate)\b/i;
 
 function describe(r: StmtResult) {
-  if (r.error) return `Errore ${r.error.errno ?? ''} (${r.error.sqlState ?? r.error.code ?? ''}): ${r.error.message}`;
-  if (r.sets.length) return r.sets.map((s) => plural(s.total, 'riga restituita', 'righe restituite') + (s.truncated ? ` (mostrate ${s.rows.length.toLocaleString('it-IT')})` : '')).join(', ') + ` in ${r.ms} ms`;
-  return `${plural(r.affectedRows ?? 0, 'riga interessata', 'righe interessate')}${r.insertId ? `, ultimo id ${r.insertId}` : ''} in ${r.ms} ms`;
+  if (r.error) return t('Errore {0} ({1}): {2}', r.error.errno ?? '', r.error.sqlState ?? r.error.code ?? '', r.error.message);
+  if (r.sets.length) return r.sets.map((s) => plural(s.total, t('riga restituita'), t('righe restituite')) + (s.truncated ? t(' (mostrate {0})', s.rows.length.toLocaleString(locale())) : '')).join(', ') + t(' in {0} ms', r.ms);
+  return t('{0}{1} in {2} ms', plural(r.affectedRows ?? 0, t('riga interessata'), t('righe interessate')), r.insertId ? t(', ultimo id {0}', r.insertId) : '', r.ms);
 }
 
 /** Before quitting: what would be lost, and the choice to save files, quit anyway or stay. */
@@ -214,12 +236,12 @@ export async function requestQuit() {
   const edits = docs.reduce((n, d) => n + pendingEdits(d), 0);
   if (!files.length && !designs.length && !edits) { api.confirmClose(); return; }
   const lines = [
-    files.length ? `File non salvati: ${files.map((d) => d.title).join(', ')}` : '',
-    designs.length ? `Strutture non applicate: ${designs.map((d) => d.title).join(', ')}` : '',
-    edits ? `${edits} modifiche ai dati in griglia non applicate` : '',
+    files.length ? t('File non salvati: {0}', files.map((d) => d.title).join(', ')) : '',
+    designs.length ? t('Strutture non applicate: {0}', designs.map((d) => d.title).join(', ')) : '',
+    edits ? t('{0} modifiche ai dati in griglia non applicate', edits) : '',
   ].filter(Boolean).join('\n');
-  const buttons = files.length ? ['Salva i file ed esci', 'Esci senza salvare', 'Annulla'] : ['Esci comunque', 'Annulla'];
-  const r = await api.confirm('Ci sono modifiche non salvate', lines, buttons);
+  const buttons = files.length ? [t('Salva i file ed esci'), t('Esci senza salvare'), t('Annulla')] : [t('Esci comunque'), t('Annulla')];
+  const r = await api.confirm(t('Ci sono modifiche non salvate'), lines, buttons);
   if (r === buttons.length - 1) return;
   if (files.length && r === 0) {
     for (const d of files) if (!(await saveDoc(d.id))) return;
@@ -243,7 +265,7 @@ export async function runDoc(mode: ExecMode, id = st().activeDoc) {
   if (!doc || doc.running || (doc.kind !== 'sql' && doc.kind !== 'query')) return;
   if (doc.obj) { if (mode !== 'explain') await applyObject(doc.id); return; }
   if (doc.kind === 'query') modelOf(doc.id).setValue(toSql(doc.qb ?? emptyQuery(), doc.db ?? ''));
-  if (!(await discardEdits(doc, 'Eseguire di nuovo'))) return;
+  if (!(await discardEdits(doc, t('Eseguire di nuovo')))) return;
   const model = modelOf(doc.id);
   const ed = editorOf(doc.id);
   const text = model.getValue();
@@ -266,8 +288,8 @@ export async function runDoc(mode: ExecMode, id = st().activeDoc) {
       logMessage(doc.id, x.error ? 'error' : 'ok', describe(x), { sql: x.sql, offset: x.start });
       for (const w of x.warnings) if (mode !== 'explain') logMessage(doc.id, 'warning', `${w.level} ${w.code}: ${w.message}`, { offset: x.start });
     }
-    if (!r.results.length) logMessage(doc.id, 'info', 'Nessuna istruzione da eseguire.');
-    if (r.cancelled) logMessage(doc.id, 'warning', 'Esecuzione annullata.');
+    if (!r.results.length) logMessage(doc.id, 'info', t('Nessuna istruzione da eseguire.'));
+    if (r.cancelled) logMessage(doc.id, 'warning', t('Esecuzione annullata.'));
     markErrors(model, r.results);
     if (mode !== 'explain') recordHistory(doc, r.results);
     const firstSet = r.results.some((x) => x.sets.length) ? 0 : 'messages';
@@ -287,7 +309,7 @@ export async function runDoc(mode: ExecMode, id = st().activeDoc) {
 export async function profileDoc(id = st().activeDoc) {
   const doc = id ? docById(id) : undefined;
   if (!doc || doc.running || doc.kind !== 'sql') return;
-  if (!(await discardEdits(doc, 'Profilare'))) return;
+  if (!(await discardEdits(doc, t('Profilare')))) return;
   const model = modelOf(doc.id);
   const ed = editorOf(doc.id);
   const cursor = ed?.getPosition() ? model.getOffsetAt(ed.getPosition()!) : 0;
@@ -302,7 +324,7 @@ export async function profileDoc(id = st().activeDoc) {
     };
     markErrors(model, [result]);
     recordHistory(doc, [result]);
-    logMessage(doc.id, p.error ? 'error' : 'ok', p.error ? p.error.message : `Profilo: ${p.ms} ms, ${p.rows ? `${p.rows} righe` : `${p.affectedRows ?? 0} righe interessate`}`, { sql: p.sql, offset: p.start });
+    logMessage(doc.id, p.error ? 'error' : 'ok', p.error ? p.error.message : t('Profilo: {0} ms, {1}', p.ms, p.rows ? t('{0} righe', p.rows) : t('{0} righe interessate', p.affectedRows ?? 0)), { sql: p.sql, offset: p.start });
     st().updateDoc(doc.id, { run: { results: [result], explain: false, ms: Math.round(p.ms), profile: p }, db: p.db, view: p.error ? 'messages' : 'profile' });
   } catch (err) {
     logMessage(doc.id, 'error', (err as Error).message);
@@ -403,7 +425,7 @@ export function formatDoc(id = st().activeDoc) {
   const range = sel && !sel.isEmpty() ? sel : model.getFullModelRange();
   const text = model.getValueInRange(range);
   let out: string;
-  try { out = formatText(text); } catch (err) { logMessage(doc.id, 'error', `Formattazione non riuscita: ${(err as Error).message}`); return; }
+  try { out = formatText(text); } catch (err) { logMessage(doc.id, 'error', t('Formattazione non riuscita: {0}', (err as Error).message)); return; }
   if (out === text) return;
   ed.pushUndoStop();
   ed.executeEdits('mibsql.format', [{ range, text: out, forceMoveMarkers: true }]);
@@ -417,7 +439,7 @@ export const OBJECT_WORD: Record<EditableKind, string> = { view: 'VIEW', procedu
 export const OBJECT_LABEL: Record<EditableKind, string> = { view: 'vista', procedure: 'procedura', function: 'funzione', trigger: 'trigger', event: 'evento' };
 const FEMININE = new Set<EditableKind>(['view', 'procedure', 'function']);
 const g = (kind: EditableKind, f: string, m: string) => (FEMININE.has(kind) ? f : m);
-const objectTitle = (kind: EditableKind, name: string | null) => name ?? `${g(kind, 'Nuova', 'Nuovo')} ${OBJECT_LABEL[kind]}`;
+const objectTitle = (kind: EditableKind, name: string | null) => name ?? `${g(kind, t('Nuova'), t('Nuovo'))} ${OBJECT_LABEL[kind]}`;
 
 const TEMPLATES: Record<EditableKind, (table?: string) => string> = {
   view: () => 'CREATE VIEW nuova_vista AS\nSELECT\n  1 AS colonna;\n',
@@ -453,7 +475,7 @@ export function openNewObject(connId: string, db: string, kind: EditableKind, ta
 export async function applyObject(id = st().activeDoc) {
   const doc = id ? docById(id) : undefined;
   if (!doc?.obj || doc.running) return false;
-  if (!doc.connId || !doc.db) { logMessage(doc.id, 'error', 'Scegli connessione e database dell\'oggetto.'); return false; }
+  if (!doc.connId || !doc.db) { logMessage(doc.id, 'error', t('Scegli connessione e database dell\'oggetto.')); return false; }
   const { kind, name: orig } = doc.obj;
   const model = modelOf(doc.id);
   const text = model.getValue();
@@ -461,21 +483,24 @@ export async function applyObject(id = st().activeDoc) {
   st().updateDoc(doc.id, { running: true, startedAt: Date.now() });
   const t0 = performance.now();
   try {
-    if (st().connState[doc.connId]?.status !== 'open' && !(await st().openConn(doc.connId))) throw new Error(st().connState[doc.connId]?.error ?? 'Connessione non aperta.');
+    if (st().connState[doc.connId]?.status !== 'open' && !(await st().openConn(doc.connId))) throw new Error(st().connState[doc.connId]?.error ?? t('Connessione non aperta.'));
     const r = await api.objects.apply(doc.connId, doc.db, kind, orig, text);
     const ms = Math.round(performance.now() - t0);
     markSaved(doc.id);
     st().updateDoc(doc.id, { obj: { kind, name: r.name }, title: r.name, dirty: false });
-    const grants = kind === 'procedure' || kind === 'function' ? '; i privilegi EXECUTE dati sulla routine vanno riassegnati' : '';
-    const how = r.method === 'drop-create' ? ` (${g(kind, 'eliminata e ricreata', 'eliminato e ricreato')}: il server non ha CREATE OR REPLACE per questo oggetto${grants})` : '';
+    const gr = r.grants;
+    const grants = !gr ? '' : gr.unreadable ? t('; privilegi sulla routine non leggibili (serve SELECT su mysql.procs_priv): eventuali EXECUTE vanno riassegnati')
+      : gr.restored ? t('; privilegi sulla routine riassegnati ({0})', gr.restored) : '';
+    const how = r.method === 'drop-create' ? t(' ({0}: il server non ha CREATE OR REPLACE per questo oggetto{1})', g(kind, t('eliminata e ricreata'), t('eliminato e ricreato')), grants) : '';
     const label = OBJECT_LABEL[kind][0].toUpperCase() + OBJECT_LABEL[kind].slice(1);
-    logMessage(doc.id, 'ok', `${label} ${r.name} ${r.created ? g(kind, 'creata', 'creato') : g(kind, 'aggiornata', 'aggiornato')} in ${ms} ms${how}.`);
+    logMessage(doc.id, 'ok', t('{0} {1} {2} in {3} ms{4}.', label, r.name, r.created ? g(kind, t('creata'), t('creato')) : g(kind, t('aggiornata'), t('aggiornato')), ms, how));
+    if (gr?.failed.length) logMessage(doc.id, 'warning', t('Privilegi non riassegnati:\n{0}', gr.failed.join('\n')));
     recordHistory(doc, [{ sql: text.trim(), start: 0, end: text.length, sets: [], affectedRows: 0, insertId: null, warnings: [], ms, error: null }]);
     if (r.renamed && orig) {
-      const drop = await api.confirm(`Eliminare ${orig}?`, `È stato creato ${r.name}; l'oggetto con il vecchio nome ${orig} esiste ancora.`, [`Elimina ${orig}`, 'Mantieni entrambi']);
+      const drop = await api.confirm(t('Eliminare {0}?', orig), t('È stato creato {0}; l\'oggetto con il vecchio nome {1} esiste ancora.', r.name, orig), [t('Elimina {0}', orig), t('Mantieni entrambi')]);
       if (drop === 0) {
         await api.ddl.run(doc.connId, [`DROP ${OBJECT_WORD[kind]} ${qi(doc.db)}.${qi(orig)}`]);
-        logMessage(doc.id, 'ok', `${orig} ${g(kind, 'eliminata', 'eliminato')}.`);
+        logMessage(doc.id, 'ok', `${orig} ${g(kind, t('eliminata'), t('eliminato'))}.`);
       }
     }
     st().dropMeta(`${doc.connId}/${doc.db}/`);
@@ -495,13 +520,29 @@ export async function applyObject(id = st().activeDoc) {
   }
 }
 
+/** Performance center › query optimizer on the selection or the statement under the cursor. */
+export async function optimizeDoc(id = st().activeDoc) {
+  const doc = id ? docById(id) : undefined;
+  if (!doc || doc.kind !== 'sql' || !doc.connId) return;
+  const ed = editorOf(doc.id);
+  const model = modelOf(doc.id);
+  const sel = ed?.getSelection();
+  let sql = sel && !sel.isEmpty() ? model.getValueInRange(sel) : '';
+  if (!sql.trim()) {
+    const at = ed?.getPosition() ? model.getOffsetAt(ed.getPosition()!) : 0;
+    const stmts = await api.split(model.getValue()).catch(() => []);
+    sql = (stmts.find((s) => at >= s.start && at <= s.end + 1) ?? stmts[0])?.sql ?? '';
+  }
+  openServerTool(doc.connId, 'perf', { tab: 'optimize', sql: sql.trim(), db: doc.db });
+}
+
 /** DROP of a view/routine/trigger/event after confirmation; its editor tabs are closed. */
 export async function dropObject(connId: string, db: string, kind: EditableKind, name: string) {
-  if ((await api.confirm(`Eliminare ${g(kind, 'la', 'il')} ${OBJECT_LABEL[kind]} ${db}.${name}?`, `DROP ${OBJECT_WORD[kind]} non si può annullare.`, ['Elimina', 'Annulla'])) !== 0) return;
+  if ((await api.confirm(`Eliminare ${g(kind, t('la'), t('il'))} ${OBJECT_LABEL[kind]} ${db}.${name}?`, `DROP ${OBJECT_WORD[kind]} non si può annullare.`, ['Elimina', 'Annulla'])) !== 0) return;
   try {
     await api.ddl.run(connId, [`DROP ${OBJECT_WORD[kind]} ${qi(db)}.${qi(name)}`]);
   } catch (err) {
-    await api.confirm('Eliminazione non riuscita', (err as Error).message, ['OK']);
+    await api.confirm(t('Eliminazione non riuscita'), (err as Error).message, ['OK']);
     return;
   }
   st().dropMeta(`${connId}/${db}/`);
@@ -516,28 +557,64 @@ export const invalidateSchema = (connId: string, db: string) => st().dropMeta(me
 const KEY = 'mibsql.docs';
 let timer: number | undefined;
 
-export function persist() {
+export function persist(now = false) {
   clearTimeout(timer);
-  timer = window.setTimeout(() => {
+  const save = () => {
     const { docs, activeDoc: active } = st();
     // designer tabs reopen on the server's definition: unapplied structure changes are not kept
     const data = docs.map((d) => (d.kind !== 'sql'
-      ? { id: d.id, kind: d.kind, design: d.design, qb: d.qb, cmp: d.cmp, title: d.title, connId: d.connId, db: d.db, file: null, dirty: false, sql: '' }
+      ? { id: d.id, kind: d.kind, design: d.design, qb: d.qb, cmp: d.cmp, perf: d.perf, datagen: d.datagen, title: d.title, connId: d.connId, db: d.db, file: null, dirty: false, sql: '' }
       : { id: d.id, kind: d.kind, obj: d.obj, title: d.title, connId: d.connId, db: d.db, file: d.file, dirty: d.dirty, sql: modelOf(d.id).getValue() }))
       .filter((d) => d.kind !== 'table' || d.design?.table);
     try { localStorage.setItem(KEY, JSON.stringify({ docs: data, active })); } catch { /* storage unavailable */ }
-  }, 400);
+  };
+  if (now) save(); else timer = window.setTimeout(save, 400);
+}
+
+/**
+ * Switches the UI language: the window reloads (every text is translated once at load), tabs come back from
+ * the saved state and the connections that were open are opened again.
+ */
+export async function switchLanguage(lang: import('./i18n').Lang) {
+  const s = st();
+  if (s.docs.some((d) => d.running) && (await api.confirm(t('Cambiare lingua?'), t('Le query in esecuzione verranno interrotte.'), [t('Cambia lingua'), t('Annulla')])) !== 0) return;
+  persist(true);
+  const open = Object.entries(s.connState).filter(([, c]) => c.status === 'open').map(([id]) => id);
+  try { sessionStorage.setItem('mibsql.reopen', JSON.stringify(open)); } catch { /* ignore */ }
+  for (const d of s.docs) if (d.sessionId) await api.sess.close(d.sessionId).catch(() => {});
+  setLang(lang);
+  await api.setLang(lang).catch(() => {});
+  location.reload();
+}
+
+/** Title of a tool tab in the current language (saved titles were written in the language of the time). */
+function toolTitle(kind: Doc['kind'], connId: string | null, db: string | null, saved: string) {
+  const name = st().conns.find((c) => c.id === connId)?.name ?? '';
+  switch (kind) {
+    case 'history': return t('Cronologia query');
+    case 'maint': return t('Manutenzione {0}', db ?? '');
+    case 'compare': return t('Confronto {0}', db ?? '');
+    case 'datagen': return `${t('Dati di test')} ${db}`;
+    case 'docgen': return `${t('Documentazione')} ${db}`;
+    case 'monitor': case 'users': case 'procs': case 'perf': return `${SERVER_TOOL_TITLE[kind]()} ${name}`;
+    default: return saved;
+  }
 }
 
 export function restore() {
-  let saved: { docs: { id: string; kind?: Doc['kind']; obj?: Doc['obj']; design?: Doc['design']; qb?: Doc['qb']; cmp?: Doc['cmp']; title: string; connId: string | null; db: string | null; file: string | null; dirty: boolean; sql: string }[]; active: string | null } | null = null;
+  try {
+    const reopen = JSON.parse(sessionStorage.getItem('mibsql.reopen') ?? '[]') as string[];
+    sessionStorage.removeItem('mibsql.reopen');
+    for (const id of reopen) if (st().conns.some((c) => c.id === id)) st().openConn(id);
+  } catch { /* ignore */ }
+  let saved: { docs: { id: string; kind?: Doc['kind']; obj?: Doc['obj']; design?: Doc['design']; qb?: Doc['qb']; cmp?: Doc['cmp']; perf?: Doc['perf']; datagen?: Doc['datagen']; title: string; connId: string | null; db: string | null; file: string | null; dirty: boolean; sql: string }[]; active: string | null } | null = null;
   try { saved = JSON.parse(localStorage.getItem(KEY) ?? 'null'); } catch { saved = null; }
   if (!saved?.docs?.length) return;
   const known = new Set(st().conns.map((c) => c.id));
   for (const d of saved.docs) {
     if (d.kind && d.kind !== 'sql') {
-      if (d.kind === 'history') st().addDoc({ id: d.id, kind: d.kind, title: d.title });
-      else if (d.connId && known.has(d.connId) && (d.db || d.kind === 'monitor' || d.kind === 'users')) st().addDoc({ id: d.id, kind: d.kind, design: d.design, qb: d.qb, cmp: d.cmp, title: d.title, connId: d.connId, db: d.db });
+      if (d.kind === 'history') st().addDoc({ id: d.id, kind: d.kind, title: toolTitle(d.kind, null, null, d.title) });
+      else if (d.connId && known.has(d.connId) && (d.db || d.kind === 'monitor' || d.kind === 'users' || d.kind === 'procs' || d.kind === 'perf')) st().addDoc({ id: d.id, kind: d.kind, design: d.design, qb: d.qb, cmp: d.cmp, perf: d.perf, datagen: d.datagen, title: toolTitle(d.kind, d.connId, d.db, d.title), connId: d.connId, db: d.db });
       continue;
     }
     const m = /^SQL(\d+)\.sql$/.exec(d.title);

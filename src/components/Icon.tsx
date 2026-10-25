@@ -37,6 +37,11 @@ const P: Record<string, ReactElement> = {
   snippet: <><path d="M5.5 3.5L1.8 8l3.7 4.5M10.5 3.5L14.2 8l-3.7 4.5" stroke="#8e5cc4" strokeWidth="1.6" fill="none" strokeLinecap="round" strokeLinejoin="round" /><path d="M9 2.5L7 13.5" stroke="#2e9e44" strokeWidth="1.4" strokeLinecap="round" /></>,
   maint: <><path d="M10.8 1.8a3.4 3.4 0 00-3.6 4.6L2 11.6a1.4 1.4 0 002 2l5.2-5.2a3.4 3.4 0 004.6-3.6L11.7 7 9.6 6.4 9 4.3z" fill="#6a7685" /></>,
   tools: <><rect x="2" y="2" width="5" height="5" rx="1" fill="#3a7bd5" /><rect x="9" y="2" width="5" height="5" rx="1" fill="#2a9d8f" /><rect x="2" y="9" width="5" height="5" rx="1" fill="#e9a23b" /><rect x="9" y="9" width="5" height="5" rx="1" fill="#8e5cc4" /></>,
+  perf: <><path d="M2 12.5a6 6 0 0112 0" fill="none" stroke="#2e9e44" strokeWidth="1.6" strokeLinecap="round" /><path d="M8 12.5l3-4.5" stroke="#d64545" strokeWidth="1.6" strokeLinecap="round" /><circle cx="8" cy="12.5" r="1.3" fill="#6a7685" /></>,
+  procs: <><rect x="1.5" y="2" width="13" height="2.6" rx=".8" fill="#5b7fb5" /><rect x="1.5" y="6.7" width="13" height="2.6" rx=".8" fill="#e9a23b" /><rect x="1.5" y="11.4" width="13" height="2.6" rx=".8" fill="#5b7fb5" /><path d="M11 6.2l3 3.6M14 6.2l-3 3.6" stroke="#d64545" strokeWidth="1.3" /></>,
+  datagen: <><rect x="1.5" y="2.5" width="9" height="11" fill="#fff" stroke="#3a7bd5" /><path d="M1.5 6h9M1.5 9.5h9M5 2.5v11" stroke="#3a7bd5" strokeWidth=".8" /><path d="M12.5 1.5l.7 1.6 1.6.7-1.6.7-.7 1.6-.7-1.6-1.6-.7 1.6-.7zM12.5 8.5l.5 1.1 1.1.5-1.1.5-.5 1.1-.5-1.1-1.1-.5 1.1-.5z" fill="#e9a23b" /></>,
+  docgen: <><path d="M3 1.5h6.5l3.5 3.5v9.5H3z" fill="#fff" stroke="#6a7685" /><path d="M9.5 1.5V5H13" fill="none" stroke="#6a7685" /><path d="M5 7.5h6M5 10h6M5 12.5h4" stroke="#2a9d8f" strokeWidth="1.2" /></>,
+  lang: <><circle cx="8" cy="8" r="6" fill="none" stroke="currentColor" strokeWidth="1.2" /><path d="M2 8h12M8 2c-2.2 2.5-2.2 9.5 0 12M8 2c2.2 2.5 2.2 9.5 0 12" fill="none" stroke="currentColor" strokeWidth="1.1" /></>,
   close: <path d="M4 4l8 8M12 4l-8 8" stroke="currentColor" strokeWidth="1.5" />,
 };
 

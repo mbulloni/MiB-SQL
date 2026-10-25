@@ -2,6 +2,7 @@
 // CHECK / REPAIR / CHECKSUM TABLE run one table at a time (progress, stop between tables) with the
 // server's result rows (Msg_type, Msg_text) kept as they are.
 const server = require('./server.cjs');
+const { t } = require('./i18n.cjs');
 
 const qi = (s) => '`' + String(s).replace(/`/g, '``') + '`';
 
@@ -35,8 +36,8 @@ const active = new Map(); // task id -> { stop }
  */
 async function run(id, connId, db, tables, op, { option = '', local = false } = {}, onProgress = () => {}) {
   const o = OPS[op];
-  if (!o) throw new Error(`Operazione sconosciuta: ${op}`);
-  if (!o.options.includes(option)) throw new Error(`Opzione non valida per ${o.sql}: ${option}`);
+  if (!o) throw new Error(t('Operazione sconosciuta: {0}', op));
+  if (!o.options.includes(option)) throw new Error(t('Opzione non valida per {0}: {1}', o.sql, option));
   const task = { stop: false };
   active.set(id, task);
   const results = [];
@@ -50,7 +51,7 @@ async function run(id, connId, db, tables, op, { option = '', local = false } = 
         try {
           const rows = Array.from(await c.query({ sql, rowsAsArray: false }));
           const ms = Date.now() - t0;
-          if (op === 'checksum') results.push({ table: t, op, type: rows[0]?.Checksum === null ? 'warning' : 'checksum', text: rows[0]?.Checksum === null ? 'Tabella inesistente o non leggibile' : String(rows[0]?.Checksum), ms });
+          if (op === 'checksum') results.push({ table: t, op, type: rows[0]?.Checksum === null ? 'warning' : 'checksum', text: rows[0]?.Checksum === null ? t('Tabella inesistente o non leggibile') : String(rows[0]?.Checksum), ms });
           else for (const r of rows) results.push({ table: t, op: r.Op ?? op, type: r.Msg_type, text: r.Msg_text, ms });
         } catch (err) {
           results.push({ table: t, op, type: 'error', text: new server.DbError(err).message, ms: Date.now() - t0 });

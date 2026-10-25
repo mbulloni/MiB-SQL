@@ -2,12 +2,13 @@ import { useState } from 'react';
 import { api } from '../api';
 import { useStore } from '../store';
 import type { ConnDef, Secrets, SshAuth } from '../types';
+import { t as tr, locale } from '../i18n';
 
 const COLORS = [
-  { label: 'Nessuno', value: '' },
-  { label: 'Sviluppo (verde)', value: '#2e9e44' },
-  { label: 'Test (giallo)', value: '#e0a800' },
-  { label: 'Produzione (rosso)', value: '#d64545' },
+  { label: tr('Nessuno'), value: '' },
+  { label: tr('Sviluppo (verde)'), value: '#2e9e44' },
+  { label: tr('Test (giallo)'), value: '#e0a800' },
+  { label: tr('Produzione (rosso)'), value: '#d64545' },
 ];
 
 const EMPTY: Omit<ConnDef, 'id'> = {
@@ -36,7 +37,7 @@ export function ConnectionDialog() {
     setStatus(null);
     try {
       const info = await api.conn.test({ ...def, id: def.id ?? '' }, secrets);
-      setStatus({ ok: true, text: `Connessione riuscita: ${info.version} come ${info.user}` });
+      setStatus({ ok: true, text: tr('Connessione riuscita: {0} come {1}', info.version, info.user) });
     } catch (err) {
       setStatus({ ok: false, text: (err as Error).message });
     } finally { setBusy(false); }
@@ -54,71 +55,71 @@ export function ConnectionDialog() {
   return (
     <div className="modal-back" onMouseDown={close}>
       <div className="modal conn-dialog" onMouseDown={(e) => e.stopPropagation()} onKeyDown={(e) => { if (e.key === 'Escape') close(); }}>
-        <div className="modal-title">{editing ? 'Modifica connessione' : 'Nuova connessione'}</div>
+        <div className="modal-title">{editing ? tr('Modifica connessione') : tr('Nuova connessione')}</div>
         <div className="tabs-row">
           {(['general', 'ssl', 'ssh'] as const).map((t) => (
-            <button key={t} className={tab === t ? 'active' : ''} onClick={() => setTab(t)}>{{ general: 'Generale', ssl: 'SSL', ssh: 'Tunnel SSH' }[t]}</button>
+            <button key={t} className={tab === t ? 'active' : ''} onClick={() => setTab(t)}>{{ general: tr('Generale'), ssl: 'SSL', ssh: tr('Tunnel SSH') }[t]}</button>
           ))}
         </div>
         <div className="form">
           {tab === 'general' && <>
-            <label>Nome<input autoFocus value={def.name} placeholder={name} onChange={(e) => set({ name: e.target.value })} /></label>
+            <label>{tr('Nome')}<input autoFocus value={def.name} placeholder={name} onChange={(e) => set({ name: e.target.value })} /></label>
             <div className="row">
-              <label className="grow">Host<input value={def.host} disabled={!!def.socket} onChange={(e) => set({ host: e.target.value })} /></label>
-              <label className="port">Porta<input type="number" value={def.port} disabled={!!def.socket} onChange={(e) => set({ port: Number(e.target.value) })} /></label>
+              <label className="grow">{tr('Host')}<input value={def.host} disabled={!!def.socket} onChange={(e) => set({ host: e.target.value })} /></label>
+              <label className="port">{tr('Porta')}<input type="number" value={def.port} disabled={!!def.socket} onChange={(e) => set({ port: Number(e.target.value) })} /></label>
             </div>
-            <label>Socket Unix (opzionale)<input value={def.socket} placeholder="/run/mysqld/mysqld.sock" onChange={(e) => set({ socket: e.target.value })} /></label>
+            <label>{tr('Socket Unix (opzionale)')}<input value={def.socket} placeholder="/run/mysqld/mysqld.sock" onChange={(e) => set({ socket: e.target.value })} /></label>
             <div className="row">
-              <label className="grow">Utente<input value={def.user} onChange={(e) => set({ user: e.target.value })} /></label>
-              <label className="grow">Password<input type="password" placeholder={editing ? '(invariata)' : ''} value={secrets.password ?? ''} onChange={(e) => setSecrets((x) => ({ ...x, password: e.target.value }))} /></label>
+              <label className="grow">{tr('Utente')}<input value={def.user} onChange={(e) => set({ user: e.target.value })} /></label>
+              <label className="grow">{tr('Password')}<input type="password" placeholder={editing ? '(invariata)' : ''} value={secrets.password ?? ''} onChange={(e) => setSecrets((x) => ({ ...x, password: e.target.value }))} /></label>
             </div>
             <label className="check">
               <input type="checkbox" checked={def.savePassword && keyring} disabled={!keyring} onChange={(e) => set({ savePassword: e.target.checked })} />
-              Salva password nel portachiavi di sistema{!keyring && ' (non disponibile: verrà chiesta a ogni avvio)'}
+              {tr('Salva password nel portachiavi di sistema')}{!keyring && tr(' (non disponibile: verrà chiesta a ogni avvio)')}
             </label>
-            <label>Database predefinito (opzionale)<input value={def.database} onChange={(e) => set({ database: e.target.value })} /></label>
-            <label>Colore ambiente
+            <label>{tr('Database predefinito (opzionale)')}<input value={def.database} onChange={(e) => set({ database: e.target.value })} /></label>
+            <label>{tr('Colore ambiente')}
               <select value={def.color} onChange={(e) => set({ color: e.target.value })}>
                 {COLORS.map((c) => <option key={c.value} value={c.value}>{c.label}</option>)}
               </select>
             </label>
           </>}
           {tab === 'ssl' && <>
-            <label className="check"><input type="checkbox" checked={!!def.ssl} onChange={(e) => set({ ssl: e.target.checked })} /> Usa SSL/TLS</label>
-            <label className="check"><input type="checkbox" disabled={!def.ssl} checked={!!def.sslVerify} onChange={(e) => set({ sslVerify: e.target.checked })} /> Verifica il certificato del server</label>
-            <label>Certificato CA (file PEM, opzionale)<input disabled={!def.ssl} value={def.sslCa} placeholder="/etc/ssl/certs/ca.pem" onChange={(e) => set({ sslCa: e.target.value })} /></label>
+            <label className="check"><input type="checkbox" checked={!!def.ssl} onChange={(e) => set({ ssl: e.target.checked })} />{' '}{tr('Usa SSL/TLS')}</label>
+            <label className="check"><input type="checkbox" disabled={!def.ssl} checked={!!def.sslVerify} onChange={(e) => set({ sslVerify: e.target.checked })} />{' '}{tr('Verifica il certificato del server')}</label>
+            <label>{tr('Certificato CA (file PEM, opzionale)')}<input disabled={!def.ssl} value={def.sslCa} placeholder="/etc/ssl/certs/ca.pem" onChange={(e) => set({ sslCa: e.target.value })} /></label>
           </>}
           {tab === 'ssh' && <>
-            <label className="check"><input type="checkbox" checked={!!def.ssh?.enabled} onChange={(e) => setSsh({ enabled: e.target.checked })} /> Connetti tramite tunnel SSH</label>
+            <label className="check"><input type="checkbox" checked={!!def.ssh?.enabled} onChange={(e) => setSsh({ enabled: e.target.checked })} />{' '}{tr('Connetti tramite tunnel SSH')}</label>
             <fieldset disabled={!def.ssh?.enabled}>
               <div className="row">
-                <label className="grow">Host SSH<input value={def.ssh!.host} onChange={(e) => setSsh({ host: e.target.value })} /></label>
-                <label className="port">Porta<input type="number" value={def.ssh!.port} onChange={(e) => setSsh({ port: Number(e.target.value) })} /></label>
+                <label className="grow">{tr('Host SSH')}<input value={def.ssh!.host} onChange={(e) => setSsh({ host: e.target.value })} /></label>
+                <label className="port">{tr('Porta')}<input type="number" value={def.ssh!.port} onChange={(e) => setSsh({ port: Number(e.target.value) })} /></label>
               </div>
-              <label>Utente SSH<input value={def.ssh!.user} onChange={(e) => setSsh({ user: e.target.value })} /></label>
-              <label>Autenticazione
+              <label>{tr('Utente SSH')}<input value={def.ssh!.user} onChange={(e) => setSsh({ user: e.target.value })} /></label>
+              <label>{tr('Autenticazione')}
                 <select value={def.ssh!.auth} onChange={(e) => setSsh({ auth: e.target.value as SshAuth })}>
-                  <option value="password">Password</option>
-                  <option value="key">Chiave privata</option>
-                  <option value="agent">ssh-agent</option>
+                  <option value="password">{tr('Password')}</option>
+                  <option value="key">{tr('Chiave privata')}</option>
+                  <option value="agent">{tr('ssh-agent')}</option>
                 </select>
               </label>
-              {def.ssh!.auth === 'password' && <label>Password SSH<input type="password" placeholder={editing ? '(invariata)' : ''} value={secrets.sshPassword ?? ''} onChange={(e) => setSecrets((x) => ({ ...x, sshPassword: e.target.value }))} /></label>}
+              {def.ssh!.auth === 'password' && <label>{tr('Password SSH')}<input type="password" placeholder={editing ? '(invariata)' : ''} value={secrets.sshPassword ?? ''} onChange={(e) => setSecrets((x) => ({ ...x, sshPassword: e.target.value }))} /></label>}
               {def.ssh!.auth === 'key' && <>
-                <label>File chiave privata<input value={def.ssh!.keyFile} onChange={(e) => setSsh({ keyFile: e.target.value })} /></label>
-                <label>Passphrase (opzionale)<input type="password" value={secrets.passphrase ?? ''} onChange={(e) => setSecrets((x) => ({ ...x, passphrase: e.target.value }))} /></label>
+                <label>{tr('File chiave privata')}<input value={def.ssh!.keyFile} onChange={(e) => setSsh({ keyFile: e.target.value })} /></label>
+                <label>{tr('Passphrase (opzionale)')}<input type="password" value={secrets.passphrase ?? ''} onChange={(e) => setSecrets((x) => ({ ...x, passphrase: e.target.value }))} /></label>
               </>}
-              <p className="note">Host e porta della scheda Generale sono visti dal server SSH (di solito localhost:3306).</p>
+              <p className="note">{tr('Host e porta della scheda Generale sono visti dal server SSH (di solito localhost:3306).')}</p>
             </fieldset>
           </>}
         </div>
         {status && <div className={`status ${status.ok ? 'ok' : 'error'}`}>{status.text}</div>}
         <div className="modal-buttons">
-          <button onClick={test} disabled={busy}>{busy ? 'Test in corso…' : 'Prova connessione'}</button>
+          <button onClick={test} disabled={busy}>{busy ? tr('Test in corso…') : tr('Prova connessione')}</button>
           <div className="spacer" />
-          <button onClick={close}>Annulla</button>
-          <button onClick={() => save(false)}>Salva</button>
-          <button className="primary" onClick={() => save(true)}>Salva e connetti</button>
+          <button onClick={close}>{tr('Annulla')}</button>
+          <button onClick={() => save(false)}>{tr('Salva')}</button>
+          <button className="primary" onClick={() => save(true)}>{tr('Salva e connetti')}</button>
         </div>
       </div>
     </div>
@@ -135,18 +136,18 @@ export function PasswordPrompt() {
   return (
     <div className="modal-back">
       <form className="modal small" onSubmit={(e) => { e.preventDefault(); ok(); }} onKeyDown={(e) => { if (e.key === 'Escape') req.resolve(null); }}>
-        <div className="modal-title">Accesso a {req.conn.name}</div>
+        <div className="modal-title">{tr('Accesso a')}{' '}{req.conn.name}</div>
         <div className="form">
           {req.error && <div className="status error">{req.error}</div>}
-          <label>Password di {req.conn.user}<input type="password" autoFocus value={secrets.password ?? ''} onChange={(e) => setSecrets((x) => ({ ...x, password: e.target.value }))} /></label>
-          {ssh === 'password' && <label>Password SSH di {req.conn.ssh!.user}<input type="password" value={secrets.sshPassword ?? ''} onChange={(e) => setSecrets((x) => ({ ...x, sshPassword: e.target.value }))} /></label>}
-          {ssh === 'key' && <label>Passphrase chiave SSH<input type="password" value={secrets.passphrase ?? ''} onChange={(e) => setSecrets((x) => ({ ...x, passphrase: e.target.value }))} /></label>}
-          <label className="check"><input type="checkbox" checked={remember} disabled={!keyring} onChange={(e) => setRemember(e.target.checked)} /> Salva nel portachiavi</label>
+          <label>{tr('Password di')}{' '}{req.conn.user}<input type="password" autoFocus value={secrets.password ?? ''} onChange={(e) => setSecrets((x) => ({ ...x, password: e.target.value }))} /></label>
+          {ssh === 'password' && <label>{tr('Password SSH di')}{' '}{req.conn.ssh!.user}<input type="password" value={secrets.sshPassword ?? ''} onChange={(e) => setSecrets((x) => ({ ...x, sshPassword: e.target.value }))} /></label>}
+          {ssh === 'key' && <label>{tr('Passphrase chiave SSH')}<input type="password" value={secrets.passphrase ?? ''} onChange={(e) => setSecrets((x) => ({ ...x, passphrase: e.target.value }))} /></label>}
+          <label className="check"><input type="checkbox" checked={remember} disabled={!keyring} onChange={(e) => setRemember(e.target.checked)} />{' '}{tr('Salva nel portachiavi')}</label>
         </div>
         <div className="modal-buttons">
           <div className="spacer" />
-          <button type="button" onClick={() => req.resolve(null)}>Annulla</button>
-          <button type="submit" className="primary">Connetti</button>
+          <button type="button" onClick={() => req.resolve(null)}>{tr('Annulla')}</button>
+          <button type="submit" className="primary">{tr('Connetti')}</button>
         </div>
       </form>
     </div>
@@ -162,21 +163,21 @@ export function ValueViewer() {
   return (
     <div className="modal-back" onMouseDown={close}>
       <div className="modal viewer" onMouseDown={(e) => e.stopPropagation()} onKeyDown={(e) => { if (e.key === 'Escape') close(); }}>
-        <div className="modal-title">{v.title} <span className="hint">{isNull ? 'NULL' : v.binary ? `${Math.floor(value.replace(/^0x/i, '').length / 2).toLocaleString('it-IT')} byte (esadecimale)` : `${value.length.toLocaleString('it-IT')} caratteri`}</span></div>
+        <div className="modal-title">{v.title} <span className="hint">{isNull ? 'NULL' : v.binary ? tr('{0} byte (esadecimale)', Math.floor(value.replace(/^0x/i, '').length / 2).toLocaleString(locale())) : `${value.length.toLocaleString(locale())} caratteri`}</span></div>
         <textarea readOnly={!v.onSave} autoFocus value={value} placeholder={isNull ? 'NULL' : ''}
           onChange={(e) => { setValue(e.target.value); setNull(false); }} />
         <div className="modal-buttons">
-          <button onClick={() => navigator.clipboard.writeText(value)}>Copia</button>
+          <button onClick={() => navigator.clipboard.writeText(value)}>{tr('Copia')}</button>
           {v.binary && <>
-            <button disabled={!v.onSave} onClick={async () => { const hex = await api.file.readHex(); if (hex !== null) { setValue(hex); setNull(false); } }}>Carica da file…</button>
-            <button disabled={!value || isNull} onClick={() => api.file.writeHex(value, v.title)}>Salva su file…</button>
+            <button disabled={!v.onSave} onClick={async () => { const hex = await api.file.readHex(); if (hex !== null) { setValue(hex); setNull(false); } }}>{tr('Carica da file…')}</button>
+            <button disabled={!value || isNull} onClick={() => api.file.writeHex(value, v.title)}>{tr('Salva su file…')}</button>
           </>}
           <div className="spacer" />
           {v.onSave ? <>
-            <button onClick={() => save(null)}>Imposta NULL</button>
-            <button onClick={close}>Annulla</button>
-            <button className="primary" disabled={isNull && value === ''} onClick={() => save(value)}>Applica</button>
-          </> : <button className="primary" onClick={close}>Chiudi</button>}
+            <button onClick={() => save(null)}>{tr('Imposta NULL')}</button>
+            <button onClick={close}>{tr('Annulla')}</button>
+            <button className="primary" disabled={isNull && value === ''} onClick={() => save(value)}>{tr('Applica')}</button>
+          </> : <button className="primary" onClick={close}>{tr('Chiudi')}</button>}
         </div>
       </div>
     </div>

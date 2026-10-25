@@ -1,5 +1,7 @@
 // Session monitor metrics: per-second rates from two status polls. Pure functions for tests.
 
+import { t } from './i18n.ts';
+
 export interface Snapshot {
   at: number;
   processes: { id: number; user: string; host: string; db: string | null; command: string; time: number; timeMs: number | null; state: string | null; info: string | null; progress: number | null }[];
@@ -44,7 +46,7 @@ export function metrics(prev: Snapshot, cur: Snapshot): Metrics {
 /** "3 g 4 h", "2 h 5 min", "40 s". */
 export function duration(seconds: number) {
   const s = Math.floor(seconds);
-  if (s >= 86400) return `${Math.floor(s / 86400)} g ${Math.floor((s % 86400) / 3600)} h`;
+  if (s >= 86400) return t('{0} g {1} h', Math.floor(s / 86400), Math.floor((s % 86400) / 3600));
   if (s >= 3600) return `${Math.floor(s / 3600)} h ${Math.floor((s % 3600) / 60)} min`;
   if (s >= 60) return `${Math.floor(s / 60)} min ${s % 60} s`;
   return `${s} s`;

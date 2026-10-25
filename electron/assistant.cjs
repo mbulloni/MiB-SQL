@@ -6,6 +6,7 @@ const fs = require('fs');
 const path = require('path');
 const { app, safeStorage } = require('electron');
 const AnthropicModule = require('@anthropic-ai/sdk');
+const { t } = require('./i18n.cjs');
 
 const Anthropic = AnthropicModule.default ?? AnthropicModule;
 const MODELS = ['claude-opus-5-5', 'claude-sonnet-5-5', 'claude-haiku-5-5'];
@@ -46,7 +47,7 @@ async function saveSettings({ model, effort, key, consent }) {
   if (consent !== undefined) cfg.consent = consent;
   if (key === null) delete cfg.key;
   else if (typeof key === 'string' && key.trim()) {
-    if (!(await safeStorage.isAsyncEncryptionAvailable())) throw new Error('Portachiavi di sistema non disponibile: impostare la variabile ANTHROPIC_API_KEY.');
+    if (!(await safeStorage.isAsyncEncryptionAvailable())) throw new Error(t('Portachiavi di sistema non disponibile: impostare la variabile ANTHROPIC_API_KEY.'));
     cfg.key = (await safeStorage.encryptStringAsync(key.trim())).toString('base64');
   }
   write(cfg);
@@ -61,14 +62,14 @@ async function client() {
 
 /** Errors in the user's language, by SDK error class (never by message text). */
 function explain(err) {
-  if (err instanceof Anthropic.APIUserAbortError) return { cancelled: true, message: 'Risposta interrotta.' };
-  if (err instanceof Anthropic.AuthenticationError) return { message: 'Credenziali Anthropic non valide: controlla la chiave API nelle impostazioni dell\'assistente.' };
-  if (err instanceof Anthropic.PermissionDeniedError) return { message: `Accesso negato dall'API: ${err.message}` };
-  if (err instanceof Anthropic.RateLimitError) return { message: 'Limite di richieste raggiunto: riprova tra poco.' };
-  if (err instanceof Anthropic.BadRequestError) return { message: `Richiesta non valida: ${err.message}` };
-  if (err instanceof Anthropic.APIConnectionError) return { message: 'Impossibile raggiungere l\'API di Anthropic: controlla la connessione.' };
-  if (err instanceof Anthropic.APIError) return { message: `Errore dell'API (${err.status ?? '?'}): ${err.message}` };
-  if (/authentication|api key|credentials/i.test(String(err?.message))) return { message: 'Nessuna credenziale Anthropic: inserisci una chiave API nelle impostazioni dell\'assistente oppure imposta ANTHROPIC_API_KEY.' };
+  if (err instanceof Anthropic.APIUserAbortError) return { cancelled: true, message: t('Risposta interrotta.') };
+  if (err instanceof Anthropic.AuthenticationError) return { message: t('Credenziali Anthropic non valide: controlla la chiave API nelle impostazioni dell\'assistente.') };
+  if (err instanceof Anthropic.PermissionDeniedError) return { message: t('Accesso negato dall\'API: {0}', err.message) };
+  if (err instanceof Anthropic.RateLimitError) return { message: t('Limite di richieste raggiunto: riprova tra poco.') };
+  if (err instanceof Anthropic.BadRequestError) return { message: t('Richiesta non valida: {0}', err.message) };
+  if (err instanceof Anthropic.APIConnectionError) return { message: t('Impossibile raggiungere l\'API di Anthropic: controlla la connessione.') };
+  if (err instanceof Anthropic.APIError) return { message: t('Errore dell\'API ({0}): {1}', err.status ?? '?', err.message) };
+  if (/authentication|api key|credentials/i.test(String(err?.message))) return { message: t('Nessuna credenziale Anthropic: inserisci una chiave API nelle impostazioni dell\'assistente oppure imposta ANTHROPIC_API_KEY.') };
   return { message: String(err?.message ?? err) };
 }
 

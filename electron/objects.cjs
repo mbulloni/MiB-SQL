@@ -4,11 +4,13 @@
 // one fails. Runs on a connection of its own on the object's database, so unqualified names resolve there.
 const server = require('./server.cjs');
 const { split } = require('./sqlsplit.cjs');
+const { t } = require('./i18n.cjs');
 
 const qi = (s) => '`' + String(s).replace(/`/g, '``') + '`';
 const WORD = { view: 'VIEW', procedure: 'PROCEDURE', function: 'FUNCTION', trigger: 'TRIGGER', event: 'EVENT' };
 const SHOW_COL = { view: 1, procedure: 2, function: 2, trigger: 2, event: 3 };
-const LABEL = { view: 'una vista', procedure: 'una procedura', function: 'una funzione', trigger: 'un trigger', event: 'un evento' };
+// translated when used: the module loads before the renderer reports the language
+const LABEL = { view: () => t('una vista'), procedure: () => t('una procedura'), function: () => t('una funzione'), trigger: () => t('un trigger'), event: () => t('un evento') };
 // routine and event names are case insensitive; views and triggers follow the table name rules
 const CASE_INSENSITIVE = new Set(['procedure', 'function', 'event']);
 
@@ -54,13 +56,13 @@ const orReplace = (sql, h) => `${sql.slice(0, h.at)}CREATE OR REPLACE${sql.slice
 /** The single CREATE statement of an editor document (DELIMITER lines allowed), checked against the kind. */
 function statementOf(text, kind, db) {
   const stmts = split(text);
-  if (!stmts.length) throw new Error('Il documento è vuoto.');
-  if (stmts.length > 1) throw new Error(`Il documento deve contenere una sola istruzione CREATE (ne contiene ${stmts.length}): sposta le altre in un documento SQL.`);
+  if (!stmts.length) throw new Error(t('Il documento è vuoto.'));
+  if (stmts.length > 1) throw new Error(t('Il documento deve contenere una sola istruzione CREATE (ne contiene {0}): sposta le altre in un documento SQL.', stmts.length));
   const sql = stmts[0].sql;
   const h = header(sql);
-  if (!h) throw new Error(`L'istruzione deve essere CREATE ${WORD[kind]} … (con DEFINER, ALGORITHM, SQL SECURITY facoltativi).`);
-  if (h.kind !== kind) throw new Error(`L'istruzione definisce ${LABEL[h.kind]}, ma questo documento modifica ${LABEL[kind]}.`);
-  if (h.db && h.db !== db) throw new Error(`L'oggetto deve restare nel database ${db}: togli il prefisso «${h.db}.» dal nome.`);
+  if (!h) throw new Error(t('L\'istruzione deve essere CREATE {0} … (con DEFINER, ALGORITHM, SQL SECURITY facoltativi).', WORD[kind]));
+  if (h.kind !== kind) throw new Error(t('L\'istruzione definisce {0}, ma questo documento modifica {1}.', LABEL[h.kind](), LABEL[kind]()));
+  if (h.db && h.db !== db) throw new Error(t('L\'oggetto deve restare nel database {0}: togli il prefisso «{1}.» dal nome.', db, h.db));
   return { sql, h };
 }
 
@@ -87,18 +89,53 @@ async function apply(connId, db, kind, orig, text) {
     // MySQL has no CREATE OR REPLACE for these: drop, create, and put the old one back on failure
     const rows = await q({ sql: `SHOW CREATE ${WORD[kind]} ${qi(orig)}`, rowsAsArray: true });
     const prev = rows[0]?.[SHOW_COL[kind]];
-    if (!prev) throw new Error('Definizione attuale non leggibile (privilegi insufficienti): modifica non applicata.');
+    if (!prev) throw new Error(t('Definizione attuale non leggibile (privilegi insufficienti): modifica non applicata.'));
+    // DROP also removes the privileges granted on the routine itself: read them first, grant them again after
+    const grants = kind === 'procedure' || kind === 'function' ? await routineGrants(c, db, orig, kind) : null;
     await q(`DROP ${WORD[kind]} ${qi(orig)}`);
     try {
       await q(sql);
     } catch (err) {
       try { await c.query(prev); } catch (again) {
-        throw new Error(`${err.message}\nATTENZIONE: ripristino della definizione precedente non riuscito (${again.sqlMessage || again.message}): l'oggetto è stato eliminato. Definizione precedente:\n${prev}`);
+        throw new Error(t('{0}\nATTENZIONE: ripristino della definizione precedente non riuscito ({1}): l\'oggetto è stato eliminato. Definizione precedente:\n{2}', err.message, again.sqlMessage || again.message, prev));
       }
-      throw new Error(`${err.message}\nLa definizione precedente è stata ripristinata.`);
+      const back = grants ? await regrant(c, db, orig, kind, grants) : null;
+      throw new Error(t('{0}\nLa definizione precedente è stata ripristinata.{1}', err.message, back?.failed.length ? `\nPrivilegi non riassegnati: ${back.failed.join('; ')}` : ''));
     }
-    return { name: h.name, created: false, renamed: false, method: 'drop-create' };
+    return { name: h.name, created: false, renamed: false, method: 'drop-create', grants: grants ? await regrant(c, db, orig, kind, grants) : { unreadable: kind === 'procedure' || kind === 'function', restored: 0, failed: [] } };
   });
+}
+
+/** Privileges granted on one routine (mysql.procs_priv); null when that table is not readable. */
+async function routineGrants(c, db, name, kind) {
+  try {
+    const rows = await c.query({ sql: `SELECT User AS user, Host AS host, Proc_priv AS privs FROM mysql.procs_priv
+      WHERE Db = ? AND LOWER(Routine_name) = LOWER(?) AND Routine_type = ?`, rowsAsArray: false }, [db, name, kind.toUpperCase()]);
+    return Array.from(rows).map((r) => ({ user: r.user, host: r.host, privs: String(r.privs ?? '').split(',').filter(Boolean) }));
+  } catch {
+    return null;
+  }
+}
+
+const account = (u, h) => `'${String(u).replace(/'/g, "''")}'@'${String(h).replace(/'/g, "''")}'`;
+
+/** GRANT statements putting back the privileges read by routineGrants. */
+function grantStatements(db, name, kind, grants) {
+  return grants.map((g) => {
+    const privs = g.privs.filter((p) => p !== 'Grant').map((p) => p.toUpperCase());
+    const option = g.privs.includes('Grant');
+    // a bare GRANT OPTION is written as USAGE … WITH GRANT OPTION
+    return `GRANT ${privs.length ? privs.join(', ') : 'USAGE'} ON ${WORD[kind]} ${qi(db)}.${qi(name)} TO ${account(g.user, g.host)}${option ? ' WITH GRANT OPTION' : ''}`;
+  }).filter((_, i) => grants[i].privs.length);
+}
+
+async function regrant(c, db, name, kind, grants) {
+  const failed = [];
+  let restored = 0;
+  for (const sql of grantStatements(db, name, kind, grants)) {
+    try { await c.query(sql); restored++; } catch (err) { failed.push(`${sql} (${err.sqlMessage || err.message})`); }
+  }
+  return { unreadable: false, restored, failed };
 }
 
 /** Parameters of a routine, in order, and the function's return type. */
@@ -117,4 +154,4 @@ async function currentUser(connId) {
   return r.u;
 }
 
-module.exports = { apply, header, statementOf, orReplace, routineParams, currentUser };
+module.exports = { apply, header, statementOf, orReplace, routineParams, currentUser, grantStatements };

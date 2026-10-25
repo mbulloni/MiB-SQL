@@ -4,6 +4,7 @@ const fs = require('fs');
 const path = require('path');
 const crypto = require('crypto');
 const { app } = require('electron');
+const { t } = require('./i18n.cjs');
 
 const MAX = 5000;
 const MAX_SQL = 64 * 1024;
@@ -88,35 +89,42 @@ function clearHistory() {
 
 // ---- Snippets (Monaco snippet syntax: ${1:placeholder}, ${1|a,b|}, $0) ----
 
-const DEFAULT_SNIPPETS = [
-  ['sel', 'SELECT con filtro', 'SELECT ${1:*}\nFROM ${2:tabella}\nWHERE ${3:condizione};$0'],
-  ['top', 'Prime righe di una tabella', 'SELECT *\nFROM ${1:tabella}\nLIMIT ${2:1000};$0'],
+// placeholder words of the built-in snippets, in the UI language
+const placeholders = () => ({
+  tabella: t('tabella'), condizione: t('condizione'), colonne: t('colonne'), valori: t('valori'), colonna: t('colonna'), valore: t('valore'),
+  altro: t('altro'), nome: t('nome'), ix_nome: t('ix_nome'), fk_nome: t('fk_nome'), tabella_riferita: t('tabella_riferita'),
+});
+
+// built per call: names and placeholders follow the UI language
+const defaultSnippets = () => [
+  ['sel', t('SELECT con filtro'), 'SELECT ${1:*}\nFROM ${2:tabella}\nWHERE ${3:condizione};$0'],
+  ['top', t('Prime righe di una tabella'), 'SELECT *\nFROM ${1:tabella}\nLIMIT ${2:1000};$0'],
   ['ins', 'INSERT', 'INSERT INTO ${1:tabella} (${2:colonne})\nVALUES (${3:valori});$0'],
-  ['upd', 'UPDATE con filtro', 'UPDATE ${1:tabella}\nSET ${2:colonna} = ${3:valore}\nWHERE ${4:condizione};$0'],
-  ['del', 'DELETE con filtro', 'DELETE FROM ${1:tabella}\nWHERE ${2:condizione};$0'],
+  ['upd', t('UPDATE con filtro'), 'UPDATE ${1:tabella}\nSET ${2:colonna} = ${3:valore}\nWHERE ${4:condizione};$0'],
+  ['del', t('DELETE con filtro'), 'DELETE FROM ${1:tabella}\nWHERE ${2:condizione};$0'],
   ['join', 'INNER JOIN', 'JOIN ${1:tabella} ${2:t} ON ${2:t}.${3:id} = ${4:alias}.${5:colonna}$0'],
   ['lj', 'LEFT JOIN', 'LEFT JOIN ${1:tabella} ${2:t} ON ${2:t}.${3:id} = ${4:alias}.${5:colonna}$0'],
-  ['gb', 'Conteggio per gruppo', 'SELECT ${1:colonna}, COUNT(*) AS n\nFROM ${2:tabella}\nGROUP BY ${1:colonna}\nORDER BY n DESC;$0'],
-  ['dup', 'Valori duplicati', 'SELECT ${1:colonna}, COUNT(*) AS n\nFROM ${2:tabella}\nGROUP BY ${1:colonna}\nHAVING COUNT(*) > 1;$0'],
-  ['cte', 'Common table expression', 'WITH ${1:cte} AS (\n  ${2:SELECT 1}\n)\nSELECT *\nFROM ${1:cte};$0'],
-  ['case', 'Espressione CASE', 'CASE\n  WHEN ${1:condizione} THEN ${2:valore}\n  ELSE ${3:altro}\nEND$0'],
-  ['tx', 'Transazione', 'START TRANSACTION;\n$0\nCOMMIT;'],
-  ['ct', 'Nuova tabella', 'CREATE TABLE ${1:nome} (\n  id INT UNSIGNED NOT NULL AUTO_INCREMENT,\n  ${2:colonna} VARCHAR(${3:100}) NOT NULL,\n  creato_il TIMESTAMP NOT NULL DEFAULT CURRENT_TIMESTAMP,\n  PRIMARY KEY (id)\n) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4;$0'],
-  ['idx', 'Nuovo indice', 'CREATE INDEX ${1:ix_nome} ON ${2:tabella} (${3:colonna});$0'],
-  ['fk', 'Chiave esterna', 'ALTER TABLE ${1:tabella}\n  ADD CONSTRAINT ${2:fk_nome} FOREIGN KEY (${3:colonna})\n  REFERENCES ${4:tabella_riferita} (${5:id})\n  ON DELETE ${6|RESTRICT,CASCADE,SET NULL|};$0'],
-  ['proc', 'Stored procedure', 'DELIMITER \\$\\$\nCREATE PROCEDURE ${1:nome}(IN ${2:p} INT)\nBEGIN\n  $0\nEND\\$\\$\nDELIMITER ;'],
-  ['func', 'Funzione', 'DELIMITER \\$\\$\nCREATE FUNCTION ${1:nome}(${2:p} INT) RETURNS ${3:INT}\nDETERMINISTIC\nBEGIN\n  RETURN ${2:p};$0\nEND\\$\\$\nDELIMITER ;'],
+  ['gb', t('Conteggio per gruppo'), 'SELECT ${1:colonna}, COUNT(*) AS n\nFROM ${2:tabella}\nGROUP BY ${1:colonna}\nORDER BY n DESC;$0'],
+  ['dup', t('Valori duplicati'), 'SELECT ${1:colonna}, COUNT(*) AS n\nFROM ${2:tabella}\nGROUP BY ${1:colonna}\nHAVING COUNT(*) > 1;$0'],
+  ['cte', t('Common table expression'), 'WITH ${1:cte} AS (\n  ${2:SELECT 1}\n)\nSELECT *\nFROM ${1:cte};$0'],
+  ['case', t('Espressione CASE'), 'CASE\n  WHEN ${1:condizione} THEN ${2:valore}\n  ELSE ${3:altro}\nEND$0'],
+  ['tx', t('Transazione'), 'START TRANSACTION;\n$0\nCOMMIT;'],
+  ['ct', t('Nuova tabella'), 'CREATE TABLE ${1:nome} (\n  id INT UNSIGNED NOT NULL AUTO_INCREMENT,\n  ${2:colonna} VARCHAR(${3:100}) NOT NULL,\n  creato_il TIMESTAMP NOT NULL DEFAULT CURRENT_TIMESTAMP,\n  PRIMARY KEY (id)\n) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4;$0'],
+  ['idx', t('Nuovo indice'), 'CREATE INDEX ${1:ix_nome} ON ${2:tabella} (${3:colonna});$0'],
+  ['fk', t('Chiave esterna'), 'ALTER TABLE ${1:tabella}\n  ADD CONSTRAINT ${2:fk_nome} FOREIGN KEY (${3:colonna})\n  REFERENCES ${4:tabella_riferita} (${5:id})\n  ON DELETE ${6|RESTRICT,CASCADE,SET NULL|};$0'],
+  ['proc', t('Stored procedure'), 'DELIMITER \\$\\$\nCREATE PROCEDURE ${1:nome}(IN ${2:p} INT)\nBEGIN\n  $0\nEND\\$\\$\nDELIMITER ;'],
+  ['func', t('Funzione'), 'DELIMITER \\$\\$\nCREATE FUNCTION ${1:nome}(${2:p} INT) RETURNS ${3:INT}\nDETERMINISTIC\nBEGIN\n  RETURN ${2:p};$0\nEND\\$\\$\nDELIMITER ;'],
   ['trig', 'Trigger', 'DELIMITER \\$\\$\nCREATE TRIGGER ${1:nome} ${2|BEFORE,AFTER|} ${3|INSERT,UPDATE,DELETE|} ON ${4:tabella}\nFOR EACH ROW\nBEGIN\n  $0\nEND\\$\\$\nDELIMITER ;'],
-  ['size', 'Dimensione delle tabelle', "SELECT TABLE_NAME, ENGINE, TABLE_ROWS,\n  ROUND((DATA_LENGTH + INDEX_LENGTH) / 1024 / 1024, 2) AS mb\nFROM information_schema.TABLES\nWHERE TABLE_SCHEMA = ${1:DATABASE()}\nORDER BY mb DESC;$0"],
-  ['running', 'Query in esecuzione', "SELECT ID, USER, DB, TIME, STATE, INFO\nFROM information_schema.PROCESSLIST\nWHERE COMMAND <> 'Sleep'\nORDER BY TIME DESC;$0"],
-].map(([prefix, name, body]) => ({ id: `builtin-${prefix}`, prefix, name, body }));
+  ['size', t('Dimensione delle tabelle'), "SELECT TABLE_NAME, ENGINE, TABLE_ROWS,\n  ROUND((DATA_LENGTH + INDEX_LENGTH) / 1024 / 1024, 2) AS mb\nFROM information_schema.TABLES\nWHERE TABLE_SCHEMA = ${1:DATABASE()}\nORDER BY mb DESC;$0"],
+  ['running', t('Query in esecuzione'), "SELECT ID, USER, DB, TIME, STATE, INFO\nFROM information_schema.PROCESSLIST\nWHERE COMMAND <> 'Sleep'\nORDER BY TIME DESC;$0"],
+].map(([prefix, name, body]) => ({ id: `builtin-${prefix}`, prefix, name, body: body.replace(/\$\{(\d+):([a-z_]+)\}/g, (m, n, w) => `\${${n}:${placeholders()[w] ?? w}}`) }));
 
 function snippets() {
   try {
     const list = JSON.parse(fs.readFileSync(file('snippets.json'), 'utf8'));
     if (Array.isArray(list)) return { list, custom: true };
   } catch { /* not saved yet */ }
-  return { list: DEFAULT_SNIPPETS, custom: false };
+  return { list: defaultSnippets(), custom: false };
 }
 
 /** list = null restores the built-in set. */
@@ -129,4 +137,4 @@ function saveSnippets(list) {
   return snippets();
 }
 
-module.exports = { addHistory, listHistory, removeHistory, clearHistory, snippets, saveSnippets, DEFAULT_SNIPPETS, MAX };
+module.exports = { addHistory, listHistory, removeHistory, clearHistory, snippets, saveSnippets, defaultSnippets, MAX };

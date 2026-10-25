@@ -27,3 +27,17 @@ test('the document must hold one CREATE of the right kind in the right database'
   assert.throws(() => statementOf('CREATE VIEW other.v AS SELECT 1', 'view', 'd'), /restare nel database d/);
   assert.throws(() => statementOf('  ', 'view', 'd'), /vuoto/);
 });
+
+test('privileges on a routine are granted again after DROP + CREATE', () => {
+  const { grantStatements } = require('../electron/objects.cjs');
+  assert.deepEqual(grantStatements('d', 'p', 'procedure', [
+    { user: 'app', host: '%', privs: ['Execute'] },
+    { user: "o'k", host: 'localhost', privs: ['Execute', 'Alter Routine', 'Grant'] },
+    { user: 'g', host: 'h', privs: ['Grant'] },
+    { user: 'none', host: 'h', privs: [] },
+  ]), [
+    "GRANT EXECUTE ON PROCEDURE `d`.`p` TO 'app'@'%'",
+    "GRANT EXECUTE, ALTER ROUTINE ON PROCEDURE `d`.`p` TO 'o''k'@'localhost' WITH GRANT OPTION",
+    "GRANT USAGE ON PROCEDURE `d`.`p` TO 'g'@'h' WITH GRANT OPTION",
+  ]);
+});

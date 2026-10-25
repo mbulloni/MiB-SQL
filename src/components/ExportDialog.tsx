@@ -2,10 +2,11 @@ import { useEffect, useState } from 'react';
 import { api } from '../api';
 import { useStore } from '../store';
 import type { ExportFormat, ExportOptions } from '../types';
+import { t, locale } from '../i18n';
 
 const FORMATS: { id: ExportFormat; label: string }[] = [
   { id: 'csv', label: 'CSV' },
-  { id: 'xlsx', label: 'Excel (.xlsx)' },
+  { id: 'xlsx', label: t('Excel (.xlsx)') },
   { id: 'json', label: 'JSON' },
   { id: 'sql', label: 'SQL (INSERT)' },
 ];
@@ -45,55 +46,55 @@ export default function ExportDialog() {
     }
   };
 
-  const n = (x: number) => x.toLocaleString('it-IT');
+  const n = (x: number) => x.toLocaleString(locale());
   return (
     <div className="modal-back" onMouseDown={() => !state.busy && close()}>
       <div className="modal small export" onMouseDown={(e) => e.stopPropagation()} onKeyDown={(e) => { if (e.key === 'Escape' && !state.busy) close(); }}>
-        <div className="modal-title">Esporta {req.name}</div>
+        <div className="modal-title">{t('Esporta')}{' '}{req.name}</div>
         <div className="form">
           <div className="seg">
             {FORMATS.map((f) => <button key={f.id} className={o.format === f.id ? 'active' : ''} onClick={() => set({ format: f.id })}>{f.label}</button>)}
           </div>
           {hasRows && req.query && (
             <fieldset className="radios">
-              <label className="check"><input type="radio" checked={!all} onChange={() => setAll(false)} /> Righe mostrate ({n(req.rows!.length)}{req.filtered ? ', filtrate' : ''})</label>
-              <label className="check"><input type="radio" checked={all} onChange={() => setAll(true)} /> Tutte le righe{req.total !== undefined ? ` (${n(req.total)}${req.truncated ? '+' : ''})` : ''}: riesegue la query</label>
+              <label className="check"><input type="radio" checked={!all} onChange={() => setAll(false)} />{' '}{t('Righe mostrate (')}{n(req.rows!.length)}{req.filtered ? ', filtrate' : ''})</label>
+              <label className="check"><input type="radio" checked={all} onChange={() => setAll(true)} />{' '}{t('Tutte le righe')}{req.total !== undefined ? ` (${n(req.total)}${req.truncated ? '+' : ''})` : ''}{t(': riesegue la query')}</label>
             </fieldset>
           )}
-          {hasRows && !req.query && req.truncated && <p className="note">Verranno esportate le {n(req.rows!.length)} righe caricate: per tutte le righe eseguire una SELECT.</p>}
+          {hasRows && !req.query && req.truncated && <p className="note">{t('Verranno esportate le')}{' '}{n(req.rows!.length)}{' '}{t('righe caricate: per tutte le righe eseguire una SELECT.')}</p>}
           {o.format === 'csv' && <>
-            <label>Separatore
+            <label>{t('Separatore')}
               <select value={o.delimiter} onChange={(e) => set({ delimiter: e.target.value })}>
-                <option value=";">Punto e virgola (;) — Excel italiano</option>
-                <option value=",">Virgola (,)</option>
-                <option value={'\t'}>Tabulazione</option>
-                <option value="|">Barra verticale (|)</option>
+                <option value=";">{t('Punto e virgola (;) — Excel italiano')}</option>
+                <option value=",">{t('Virgola (,)')}</option>
+                <option value={'\t'}>{t('Tabulazione')}</option>
+                <option value="|">{t('Barra verticale (|)')}</option>
               </select>
             </label>
-            <label className="check"><input type="checkbox" checked={o.header} onChange={(e) => set({ header: e.target.checked })} /> Riga di intestazione</label>
-            <label className="check"><input type="checkbox" checked={o.bom} onChange={(e) => set({ bom: e.target.checked })} /> BOM UTF-8 (accenti corretti in Excel)</label>
-            <label>NULL come
+            <label className="check"><input type="checkbox" checked={o.header} onChange={(e) => set({ header: e.target.checked })} />{' '}{t('Riga di intestazione')}</label>
+            <label className="check"><input type="checkbox" checked={o.bom} onChange={(e) => set({ bom: e.target.checked })} />{' '}{t('BOM UTF-8 (accenti corretti in Excel)')}</label>
+            <label>{t('NULL come')}
               <select value={o.nullAs} onChange={(e) => set({ nullAs: e.target.value })}>
-                <option value="">Campo vuoto</option>
+                <option value="">{t('Campo vuoto')}</option>
                 <option value="NULL">NULL</option>
                 <option value="\N">\N (LOAD DATA)</option>
               </select>
             </label>
           </>}
           {o.format === 'sql' && <>
-            <label>Tabella di destinazione<input value={table} onChange={(e) => setTable(e.target.value)} /></label>
-            <label>Righe per INSERT<input type="number" min={1} value={o.batch} onChange={(e) => set({ batch: Number(e.target.value) || 1 })} /></label>
+            <label>{t('Tabella di destinazione')}<input value={table} onChange={(e) => setTable(e.target.value)} /></label>
+            <label>{t('Righe per INSERT')}<input type="number" min={1} value={o.batch} onChange={(e) => set({ batch: Number(e.target.value) || 1 })} /></label>
           </>}
-          {o.format === 'xlsx' && <p className="note">Numeri come numeri (oltre 15 cifre restano testo); massimo 1.048.575 righe.</p>}
-          {state.busy && <div className="status">Esportazione in corso…{state.progress ? ` ${n(state.progress)} righe` : ''}</div>}
+          {o.format === 'xlsx' && <p className="note">{t('Numeri come numeri (oltre 15 cifre restano testo); massimo 1.048.575 righe.')}</p>}
+          {state.busy && <div className="status">{t('Esportazione in corso…')}{state.progress ? ` ${n(state.progress)} righe` : ''}</div>}
           {state.error && <div className="status error">{state.error}</div>}
-          {state.done && <div className="status ok">Esportate {n(state.done.rows)} righe in {state.done.file}</div>}
+          {state.done && <div className="status ok">{t('Esportate')}{' '}{n(state.done.rows)}{' '}{t('righe in')}{' '}{state.done.file}</div>}
         </div>
         <div className="modal-buttons">
-          {state.done && <button onClick={() => api.showItem(state.done!.file)}>Mostra nella cartella</button>}
+          {state.done && <button onClick={() => api.showItem(state.done!.file)}>{t('Mostra nella cartella')}</button>}
           <div className="spacer" />
-          <button onClick={close} disabled={state.busy}>{state.done ? 'Chiudi' : 'Annulla'}</button>
-          {!state.done && <button className="primary" onClick={go} disabled={state.busy}>Esporta…</button>}
+          <button onClick={close} disabled={state.busy}>{state.done ? t('Chiudi') : t('Annulla')}</button>
+          {!state.done && <button className="primary" onClick={go} disabled={state.busy}>{t('Esporta…')}</button>}
         </div>
       </div>
     </div>

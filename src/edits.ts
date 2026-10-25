@@ -1,5 +1,6 @@
 // Pending grid edits and the SQL that applies them. Pure functions (no React, no IPC) so they run in tests.
 import type { ApplyStmt, Cell, Column, IndexInfo } from './types';
+import { t } from './i18n.ts';
 
 /** Row positions: 0..n-1 are the result's rows, n+k is the k-th inserted row. */
 export interface Edits {
@@ -23,12 +24,12 @@ const qi = (s: string) => '`' + s.replace(/`/g, '``') + '`';
 
 /** Base table of a result when every column comes from it, otherwise why it cannot be edited. */
 export function baseTable(columns: Column[]): { db: string; table: string } | string {
-  if (!columns.length) return 'Nessuna colonna.';
+  if (!columns.length) return t('Nessuna colonna.');
   const { db, orgTable } = columns[0];
-  if (!orgTable || !db) return 'Sola lettura: il risultato non proviene da una tabella.';
-  if (columns.some((c) => c.orgTable !== orgTable || c.db !== db || !c.orgName)) return 'Sola lettura: colonne da più tabelle o espressioni.';
+  if (!orgTable || !db) return t('Sola lettura: il risultato non proviene da una tabella.');
+  if (columns.some((c) => c.orgTable !== orgTable || c.db !== db || !c.orgName)) return t('Sola lettura: colonne da più tabelle o espressioni.');
   const names = columns.map((c) => c.orgName.toLowerCase());
-  if (new Set(names).size !== names.length) return 'Sola lettura: colonne ripetute.';
+  if (new Set(names).size !== names.length) return t('Sola lettura: colonne ripetute.');
   return { db, table: orgTable };
 }
 
@@ -36,7 +37,7 @@ export function baseTable(columns: Column[]): { db: string; table: string } | st
 export function editTarget(columns: Column[], indexes: IndexInfo[] | undefined): EditTarget | string {
   const base = baseTable(columns);
   if (typeof base === 'string') return base;
-  if (!indexes) return 'Lettura della chiave primaria…';
+  if (!indexes) return t('Lettura della chiave primaria…');
   const at = (name: string) => columns.findIndex((c) => c.orgName.toLowerCase() === name.toLowerCase());
   const candidates = [...indexes.filter((i) => i.primary), ...indexes.filter((i) => i.unique && !i.primary)];
   for (const ix of candidates) {
@@ -44,7 +45,7 @@ export function editTarget(columns: Column[], indexes: IndexInfo[] | undefined):
     if (key.every((k) => k >= 0) && (ix.primary || key.every((k) => columns[k].notNull))) return { ...base, key };
   }
   const pk = indexes.find((i) => i.primary);
-  return pk ? `Sola lettura: aggiungere al risultato la chiave primaria (${pk.columns.join(', ')}).` : 'Sola lettura: la tabella non ha una chiave primaria.';
+  return pk ? t('Sola lettura: aggiungere al risultato la chiave primaria ({0}).', pk.columns.join(', ')) : t('Sola lettura: la tabella non ha una chiave primaria.');
 }
 
 /** Value shown at a row/column with pending edits applied; undefined = DEFAULT of a new row. */

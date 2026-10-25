@@ -28,7 +28,9 @@ export interface ExportRequest {
   filtered?: boolean;
 }
 
-export type VisualKind = 'er' | 'query' | 'table' | 'compare' | 'maint';
+export type VisualKind = 'er' | 'query' | 'table' | 'compare' | 'maint' | 'datagen' | 'docgen' | 'perf' | 'procs' | 'monitor' | 'users';
+/** Tools that work on a whole server: the target dialog asks only for the connection. */
+export const SERVER_KINDS = new Set<VisualKind>(['perf', 'procs', 'monitor', 'users']);
 
 interface PasswordRequest {
   conn: ConnDef;

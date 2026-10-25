@@ -8,6 +8,7 @@ import {
 import { useStore, type MetaEntry } from '../store';
 import type { Doc } from '../types';
 import { openMenu } from './ContextMenu';
+import { t as tr, locale } from '../i18n';
 
 // Styles live inside the SVG so exported files look the same as on screen.
 const ER_CSS = `
@@ -85,7 +86,7 @@ export default function ErDiagram({ doc }: { doc: Doc }) {
       useStore.getState().dropMeta(`${connId}/${db}/`);
       return true;
     } catch (err) {
-      await api.confirm('Operazione non riuscita', (err as Error).message, ['OK']);
+      await api.confirm(tr('Operazione non riuscita'), (err as Error).message, ['OK']);
       return false;
     }
   };
@@ -250,7 +251,7 @@ export default function ErDiagram({ doc }: { doc: Doc }) {
   };
 
   if (!model) {
-    return <div className="er"><div className="empty">{entry?.error ?? (connOpen ? 'Caricamento del modello…' : 'Connessione in corso…')}</div></div>;
+    return <div className="er"><div className="empty">{entry?.error ?? (connOpen ? tr('Caricamento del modello…') : tr('Connessione in corso…'))}</div></div>;
   }
 
   const focus = hover ?? sel;
@@ -258,13 +259,13 @@ export default function ErDiagram({ doc }: { doc: Doc }) {
   const colIndex = (table: string, col: string) => shown[table].findIndex((c) => c.name === col);
 
   const tableMenu = (e: React.MouseEvent, name: string, kind: 'table' | 'view') => openMenu(e, [
-    ...(kind === 'table' ? [{ label: 'Modifica tabella…', action: () => openDesigner(connId, db, name) }] : []),
-    { label: kind === 'table' ? 'Modifica dati (prime 1000 righe)' : 'Seleziona prime 1000 righe', action: () => selectTop(connId, db, name) },
-    { label: 'Mostra DDL', action: () => showDdl(connId, db, kind, name) },
+    ...(kind === 'table' ? [{ label: tr('Modifica tabella…'), action: () => openDesigner(connId, db, name) }] : []),
+    { label: kind === 'table' ? tr('Modifica dati (prime 1000 righe)') : tr('Seleziona prime 1000 righe'), action: () => selectTop(connId, db, name) },
+    { label: tr('Mostra DDL'), action: () => showDdl(connId, db, kind, name) },
     'sep',
-    { label: 'Nascondi dal diagramma', action: () => save({ ...saved, hidden: [...saved.hidden, name] }) },
+    { label: tr('Nascondi dal diagramma'), action: () => save({ ...saved, hidden: [...saved.hidden, name] }) },
     ...(kind === 'table' ? ['sep' as const, {
-      label: 'Elimina tabella…', danger: true, action: async () => {
+      label: tr('Elimina tabella…'), danger: true, action: async () => {
         if ((await api.confirm(`Eliminare la tabella ${db}.${name}?`, 'La tabella e tutti i suoi dati verranno eliminati definitivamente.', ['Elimina', 'Annulla'])) === 0) await runDdl([`DROP TABLE ${qi(db)}.${qi(name)}`]);
       },
     }] : []),
@@ -273,23 +274,23 @@ export default function ErDiagram({ doc }: { doc: Doc }) {
   return (
     <div className="er">
       <div className="er-bar">
-        <button className="primary" onClick={() => openDesigner(connId, db, null)}>+ Tabella</button>
-        <button className={linkMode ? 'active' : ''} onClick={() => setLinkMode((v) => !v)} title="Trascina da una colonna alla colonna riferita di un'altra tabella">🔗 Relazione</button>
-        <input className="search" placeholder="Trova tabella…" value={search} onChange={(e) => find(e.target.value)} />
-        <button onClick={() => zoom(1 / 1.2)} title="Riduci">−</button>
+        <button className="primary" onClick={() => openDesigner(connId, db, null)}>{tr('+ Tabella')}</button>
+        <button className={linkMode ? 'active' : ''} onClick={() => setLinkMode((v) => !v)} title={tr('Trascina da una colonna alla colonna riferita di un\'altra tabella')}>{tr('🔗 Relazione')}</button>
+        <input className="search" placeholder={tr('Trova tabella…')} value={search} onChange={(e) => find(e.target.value)} />
+        <button onClick={() => zoom(1 / 1.2)} title={tr('Riduci')}>−</button>
         <span className="zoom">{Math.round(view.k * 100)}%</span>
-        <button onClick={() => zoom(1.2)} title="Ingrandisci">+</button>
-        <button onClick={fit}>Adatta</button>
-        <button onClick={relayout} title="Disposizione automatica">Ridisponi</button>
-        <label className="check"><input type="checkbox" checked={saved.keysOnly} onChange={(e) => { save({ ...saved, keysOnly: e.target.checked, pos: {} }); requestAnimationFrame(fit); }} /> Solo chiavi</label>
-        {saved.hidden.length > 0 && <button onClick={() => save({ ...saved, hidden: [] })}>Mostra {saved.hidden.length} nascoste</button>}
+        <button onClick={() => zoom(1.2)} title={tr('Ingrandisci')}>+</button>
+        <button onClick={fit}>{tr('Adatta')}</button>
+        <button onClick={relayout} title={tr('Disposizione automatica')}>{tr('Ridisponi')}</button>
+        <label className="check"><input type="checkbox" checked={saved.keysOnly} onChange={(e) => { save({ ...saved, keysOnly: e.target.checked, pos: {} }); requestAnimationFrame(fit); }} />{' '}{tr('Solo chiavi')}</label>
+        {saved.hidden.length > 0 && <button onClick={() => save({ ...saved, hidden: [] })}>{tr('Mostra')}{' '}{saved.hidden.length}{' '}{tr('nascoste')}</button>}
         <div className="spacer" />
-        <span className="muted">{model.tables.length} tabelle · {model.fks.length} relazioni</span>
-        <button onClick={() => { useStore.getState().dropMeta(key); useStore.getState().loadMeta(key, () => api.meta.erModel(connId, db)); }}>Aggiorna</button>
-        <button onClick={savePng}>Esporta PNG</button>
-        <button onClick={saveSvg}>Esporta SVG</button>
+        <span className="muted">{model.tables.length}{' '}{tr('tabelle ·')}{' '}{model.fks.length}{' '}{tr('relazioni')}</span>
+        <button onClick={() => { useStore.getState().dropMeta(key); useStore.getState().loadMeta(key, () => api.meta.erModel(connId, db)); }}>{tr('Aggiorna')}</button>
+        <button onClick={savePng}>{tr('Esporta PNG')}</button>
+        <button onClick={saveSvg}>{tr('Esporta SVG')}</button>
       </div>
-      {linkMode && <div className="er-hint">Trascina dalla colonna della tabella figlia (es. customer_id) alla colonna riferita della tabella padre (es. id). Esc per uscire.</div>}
+      {linkMode && <div className="er-hint">{tr('Trascina dalla colonna della tabella figlia (es. customer_id) alla colonna riferita della tabella padre (es. id). Esc per uscire.')}</div>}
       <svg ref={svg} className={`er-canvas${linkMode ? ' linking' : ''}`} onMouseDown={(e) => drag(e, null)} onWheel={onWheel}>
         <style>{ER_CSS}</style>
         <g className="root" transform={`translate(${view.x} ${view.y}) scale(${view.k})`}>
@@ -324,7 +325,7 @@ export default function ErDiagram({ doc }: { doc: Doc }) {
                 onMouseDown={(e) => drag(e, t.name)} onMouseEnter={() => setHover(t.name)} onMouseLeave={() => setHover(null)}
                 onDoubleClick={() => (t.kind === 'table' ? openDesigner(connId, db, t.name) : showDdl(connId, db, 'view', t.name))}
                 onContextMenu={(e) => tableMenu(e, t.name, t.kind)}>
-                <title>{[t.name, t.comment, t.rows !== null ? `~${t.rows.toLocaleString('it-IT')} righe` : ''].filter(Boolean).join('\n')}</title>
+                <title>{[t.name, t.comment, t.rows !== null ? `~${t.rows.toLocaleString(locale())} righe` : ''].filter(Boolean).join('\n')}</title>
                 <rect className="body" width={b.w} height={b.h} rx="5" />
                 <rect className="head" width={b.w} height={HEADER} rx="5" />
                 <rect className="head" y={HEADER - 6} width={b.w} height="6" />
@@ -341,7 +342,7 @@ export default function ErDiagram({ doc }: { doc: Doc }) {
                     </g>
                   );
                 })}
-                {saved.keysOnly && cols.length < t.columns.length && <text className="more" x="30" y={HEADER + cols.length * ROW + ROW / 2 + 7}>+{t.columns.length - cols.length} colonne</text>}
+                {saved.keysOnly && cols.length < t.columns.length && <text className="more" x="30" y={HEADER + cols.length * ROW + ROW / 2 + 7}>+{t.columns.length - cols.length}{' '}{tr('colonne')}</text>}
               </g>
             );
           })}
@@ -368,18 +369,18 @@ function NewRelation({ db, model, fk, onClose, onCreate }: {
   const parent = model.tables.find((t) => t.name === fk.refTable)?.columns.find((c) => c.name === fk.refCol);
   const norm = (t?: string) => (t ?? '').toLowerCase().replace(/\(\d+\)/, '').replace(/\s+zerofill/, '');
   const warnings = [
-    norm(child?.type) !== norm(parent?.type) ? `Tipi diversi: ${fk.col} è ${child?.type}, ${fk.refCol} è ${parent?.type}. MariaDB rifiuterà la relazione se non compatibili.` : '',
-    parent && !parent.pk ? `${fk.refTable}.${fk.refCol} non è chiave primaria: serve almeno un indice su quella colonna.` : '',
+    norm(child?.type) !== norm(parent?.type) ? tr('Tipi diversi: {0} è {1}, {2} è {3}. MariaDB rifiuterà la relazione se non compatibili.', fk.col, child?.type, fk.refCol, parent?.type) : '',
+    parent && !parent.pk ? tr('{0}.{1} non è chiave primaria: serve almeno un indice su quella colonna.', fk.refTable, fk.refCol) : '',
     (onDelete === 'SET NULL' || onUpdate === 'SET NULL') && child && !child.nullable ? `SET NULL richiede che ${fk.col} ammetta NULL.` : '',
   ].filter(Boolean);
   const sql = `ALTER TABLE ${qi(db)}.${qi(fk.table)} ADD CONSTRAINT ${qi(name)} FOREIGN KEY (${qi(fk.col)}) REFERENCES ${qi(fk.refTable)} (${qi(fk.refCol)}) ON DELETE ${onDelete} ON UPDATE ${onUpdate}`;
   return (
     <div className="modal-back" onMouseDown={onClose}>
       <div className="modal small" onMouseDown={(e) => e.stopPropagation()} onKeyDown={(e) => { if (e.key === 'Escape') onClose(); }}>
-        <div className="modal-title">Nuova relazione</div>
+        <div className="modal-title">{tr('Nuova relazione')}</div>
         <div className="form">
           <p className="note"><b>{fk.table}</b>.{fk.col} → <b>{fk.refTable}</b>.{fk.refCol}</p>
-          <label>Nome<input autoFocus value={name} onChange={(e) => setName(e.target.value)} /></label>
+          <label>{tr('Nome')}<input autoFocus value={name} onChange={(e) => setName(e.target.value)} /></label>
           <div className="row">
             <label className="grow">ON DELETE<select value={onDelete} onChange={(e) => setOnDelete(e.target.value)}>{FK_RULES.map((r) => <option key={r}>{r}</option>)}</select></label>
             <label className="grow">ON UPDATE<select value={onUpdate} onChange={(e) => setOnUpdate(e.target.value)}>{FK_RULES.map((r) => <option key={r}>{r}</option>)}</select></label>
@@ -389,8 +390,8 @@ function NewRelation({ db, model, fk, onClose, onCreate }: {
         </div>
         <div className="modal-buttons">
           <div className="spacer" />
-          <button onClick={onClose}>Annulla</button>
-          <button className="primary" disabled={!name.trim()} onClick={() => onCreate(sql)}>Crea relazione</button>
+          <button onClick={onClose}>{tr('Annulla')}</button>
+          <button className="primary" disabled={!name.trim()} onClick={() => onCreate(sql)}>{tr('Crea relazione')}</button>
         </div>
       </div>
     </div>

@@ -2,17 +2,19 @@
 // streamed from the server (server.streamQuery) as well as the rows already shown in a grid.
 const fs = require('fs');
 const ExcelJS = require('exceljs');
+const { t, locale } = require('./i18n.cjs');
 
 const NUMERIC = new Set(['TINY', 'SHORT', 'LONG', 'INT', 'INT24', 'LONGLONG', 'BIGINT', 'FLOAT', 'DOUBLE', 'DECIMAL', 'NEWDECIMAL', 'YEAR']);
 const XLSX_MAX_ROWS = 1048575;
 
 const EXT = { csv: 'csv', json: 'json', sql: 'sql', xlsx: 'xlsx' };
-const FILTERS = {
+// a function: the module loads before the renderer reports the language
+const FILTERS = () => ({
   csv: [{ name: 'CSV', extensions: ['csv', 'txt'] }],
   json: [{ name: 'JSON', extensions: ['json'] }],
-  sql: [{ name: 'Script SQL', extensions: ['sql'] }],
+  sql: [{ name: t('Script SQL'), extensions: ['sql'] }],
   xlsx: [{ name: 'Excel', extensions: ['xlsx'] }],
-};
+});
 
 const qi = (s) => '`' + String(s).replace(/`/g, '``') + '`';
 
@@ -104,13 +106,13 @@ function sqlWriter(file, opts, columns) {
 function xlsxWriter(file, opts, columns) {
   const wb = new ExcelJS.stream.xlsx.WorkbookWriter({ filename: file, useStyles: true });
   // the streaming writer takes views only here: assigning ws.views later is ignored
-  const ws = wb.addWorksheet((opts.sheet || 'Dati').slice(0, 31).replace(/[\\/?*[\]:]/g, '_'), { views: [{ state: 'frozen', ySplit: 1 }] });
+  const ws = wb.addWorksheet((opts.sheet || t('Dati')).slice(0, 31).replace(/[\\/?*[\]:]/g, '_'), { views: [{ state: 'frozen', ySplit: 1 }] });
   ws.columns = columns.map((c) => ({ header: c.name, key: c.name, width: Math.min(50, Math.max(10, c.name.length + 2)) }));
   ws.getRow(1).font = { bold: true };
   let n = 0;
   return {
     async row(r) {
-      if (++n > XLSX_MAX_ROWS) throw new Error(`Excel ammette al massimo ${XLSX_MAX_ROWS.toLocaleString('it-IT')} righe: usare CSV.`);
+      if (++n > XLSX_MAX_ROWS) throw new Error(t('Excel ammette al massimo {0} righe: usare CSV.', XLSX_MAX_ROWS.toLocaleString(locale())));
       ws.addRow(r.map((v, i) => asNumber(v, columns[i]))).commit();
     },
     async end() { ws.commit(); await wb.commit(); },
@@ -121,7 +123,7 @@ const WRITERS = { csv: csvWriter, json: jsonWriter, sql: sqlWriter, xlsx: xlsxWr
 
 function writer(format, file, opts, columns) {
   const make = WRITERS[format];
-  if (!make) throw new Error(`Formato non supportato: ${format}`);
+  if (!make) throw new Error(t('Formato non supportato: {0}', format));
   return make(file, opts, columns);
 }
 

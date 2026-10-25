@@ -2,9 +2,10 @@ import { useEffect, useMemo, useState } from 'react';
 import { api } from '../api';
 import { useStore } from '../store';
 import type { Doc, MaintOp, MaintResult, TableStat } from '../types';
+import { t as tr, locale } from '../i18n';
 
-const REPAIRABLE = new Set(['MyISAM', 'Aria', 'ARCHIVE', 'CSV']);
-const OP_LABEL: Record<MaintOp, string> = { analyze: 'Analizza', optimize: 'Ottimizza', check: 'Controlla', repair: 'Ripara', checksum: 'Checksum' };
+const REPAIRABLE = new Set(['MyISAM', tr('Aria'), 'ARCHIVE', 'CSV']);
+const OP_LABEL: Record<MaintOp, string> = { analyze: tr('Analizza'), optimize: tr('Ottimizza'), check: tr('Controlla'), repair: tr('Ripara'), checksum: 'Checksum' };
 
 export function bytes(n: number | null) {
   if (n === null) return '';
@@ -13,7 +14,7 @@ export function bytes(n: number | null) {
   let v = n / 1024;
   let i = 0;
   while (v >= 1024 && i < u.length - 1) { v /= 1024; i++; }
-  return `${v.toLocaleString('it-IT', { maximumFractionDigits: v < 10 ? 1 : 0 })} ${u[i]}`;
+  return `${v.toLocaleString(locale(), { maximumFractionDigits: v < 10 ? 1 : 0 })} ${u[i]}`;
 }
 const total = (t: TableStat) => (t.data ?? 0) + (t.idx ?? 0);
 /** Share of the table's space that is allocated but free (reclaimable with OPTIMIZE). */
@@ -21,7 +22,7 @@ export const fragmentation = (t: TableStat) => {
   const all = total(t) + (t.free ?? 0);
   return all && t.free ? (t.free / all) * 100 : 0;
 };
-const day = (iso: string | null) => (iso ? new Date(iso).toLocaleString('it-IT', { dateStyle: 'short', timeStyle: 'short' }) : '');
+const day = (iso: string | null) => (iso ? new Date(iso).toLocaleString(locale(), { dateStyle: 'short', timeStyle: 'short' }) : '');
 
 type SortKey = 'name' | 'engine' | 'rows' | 'data' | 'idx' | 'total' | 'free' | 'frag' | 'updated';
 const KEY: Record<SortKey, (t: TableStat) => number | string> = {
@@ -78,7 +79,7 @@ export default function Maint({ doc }: { doc: Doc }) {
     const tables = picked.map((t) => t.name);
     if (!tables.length) return;
     const size = bytes(picked.reduce((n, t) => n + total(t), 0));
-    const what = tables.length === 1 ? `la tabella ${tables[0]}` : `${tables.length} tabelle`;
+    const what = tables.length === 1 ? tr('la tabella {0}', tables[0]) : tr('{0} tabelle', tables.length);
     if (op === 'optimize' && (await api.confirm(`Ottimizzare ${what} (${size})?`,
       'OPTIMIZE ricostruisce ogni tabella per recuperare lo spazio libero e riordinare dati e indici. Su InnoDB equivale ad ALTER TABLE … FORCE: '
       + 'richiede spazio su disco pari alla tabella e su tabelle grandi può durare a lungo. Le tabelle vengono elaborate una alla volta.', ['Ottimizza', 'Annulla'])) !== 0) return;
@@ -90,7 +91,7 @@ export default function Maint({ doc }: { doc: Doc }) {
     try {
       const r = await api.maint.run(id, connId, db, tables, op, { option, local });
       setResults(r.results);
-      if (r.stopped) setError(`Interrotto: elaborate ${new Set(r.results.map((x) => x.table)).size} tabelle su ${tables.length}.`);
+      if (r.stopped) setError(tr('Interrotto: elaborate {0} tabelle su {1}.', new Set(r.results.map((x) => x.table)).size, tables.length));
     } catch (err) { setError((err as Error).message); }
     setRunning(null);
     load();
@@ -103,39 +104,39 @@ export default function Maint({ doc }: { doc: Doc }) {
     <div className="monitor maint">
       <div className="er-bar">
         <b>{db}</b>
-        <span className="muted">{stats ? `${stats.length} tabelle · dati ${bytes(sums.data)} · indici ${bytes(sums.idx)} · libero ${bytes(sums.free)}` : 'Caricamento…'}</span>
+        <span className="muted">{stats ? tr('{0} tabelle · dati {1} · indici {2} · libero {3}', stats.length, bytes(sums.data), bytes(sums.idx), bytes(sums.free)) : tr('Caricamento…')}</span>
         <div className="spacer" />
-        <input className="search" placeholder="Filtra tabelle…" value={filter} onChange={(e) => setFilter(e.target.value)} />
-        <button onClick={load} disabled={!!running}>Aggiorna</button>
+        <input className="search" placeholder={tr('Filtra tabelle…')} value={filter} onChange={(e) => setFilter(e.target.value)} />
+        <button onClick={load} disabled={!!running}>{tr('Aggiorna')}</button>
       </div>
       <div className="maint-actions">
         <span className="muted">{picked.length === 1 ? '1 selezionata' : `${picked.length} selezionate`}</span>
-        <button disabled={!picked.length || !!running} onClick={() => run('analyze')} title="ANALYZE TABLE: aggiorna le statistiche degli indici usate dall'ottimizzatore">Analizza</button>
-        {mariadb && <label className="check" title="ANALYZE TABLE … PERSISTENT FOR ALL: raccoglie anche gli istogrammi delle colonne (statistiche indipendenti dall'engine); più lento"><input type="checkbox" checked={persistent} onChange={(e) => setPersistent(e.target.checked)} /> con istogrammi</label>}
+        <button disabled={!picked.length || !!running} onClick={() => run('analyze')} title={tr('ANALYZE TABLE: aggiorna le statistiche degli indici usate dall\'ottimizzatore')}>{tr('Analizza')}</button>
+        {mariadb && <label className="check" title={tr('ANALYZE TABLE … PERSISTENT FOR ALL: raccoglie anche gli istogrammi delle colonne (statistiche indipendenti dall\'engine); più lento')}><input type="checkbox" checked={persistent} onChange={(e) => setPersistent(e.target.checked)} />{' '}{tr('con istogrammi')}</label>}
         <span className="sep" />
-        <button disabled={!picked.length || !!running} onClick={() => run('optimize')} title="OPTIMIZE TABLE: ricostruisce la tabella, recupera lo spazio libero">Ottimizza…</button>
+        <button disabled={!picked.length || !!running} onClick={() => run('optimize')} title={tr('OPTIMIZE TABLE: ricostruisce la tabella, recupera lo spazio libero')}>{tr('Ottimizza…')}</button>
         <span className="sep" />
-        <button disabled={!picked.length || !!running} onClick={() => run('check')} title="CHECK TABLE: verifica la tabella e gli indici">Controlla</button>
-        <select value={checkOption} onChange={(e) => setCheckOption(e.target.value)} title="Profondità del controllo">
-          <option value="">standard</option>
-          <option value="QUICK">QUICK (senza leggere le righe)</option>
-          <option value="FAST">FAST (solo se non chiuse correttamente)</option>
+        <button disabled={!picked.length || !!running} onClick={() => run('check')} title={tr('CHECK TABLE: verifica la tabella e gli indici')}>{tr('Controlla')}</button>
+        <select value={checkOption} onChange={(e) => setCheckOption(e.target.value)} title={tr('Profondità del controllo')}>
+          <option value="">{tr('standard')}</option>
+          <option value="QUICK">{tr('QUICK (senza leggere le righe)')}</option>
+          <option value="FAST">{tr('FAST (solo se non chiuse correttamente)')}</option>
           <option value="MEDIUM">MEDIUM</option>
-          <option value="EXTENDED">EXTENDED (completo, lento)</option>
-          <option value="CHANGED">CHANGED (modificate dall'ultimo controllo)</option>
-          <option value="FOR UPGRADE">FOR UPGRADE (compatibilità di versione)</option>
+          <option value="EXTENDED">{tr('EXTENDED (completo, lento)')}</option>
+          <option value="CHANGED">{tr('CHANGED (modificate dall\'ultimo controllo)')}</option>
+          <option value="FOR UPGRADE">{tr('FOR UPGRADE (compatibilità di versione)')}</option>
         </select>
         <span className="sep" />
-        <button disabled={!repairable || !!running} onClick={() => run('repair')} title={repairable ? 'REPAIR TABLE' : 'REPAIR TABLE vale solo per MyISAM, Aria, ARCHIVE e CSV: per InnoDB usa Ottimizza o un ripristino da backup'}>Ripara…</button>
-        <button disabled={!picked.length || !!running} onClick={() => run('checksum')} title="CHECKSUM TABLE: impronta dei dati, per confrontare la stessa tabella su due server">Checksum</button>
+        <button disabled={!repairable || !!running} onClick={() => run('repair')} title={repairable ? 'REPAIR TABLE' : tr('REPAIR TABLE vale solo per MyISAM, Aria, ARCHIVE e CSV: per InnoDB usa Ottimizza o un ripristino da backup')}>{tr('Ripara…')}</button>
+        <button disabled={!picked.length || !!running} onClick={() => run('checksum')} title={tr('CHECKSUM TABLE: impronta dei dati, per confrontare la stessa tabella su due server')}>{tr('Checksum')}</button>
         <div className="spacer" />
-        <label className="check" title="NO_WRITE_TO_BINLOG: ANALYZE, OPTIMIZE e REPAIR non vengono replicati sulle repliche"><input type="checkbox" checked={local} onChange={(e) => setLocal(e.target.checked)} /> Non replicare (binlog)</label>
+        <label className="check" title={tr('NO_WRITE_TO_BINLOG: ANALYZE, OPTIMIZE e REPAIR non vengono replicati sulle repliche')}><input type="checkbox" checked={local} onChange={(e) => setLocal(e.target.checked)} />{' '}{tr('Non replicare (binlog)')}</label>
       </div>
       {running && (
         <div className="maint-progress">
-          <span>{OP_LABEL[running.op]}: {running.table ?? 'completato'} ({running.done + (running.table ? 1 : 0)} di {running.total})</span>
+          <span>{OP_LABEL[running.op]}: {running.table ?? 'completato'} ({running.done + (running.table ? 1 : 0)}{' '}{tr('di')}{' '}{running.total})</span>
           <div className="progress"><div style={{ width: `${(running.done / Math.max(1, running.total)) * 100}%` }} /></div>
-          <button onClick={() => api.maint.stop(running.id)} title="Si ferma dopo la tabella in corso">Interrompi</button>
+          <button onClick={() => api.maint.stop(running.id)} title={tr('Si ferma dopo la tabella in corso')}>{tr('Interrompi')}</button>
         </div>
       )}
       {error && <div className="status error cmp-error">{error}</div>}
@@ -144,10 +145,10 @@ export default function Maint({ doc }: { doc: Doc }) {
           <table className="dtable maint-table">
             <thead>
               <tr>
-                <th className="c"><input type="checkbox" checked={allShown} title="Seleziona tutte le tabelle mostrate" onChange={(e) => setSel((s) => { const n = new Set(s); for (const t of shown) if (e.target.checked) n.add(t.name); else n.delete(t.name); return n; })} /></th>
-                {header('name', 'Tabella')}{header('engine', 'Engine')}{header('rows', 'Righe (stima)', true)}{header('data', 'Dati', true)}{header('idx', 'Indici', true)}
-                {header('total', 'Totale', true)}{header('free', 'Libero', true)}{header('frag', 'Frammentazione', true)}{header('updated', 'Ultima modifica')}
-                <th>Ultimo controllo</th>
+                <th className="c"><input type="checkbox" checked={allShown} title={tr('Seleziona tutte le tabelle mostrate')} onChange={(e) => setSel((s) => { const n = new Set(s); for (const t of shown) if (e.target.checked) n.add(t.name); else n.delete(t.name); return n; })} /></th>
+                {header('name', tr('Tabella'))}{header('engine', 'Engine')}{header('rows', tr('Righe (stima)'), true)}{header('data', tr('Dati'), true)}{header('idx', tr('Indici'), true)}
+                {header('total', tr('Totale'), true)}{header('free', tr('Libero'), true)}{header('frag', tr('Frammentazione'), true)}{header('updated', tr('Ultima modifica'))}
+                <th>{tr('Ultimo controllo')}</th>
               </tr>
             </thead>
             <tbody>
@@ -159,12 +160,12 @@ export default function Maint({ doc }: { doc: Doc }) {
                     <td className="c"><input type="checkbox" checked={sel.has(t.name)} onChange={(e) => toggle(t.name, e.target.checked)} /></td>
                     <td title={t.comment || undefined}>{t.name}</td>
                     <td>{t.engine ?? ''}{t.rowFormat ? <span className="muted"> {t.rowFormat}</span> : null}</td>
-                    <td className="num">{t.rows?.toLocaleString('it-IT') ?? ''}</td>
+                    <td className="num">{t.rows?.toLocaleString(locale()) ?? ''}</td>
                     <td className="num">{bytes(t.data)}</td>
                     <td className="num">{bytes(t.idx)}</td>
                     <td className="num"><b>{bytes(total(t))}</b></td>
                     <td className="num">{bytes(t.free)}</td>
-                    <td className={`num${heavy ? ' warn' : ''}`} title={heavy ? 'Molto spazio inutilizzato: Ottimizza lo recupera' : undefined}>{frag ? `${frag.toLocaleString('it-IT', { maximumFractionDigits: 1 })} %` : ''}</td>
+                    <td className={`num${heavy ? ' warn' : ''}`} title={heavy ? tr('Molto spazio inutilizzato: Ottimizza lo recupera') : undefined}>{frag ? `${frag.toLocaleString(locale(), { maximumFractionDigits: 1 })} %` : ''}</td>
                     <td>{day(t.updated)}</td>
                     <td>{day(t.checked)}</td>
                   </tr>
@@ -172,27 +173,27 @@ export default function Maint({ doc }: { doc: Doc }) {
               })}
             </tbody>
           </table>
-          {stats && !shown.length && <div className="empty">{stats.length ? 'Nessuna tabella corrisponde al filtro.' : 'Il database non ha tabelle.'}</div>}
+          {stats && !shown.length && <div className="empty">{stats.length ? tr('Nessuna tabella corrisponde al filtro.') : tr('Il database non ha tabelle.')}</div>}
         </div>
         {results.length > 0 && (
           <div className="procs maint-results">
             <div className="procs-bar">
-              <b>Risultati</b>
-              <span className="muted">{new Set(results.map((r) => r.table)).size} tabelle · {problems ? `${problems} da verificare` : 'nessun problema'}</span>
+              <b>{tr('Risultati')}</b>
+              <span className="muted">{new Set(results.map((r) => r.table)).size}{' '}{tr('tabelle ·')}{' '}{problems ? tr('{0} da verificare', problems) : tr('nessun problema')}</span>
               <div className="spacer" />
-              <button onClick={() => setResults([])}>Chiudi</button>
+              <button onClick={() => setResults([])}>{tr('Chiudi')}</button>
             </div>
             <div className="procs-table">
               <table className="dtable">
-                <thead><tr><th>Tabella</th><th>Operazione</th><th>Tipo</th><th>Messaggio</th><th className="num">Tempo</th></tr></thead>
+                <thead><tr><th>{tr('Tabella')}</th><th>{tr('Operazione')}</th><th>{tr('Tipo')}</th><th>{tr('Messaggio')}</th><th className="num">{tr('Tempo')}</th></tr></thead>
                 <tbody>
                   {results.map((r, i) => (
                     <tr key={i}>
                       <td>{r.table}</td>
                       <td>{r.op}</td>
                       <td className={r.type === 'error' ? 'err' : r.type === 'warning' ? 'warn' : ''}>{r.type}</td>
-                      <td className="q" title={r.text}>{r.text}{/doing recreate \+ analyze/i.test(r.text) ? <span className="muted"> — normale per InnoDB: la tabella viene ricostruita e poi analizzata</span> : null}</td>
-                      <td className="num">{r.ms.toLocaleString('it-IT')} ms</td>
+                      <td className="q" title={r.text}>{r.text}{/doing recreate \+ analyze/i.test(r.text) ? <span className="muted">{' '}{tr('— normale per InnoDB: la tabella viene ricostruita e poi analizzata')}</span> : null}</td>
+                      <td className="num">{r.ms.toLocaleString(locale())} ms</td>
                     </tr>
                   ))}
                 </tbody>

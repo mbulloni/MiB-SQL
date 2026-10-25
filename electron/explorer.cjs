@@ -1,5 +1,6 @@
 // Database Explorer and completion metadata, read from information_schema on the connection's pool.
 const server = require('./server.cjs');
+const { t } = require('./i18n.cjs');
 
 const qi = (s) => '`' + String(s).replace(/`/g, '``') + '`';
 
@@ -79,7 +80,7 @@ async function ddl(connId, db, kind, name) {
   const [word, col] = DDL[kind];
   const rows = await server.meta(connId, `SHOW CREATE ${word} ${qi(db)}.${qi(name)}`);
   const text = Object.values(rows[0])[col];
-  if (text === null || text === undefined) throw new Error('Definizione non disponibile: privilegi insufficienti.');
+  if (text === null || text === undefined) throw new Error(t('Definizione non disponibile: privilegi insufficienti.'));
   return ['procedure', 'function', 'trigger', 'event'].includes(kind) ? `DELIMITER $$\n${text}$$\nDELIMITER ;\n` : `${text};\n`;
 }
 
@@ -210,7 +211,7 @@ async function tableDefinition(connId, db, table) {
   const all = await tableDefinitions(connId, db, table);
   if (!all.has(table)) {
     const [t] = await server.meta(connId, 'SELECT TABLE_TYPE AS type FROM information_schema.TABLES WHERE TABLE_SCHEMA = ? AND TABLE_NAME = ?', [db, table]);
-    throw new Error(t?.type === 'VIEW' ? `${table} è una vista: il designer modifica solo tabelle.` : `Tabella ${db}.${table} non trovata.`);
+    throw new Error(t?.type === 'VIEW' ? t('{0} è una vista: il designer modifica solo tabelle.', table) : t('Tabella {0}.{1} non trovata.', db, table));
   }
   return all.get(table);
 }

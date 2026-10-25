@@ -4,8 +4,9 @@ import { historyEnabled, newDoc, runDoc, setHistoryEnabled } from '../actions';
 import { monaco } from '../editor';
 import { useStore } from '../store';
 import type { Doc, HistoryEntry } from '../types';
+import { t, locale } from '../i18n';
 
-const when = (iso: string) => new Date(iso).toLocaleString('it-IT', { day: '2-digit', month: '2-digit', year: '2-digit', hour: '2-digit', minute: '2-digit', second: '2-digit' });
+const when = (iso: string) => new Date(iso).toLocaleString(locale(), { day: '2-digit', month: '2-digit', year: '2-digit', hour: '2-digit', minute: '2-digit', second: '2-digit' });
 const oneLine = (sql: string) => sql.replace(/\s+/g, ' ').trim();
 
 function Sql({ text }: { text: string }) {
@@ -43,7 +44,7 @@ export default function History({ doc: _doc }: { doc: Doc }) {
     load();
   };
   const clear = async () => {
-    if ((await api.confirm('Svuotare la cronologia?', `Verranno eliminate tutte le ${data?.all.toLocaleString('it-IT') ?? ''} istruzioni registrate, di tutte le connessioni.`, ['Svuota', 'Annulla'])) !== 0) return;
+    if ((await api.confirm('Svuotare la cronologia?', `Verranno eliminate tutte le ${data?.all.toLocaleString(locale()) ?? ''} istruzioni registrate, di tutte le connessioni.`, ['Svuota', 'Annulla'])) !== 0) return;
     await api.history.clear();
     setSel(null);
     load();
@@ -52,35 +53,35 @@ export default function History({ doc: _doc }: { doc: Doc }) {
   return (
     <div className="monitor history">
       <div className="er-bar">
-        <input className="search" autoFocus placeholder="Cerca nel testo SQL, connessione, database…" value={q} onChange={(e) => setQ(e.target.value)} />
-        <select value={connId} onChange={(e) => setConnId(e.target.value)} title="Connessione">
-          <option value="">Tutte le connessioni</option>
+        <input className="search" autoFocus placeholder={t('Cerca nel testo SQL, connessione, database…')} value={q} onChange={(e) => setQ(e.target.value)} />
+        <select value={connId} onChange={(e) => setConnId(e.target.value)} title={t('Connessione')}>
+          <option value="">{t('Tutte le connessioni')}</option>
           {conns.map((c) => <option key={c.id} value={c.id}>{c.name}</option>)}
         </select>
-        <select value={status} onChange={(e) => setStatus(e.target.value as typeof status)} title="Esito">
-          <option value="all">Tutti gli esiti</option>
-          <option value="ok">Riuscite</option>
-          <option value="error">Con errore</option>
+        <select value={status} onChange={(e) => setStatus(e.target.value as typeof status)} title={t('Esito')}>
+          <option value="all">{t('Tutti gli esiti')}</option>
+          <option value="ok">{t('Riuscite')}</option>
+          <option value="error">{t('Con errore')}</option>
         </select>
-        <span className="muted">{data ? `${data.total.toLocaleString('it-IT')} di ${data.all.toLocaleString('it-IT')}` : ''}{data && data.total > data.entries.length ? ` (mostrate le ultime ${data.entries.length})` : ''}</span>
+        <span className="muted">{data ? `${data.total.toLocaleString(locale())} di ${data.all.toLocaleString(locale())}` : ''}{data && data.total > data.entries.length ? t(' (mostrate le ultime {0})', data.entries.length) : ''}</span>
         <div className="spacer" />
-        <label className="check" title="Registra le istruzioni eseguite dagli editor SQL (le password di CREATE/ALTER USER sono mascherate)">
-          <input type="checkbox" checked={enabled} onChange={(e) => { setHistoryEnabled(e.target.checked); setEnabled(e.target.checked); }} /> Registra
+        <label className="check" title={t('Registra le istruzioni eseguite dagli editor SQL (le password di CREATE/ALTER USER sono mascherate)')}>
+          <input type="checkbox" checked={enabled} onChange={(e) => { setHistoryEnabled(e.target.checked); setEnabled(e.target.checked); }} />{' '}{t('Registra')}
         </label>
-        <button className="danger" disabled={!data?.all} onClick={clear}>Svuota…</button>
+        <button className="danger" disabled={!data?.all} onClick={clear}>{t('Svuota…')}</button>
       </div>
       {error && <div className="status error cmp-error">{error}</div>}
-      {!enabled && <div className="status cmp-error">La registrazione è disattivata: le nuove esecuzioni non vengono salvate.</div>}
+      {!enabled && <div className="status cmp-error">{t('La registrazione è disattivata: le nuove esecuzioni non vengono salvate.')}</div>}
       <div className="hist-body">
         <div className="procs-table hist-list">
           <table className="dtable">
-            <thead><tr><th>Quando</th><th>Durata</th><th>Risultato</th><th>Connessione</th><th>Database</th><th>SQL</th></tr></thead>
+            <thead><tr><th>{t('Quando')}</th><th>{t('Durata')}</th><th>{t('Risultato')}</th><th>{t('Connessione')}</th><th>{t('Database')}</th><th>SQL</th></tr></thead>
             <tbody>
               {data?.entries.map((e) => (
-                <tr key={e.id} className={sel === e.id ? 'sel' : ''} onMouseDown={() => setSel(e.id)} onDoubleClick={() => open(e, false)} title="Doppio clic: apri in un nuovo documento SQL">
+                <tr key={e.id} className={sel === e.id ? 'sel' : ''} onMouseDown={() => setSel(e.id)} onDoubleClick={() => open(e, false)} title={t('Doppio clic: apri in un nuovo documento SQL')}>
                   <td>{when(e.at)}</td>
-                  <td className="num">{e.ms !== null ? `${e.ms.toLocaleString('it-IT')} ms` : ''}</td>
-                  <td className={e.error ? 'err' : ''}>{e.error ? 'Errore' : e.rows !== null ? `${e.rows.toLocaleString('it-IT')} righe` : e.affected !== null ? `${e.affected.toLocaleString('it-IT')} modificate` : 'OK'}</td>
+                  <td className="num">{e.ms !== null ? `${e.ms.toLocaleString(locale())} ms` : ''}</td>
+                  <td className={e.error ? 'err' : ''}>{e.error ? t('Errore') : e.rows !== null ? t('{0} righe', e.rows.toLocaleString(locale())) : e.affected !== null ? `${e.affected.toLocaleString(locale())} modificate` : 'OK'}</td>
                   <td>{e.conn}</td>
                   <td>{e.db ?? ''}</td>
                   <td className="q">{oneLine(e.sql).slice(0, 240)}</td>
@@ -88,7 +89,7 @@ export default function History({ doc: _doc }: { doc: Doc }) {
               ))}
             </tbody>
           </table>
-          {data && !data.entries.length && <div className="empty">{data.all ? 'Nessuna istruzione corrisponde ai filtri.' : 'La cronologia è vuota: le istruzioni eseguite negli editor SQL compariranno qui.'}</div>}
+          {data && !data.entries.length && <div className="empty">{data.all ? t('Nessuna istruzione corrisponde ai filtri.') : t('La cronologia è vuota: le istruzioni eseguite negli editor SQL compariranno qui.')}</div>}
         </div>
         <div className="hist-detail">
           {picked ? <>
@@ -96,15 +97,15 @@ export default function History({ doc: _doc }: { doc: Doc }) {
               <b>{when(picked.at)}</b>
               <span className="muted">{picked.conn}{picked.db ? ` / ${picked.db}` : ''}</span>
               <div className="spacer" />
-              <button onClick={() => open(picked, false)}>Apri in un nuovo SQL</button>
-              <button onClick={() => open(picked, true)}>Esegui di nuovo</button>
-              <button onClick={() => navigator.clipboard.writeText(picked.sql)}>Copia</button>
-              <button className="danger" onClick={remove}>Elimina voce</button>
+              <button onClick={() => open(picked, false)}>{t('Apri in un nuovo SQL')}</button>
+              <button onClick={() => open(picked, true)}>{t('Esegui di nuovo')}</button>
+              <button onClick={() => navigator.clipboard.writeText(picked.sql)}>{t('Copia')}</button>
+              <button className="danger" onClick={remove}>{t('Elimina voce')}</button>
             </div>
             {picked.error && <div className="status error hist-error">{picked.error}</div>}
-            {picked.truncated && <div className="status hist-error">Testo troncato a 64 KB nella cronologia.</div>}
+            {picked.truncated && <div className="status hist-error">{t('Testo troncato a 64 KB nella cronologia.')}</div>}
             <Sql text={picked.sql} />
-          </> : <div className="empty">Seleziona un'istruzione per vederne il testo completo.</div>}
+          </> : <div className="empty">{t('Seleziona un\'istruzione per vederne il testo completo.')}</div>}
         </div>
       </div>
     </div>

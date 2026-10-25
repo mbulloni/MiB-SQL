@@ -4,10 +4,11 @@ import { newDoc } from '../actions';
 import { duration, metrics, niceMax, type Metrics, type Snapshot } from '../monitor';
 import { useStore } from '../store';
 import type { Doc } from '../types';
+import { t, locale } from '../i18n';
 
 const HISTORY = 90;
-const fmt = (v: number, digits = 1) => v.toLocaleString('it-IT', { maximumFractionDigits: digits, minimumFractionDigits: 0 });
-const clock = (t: number) => new Date(t).toLocaleTimeString('it-IT');
+const fmt = (v: number, digits = 1) => v.toLocaleString(locale(), { maximumFractionDigits: digits, minimumFractionDigits: 0 });
+const clock = (t: number) => new Date(t).toLocaleTimeString(locale());
 
 /** One series over time: area + 2px line, y from zero, crosshair tooltip on hover; the title names the series. */
 function TrendChart({ title, unit, points, digits = 1, max }: { title: string; unit: string; points: { t: number; v: number | null }[]; digits?: number; max?: number }) {
@@ -64,7 +65,7 @@ function TrendChart({ title, unit, points, digits = 1, max }: { title: string; u
         </>}
       </svg>
       {h && <div className="tip" style={{ left: Math.min(w - 120, Math.max(0, x(offset + hover!) - 60)) }}>{clock(h.t)} · <b>{h.v === null ? '—' : `${fmt(h.v, digits)} ${unit}`}</b></div>}
-      {!values.length && <div className="trend-empty">In attesa di dati…</div>}
+      {!values.length && <div className="trend-empty">{t('In attesa di dati…')}</div>}
     </div>
   );
 }
@@ -113,7 +114,7 @@ export default function Monitor({ doc }: { doc: Doc }) {
 
   const killIt = async (queryOnly: boolean) => {
     if (!picked) return;
-    const what = queryOnly ? `la query del thread ${picked.id}` : `la connessione ${picked.id} (${picked.user}@${picked.host})`;
+    const what = queryOnly ? t('la query del thread {0}', picked.id) : t('la connessione {0} ({1}@{2})', picked.id, picked.user, picked.host);
     if ((await api.confirm(`Terminare ${what}?`, picked.info ? picked.info.slice(0, 300) : '', ['Termina', 'Annulla'])) !== 0) return;
     try { await api.monitor.kill(connId, picked.id, queryOnly); } catch (err) { setError((err as Error).message); }
   };
@@ -127,44 +128,44 @@ export default function Monitor({ doc }: { doc: Doc }) {
       <div className="er-bar">
         <span className="muted">{conn?.name} · {snap?.variables.version ?? ''}</span>
         <div className="spacer" />
-        <label className="check"><input type="checkbox" checked={hideSleep} onChange={(e) => setHideSleep(e.target.checked)} /> Nascondi inattive</label>
-        <input className="search" placeholder="Filtra processi…" value={filter} onChange={(e) => setFilter(e.target.value)} />
-        <select value={interval} onChange={(e) => setIntervalMs(Number(e.target.value))} title="Aggiornamento">
-          {[1000, 2000, 5000, 10000].map((v) => <option key={v} value={v}>ogni {v / 1000} s</option>)}
+        <label className="check"><input type="checkbox" checked={hideSleep} onChange={(e) => setHideSleep(e.target.checked)} />{' '}{t('Nascondi inattive')}</label>
+        <input className="search" placeholder={t('Filtra processi…')} value={filter} onChange={(e) => setFilter(e.target.value)} />
+        <select value={interval} onChange={(e) => setIntervalMs(Number(e.target.value))} title={t('Aggiornamento')}>
+          {[1000, 2000, 5000, 10000].map((v) => <option key={v} value={v}>{t('ogni')}{' '}{v / 1000} s</option>)}
         </select>
-        <button className={paused ? 'active' : ''} onClick={() => setPaused((p) => !p)}>{paused ? '▶ Riprendi' : '❚❚ Pausa'}</button>
+        <button className={paused ? 'active' : ''} onClick={() => setPaused((p) => !p)}>{paused ? t('▶ Riprendi') : t('❚❚ Pausa')}</button>
       </div>
       {error && <div className="status error cmp-error">{error}</div>}
       <div className="mon-body">
         <div className="tiles">
-          <div className="tile"><span>Attivo da</span><b>{st.Uptime ? duration(st.Uptime) : '—'}</b></div>
-          <div className="tile"><span>Connessioni</span><b>{st.Threads_connected ?? '—'}{maxConn ? <small> / {maxConn}</small> : null}</b></div>
-          <div className="tile"><span>Picco connessioni</span><b>{st.Max_used_connections ?? '—'}</b></div>
-          <div className="tile"><span>Query lente (totale)</span><b>{st.Slow_queries !== undefined ? fmt(st.Slow_queries, 0) : '—'}</b></div>
-          <div className="tile"><span>Tabelle temporanee su disco</span><b>{st.Created_tmp_disk_tables !== undefined ? fmt(st.Created_tmp_disk_tables, 0) : '—'}</b></div>
+          <div className="tile"><span>{t('Attivo da')}</span><b>{st.Uptime ? duration(st.Uptime) : '—'}</b></div>
+          <div className="tile"><span>{t('Connessioni')}</span><b>{st.Threads_connected ?? '—'}{maxConn ? <small> / {maxConn}</small> : null}</b></div>
+          <div className="tile"><span>{t('Picco connessioni')}</span><b>{st.Max_used_connections ?? '—'}</b></div>
+          <div className="tile"><span>{t('Query lente (totale)')}</span><b>{st.Slow_queries !== undefined ? fmt(st.Slow_queries, 0) : '—'}</b></div>
+          <div className="tile"><span>{t('Tabelle temporanee su disco')}</span><b>{st.Created_tmp_disk_tables !== undefined ? fmt(st.Created_tmp_disk_tables, 0) : '—'}</b></div>
         </div>
         <div className="charts">
-          <TrendChart title="Query al secondo" unit="q/s" points={series('qps')} />
-          <TrendChart title="Thread in esecuzione" unit="" points={series('threadsRunning')} digits={0} />
-          <TrendChart title="Connessioni aperte" unit="" points={series('threadsConnected')} digits={0} />
-          <TrendChart title="Scritture al secondo" unit="op/s" points={series('writesPerSec')} />
-          <TrendChart title="Rete in entrata" unit="KB/s" points={series('inKBs')} />
-          <TrendChart title="Rete in uscita" unit="KB/s" points={series('outKBs')} />
-          <TrendChart title="Hit ratio buffer pool" unit="%" points={series('hitRatio')} max={100} />
-          <TrendChart title="Query lente al minuto" unit="/min" points={series('slowPerMin')} />
+          <TrendChart title={t('Query al secondo')} unit="q/s" points={series('qps')} />
+          <TrendChart title={t('Thread in esecuzione')} unit="" points={series('threadsRunning')} digits={0} />
+          <TrendChart title={t('Connessioni aperte')} unit="" points={series('threadsConnected')} digits={0} />
+          <TrendChart title={t('Scritture al secondo')} unit="op/s" points={series('writesPerSec')} />
+          <TrendChart title={t('Rete in entrata')} unit="KB/s" points={series('inKBs')} />
+          <TrendChart title={t('Rete in uscita')} unit="KB/s" points={series('outKBs')} />
+          <TrendChart title={t('Hit ratio buffer pool')} unit="%" points={series('hitRatio')} max={100} />
+          <TrendChart title={t('Query lente al minuto')} unit="/min" points={series('slowPerMin')} />
         </div>
         <div className="procs">
           <div className="procs-bar">
-            <b>Processi</b><span className="muted">{procs.length} di {snap?.processes.length ?? 0}</span>
+            <b>{t('Processi')}</b><span className="muted">{procs.length}{' '}{t('di')}{' '}{snap?.processes.length ?? 0}</span>
             <div className="spacer" />
-            <button disabled={!picked?.info} onClick={() => picked && useStore.getState().set({ viewer: { title: `Thread ${picked.id}`, value: picked.info ?? '' } })}>Mostra query</button>
-            <button disabled={!picked?.info} onClick={() => picked && newDoc({ connId, db: picked.db, sql: `${picked.info};\n` })}>Apri nell'editor</button>
-            <button disabled={!picked || picked.command === 'Sleep'} onClick={() => killIt(true)}>Termina query</button>
-            <button className="danger" disabled={!picked} onClick={() => killIt(false)}>Termina connessione</button>
+            <button disabled={!picked?.info} onClick={() => picked && useStore.getState().set({ viewer: { title: `Thread ${picked.id}`, value: picked.info ?? '' } })}>{t('Mostra query')}</button>
+            <button disabled={!picked?.info} onClick={() => picked && newDoc({ connId, db: picked.db, sql: `${picked.info};\n` })}>{t('Apri nell\'editor')}</button>
+            <button disabled={!picked || picked.command === 'Sleep'} onClick={() => killIt(true)}>{t('Termina query')}</button>
+            <button className="danger" disabled={!picked} onClick={() => killIt(false)}>{t('Termina connessione')}</button>
           </div>
           <div className="procs-table">
             <table className="dtable">
-              <thead><tr><th>ID</th><th>Utente</th><th>Host</th><th>DB</th><th>Comando</th><th>Tempo</th><th>Stato</th><th>Query</th></tr></thead>
+              <thead><tr><th>ID</th><th>{t('Utente')}</th><th>{t('Host')}</th><th>DB</th><th>{t('Comando')}</th><th>{t('Tempo')}</th><th>{t('Stato')}</th><th>{t('Query')}</th></tr></thead>
               <tbody>
                 {procs.map((p) => (
                   <tr key={p.id} className={sel === p.id ? 'sel' : ''} onMouseDown={() => setSel(p.id)}
@@ -177,7 +178,7 @@ export default function Monitor({ doc }: { doc: Doc }) {
                 ))}
               </tbody>
             </table>
-            {!procs.length && <div className="empty">Nessun processo con i filtri scelti.</div>}
+            {!procs.length && <div className="empty">{t('Nessun processo con i filtri scelti.')}</div>}
           </div>
         </div>
       </div>

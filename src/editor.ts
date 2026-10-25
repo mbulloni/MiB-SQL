@@ -6,6 +6,7 @@ import { api } from './api';
 import { DEFAULT_FORMAT, formatSql, type FormatOptions } from './format';
 import { loadDatabases, loadSchema, useStore } from './store';
 import type { Schema, Snippet, StmtResult } from './types';
+import { t } from './i18n.ts';
 
 self.MonacoEnvironment = { getWorker: () => new EditorWorker() };
 

@@ -7,6 +7,7 @@ import { loadDatabases, metaKey, useStore, type MetaEntry } from '../store';
 import type { ApplyStmt, Cell, Column, Doc } from '../types';
 import ResultGrid, { type GridEditing } from './ResultGrid';
 import Icon from './Icon';
+import { t as tr, locale } from '../i18n';
 
 type Side = { connId: string | null; db: string | null };
 interface DataResult {
@@ -16,7 +17,7 @@ interface DataResult {
 }
 
 const SPATIAL = /^(geometry|point|linestring|polygon|multi\w+|geometrycollection|geomcollection)\b/i;
-const STATUS: Record<Status, string> = { equal: 'Uguale', diff: 'Diverso', source: 'Solo in origine', target: 'Solo in destinazione' };
+const STATUS: Record<Status, string> = { equal: tr('Uguale'), diff: tr('Diverso'), source: tr('Solo in origine'), target: tr('Solo in destinazione') };
 const KIND_ICON: Record<string, string> = { table: 'table', view: 'view', procedure: 'procedure', function: 'function', trigger: 'trigger', event: 'event' };
 
 function SidePicker({ label, side, onChange }: { label: string; side: Side; onChange: (s: Side) => void }) {
@@ -32,11 +33,11 @@ function SidePicker({ label, side, onChange }: { label: string; side: Side; onCh
     <div className="cmp-side">
       <span className="lbl">{label}</span>
       <select value={side.connId ?? ''} onChange={(e) => onChange({ connId: e.target.value || null, db: null })}>
-        <option value="">(connessione)</option>
+        <option value="">{tr('(connessione)')}</option>
         {conns.map((c) => <option key={c.id} value={c.id}>{c.name}</option>)}
       </select>
       <select value={side.db ?? ''} disabled={!side.connId} onChange={(e) => onChange({ ...side, db: e.target.value || null })}>
-        <option value="">(database)</option>
+        <option value="">{tr('(database)')}</option>
         {side.db && !(dbs?.data ?? []).includes(side.db) && <option>{side.db}</option>}
         {(dbs?.data ?? []).map((d) => <option key={d}>{d}</option>)}
       </select>
@@ -70,7 +71,7 @@ export default function CompareView({ doc }: { doc: Doc }) {
 
   const compare = async () => {
     if (!ready) return;
-    setBusy('Lettura degli schemi…');
+    setBusy(tr('Lettura degli schemi…'));
     setError(null);
     try {
       const [src, tgt] = await Promise.all([
@@ -100,10 +101,10 @@ export default function CompareView({ doc }: { doc: Doc }) {
   const syncSchema = async () => {
     if (!script.length) return;
     const drops = chosen.filter((i) => i.status === 'target').length;
-    const ok = await api.confirm(`Modificare la struttura di ${tgtName}?`,
-      `${script.length - 1} istruzioni DDL${drops ? `, ${drops} oggetti eliminati (i dati delle tabelle eliminate vanno persi)` : ''}. Le istruzioni DDL non sono transazionali.`, ['Sincronizza', 'Annulla']);
+    const ok = await api.confirm(tr('Modificare la struttura di {0}?', tgtName),
+      tr('{0} istruzioni DDL{1}. Le istruzioni DDL non sono transazionali.', script.length - 1, drops ? `, ${drops} oggetti eliminati (i dati delle tabelle eliminate vanno persi)` : ''), [tr('Sincronizza'), tr('Annulla')]);
     if (ok !== 0) return;
-    setBusy('Sincronizzazione dello schema…');
+    setBusy(tr('Sincronizzazione dello schema…'));
     try {
       await api.ddl.run(cmp.tgt.connId!, script);
       useStore.getState().dropMeta(`${cmp.tgt.connId}/${cmp.tgt.db}/`);
@@ -147,8 +148,8 @@ export default function CompareView({ doc }: { doc: Doc }) {
   const dataStmts = [...dataPicked].flatMap((t) => { const r = data[t]; return r && typeof r === 'object' && 'statements' in r ? r.statements : []; });
   const syncData = async () => {
     if (!dataStmts.length) return;
-    if ((await api.confirm(`Modificare i dati di ${tgtName}?`, `${dataStmts.length.toLocaleString('it-IT')} istruzioni INSERT/UPDATE/DELETE in un'unica transazione.`, ['Sincronizza', 'Annulla'])) !== 0) return;
-    setBusy('Sincronizzazione dei dati…');
+    if ((await api.confirm(`Modificare i dati di ${tgtName}?`, `${dataStmts.length.toLocaleString(locale())} istruzioni INSERT/UPDATE/DELETE in un'unica transazione.`, ['Sincronizza', 'Annulla'])) !== 0) return;
+    setBusy(tr('Sincronizzazione dei dati…'));
     try {
       await api.data.apply(cmp.tgt.connId!, dataStmts);
       const tables = [...dataPicked];
@@ -185,20 +186,20 @@ export default function CompareView({ doc }: { doc: Doc }) {
   return (
     <div className="cmp">
       <div className="er-bar cmp-bar">
-        <SidePicker label="Origine" side={cmp.src} onChange={(s) => setSides({ ...cmp, src: s })} />
-        <button title="Inverti origine e destinazione" onClick={() => setSides({ src: cmp.tgt, tgt: cmp.src })}>⇄</button>
-        <SidePicker label="Destinazione" side={cmp.tgt} onChange={(s) => setSides({ ...cmp, tgt: s })} />
-        <button className="primary" disabled={!ready || sameDb || !!busy} onClick={compare}>Confronta</button>
+        <SidePicker label={tr('Origine')} side={cmp.src} onChange={(s) => setSides({ ...cmp, src: s })} />
+        <button title={tr('Inverti origine e destinazione')} onClick={() => setSides({ src: cmp.tgt, tgt: cmp.src })}>⇄</button>
+        <SidePicker label={tr('Destinazione')} side={cmp.tgt} onChange={(s) => setSides({ ...cmp, tgt: s })} />
+        <button className="primary" disabled={!ready || sameDb || !!busy} onClick={compare}>{tr('Confronta')}</button>
         <div className="spacer" />
-        {busy ? <span className="muted">{busy}</span> : sameDb && ready ? <span className="muted">Origine e destinazione coincidono</span> : null}
+        {busy ? <span className="muted">{busy}</span> : sameDb && ready ? <span className="muted">{tr('Origine e destinazione coincidono')}</span> : null}
       </div>
       {error && <div className="status error cmp-error">{error}<button onClick={() => setError(null)}>×</button></div>}
       <div className="tabs-row">
-        <button className={tab === 'schema' ? 'active' : ''} onClick={() => setTab('schema')}>Schema</button>
-        <button className={tab === 'data' ? 'active' : ''} onClick={() => setTab('data')} disabled={!snap}>Dati</button>
+        <button className={tab === 'schema' ? 'active' : ''} onClick={() => setTab('schema')}>{tr('Schema')}</button>
+        <button className={tab === 'data' ? 'active' : ''} onClick={() => setTab('data')} disabled={!snap}>{tr('Dati')}</button>
       </div>
 
-      {!snap && <div className="empty">Scegli origine e destinazione, poi «Confronta». Lo script rende la destinazione uguale all'origine.</div>}
+      {!snap && <div className="empty">{tr('Scegli origine e destinazione, poi «Confronta». Lo script rende la destinazione uguale all\'origine.')}</div>}
 
       {snap && tab === 'schema' && <>
         <div className="cmp-body">
@@ -217,21 +218,21 @@ export default function CompareView({ doc }: { doc: Doc }) {
                 <span className={`badge st-${i.status}`}>{STATUS[i.status]}</span>
               </div>
             ))}
-            {!visible.length && <div className="empty">Nessun oggetto con i filtri scelti.</div>}
+            {!visible.length && <div className="empty">{tr('Nessun oggetto con i filtri scelti.')}</div>}
           </div>
           <div className="cmp-diff">
             {current ? <>
-              <div className="cmp-diff-head"><span className="del">− {tgtName}</span><span className="add">+ origine</span>{current.note && <span className="warn">{current.note}</span>}</div>
+              <div className="cmp-diff-head"><span className="del">− {tgtName}</span><span className="add">{tr('+ origine')}</span>{current.note && <span className="warn">{current.note}</span>}</div>
               <pre>{diff.map((l, n) => <div key={n} className={`dl ${l.type}`}>{l.type === 'add' ? '+ ' : l.type === 'del' ? '− ' : '  '}{l.text}</div>)}</pre>
-              {current.sync.length > 0 && <><div className="cmp-diff-head">Istruzioni per la destinazione</div><pre className="sync">{scriptText(current.sync)}</pre></>}
-            </> : <div className="empty">Seleziona un oggetto.</div>}
+              {current.sync.length > 0 && <><div className="cmp-diff-head">{tr('Istruzioni per la destinazione')}</div><pre className="sync">{scriptText(current.sync)}</pre></>}
+            </> : <div className="empty">{tr('Seleziona un oggetto.')}</div>}
           </div>
         </div>
         <div className="designer-foot">
-          <span className="muted">{chosen.length} oggetti selezionati · {Math.max(0, script.length - 1)} istruzioni</span>
+          <span className="muted">{chosen.length}{' '}{tr('oggetti selezionati ·')}{' '}{Math.max(0, script.length - 1)}{' '}{tr('istruzioni')}</span>
           <div className="spacer" />
-          <button disabled={!script.length} onClick={() => openScript(scriptText(script), `sync-${cmp.tgt.db}.sql`)}>Apri script nell'editor</button>
-          <button className="primary" disabled={!script.length || !!busy} onClick={syncSchema}>Sincronizza destinazione</button>
+          <button disabled={!script.length} onClick={() => openScript(scriptText(script), `sync-${cmp.tgt.db}.sql`)}>{tr('Apri script nell\'editor')}</button>
+          <button className="primary" disabled={!script.length || !!busy} onClick={syncSchema}>{tr('Sincronizza destinazione')}</button>
         </div>
       </>}
 
@@ -239,10 +240,10 @@ export default function CompareView({ doc }: { doc: Doc }) {
         <div className="cmp-body">
           <div className="cmp-list data">
             <div className="cmp-filters">
-              <button disabled={!!busy} onClick={() => compareData(dataTables.filter((t) => !t.reason).map((t) => t.table))}>Confronta tutte</button>
+              <button disabled={!!busy} onClick={() => compareData(dataTables.filter((t) => !t.reason).map((t) => t.table))}>{tr('Confronta tutte')}</button>
             </div>
             <table className="dtable">
-              <thead><tr><th /><th>Tabella</th><th title="Uguali">=</th><th title="Diverse">≠</th><th title="Solo in origine">+</th><th title="Solo in destinazione">−</th></tr></thead>
+              <thead><tr><th /><th>{tr('Tabella')}</th><th title={tr('Uguali')}>=</th><th title={tr('Diverse')}>≠</th><th title={tr('Solo in origine')}>+</th><th title={tr('Solo in destinazione')}>−</th></tr></thead>
               <tbody>
                 {dataTables.map((t) => {
                   const r = data[t.table];
@@ -252,10 +253,10 @@ export default function CompareView({ doc }: { doc: Doc }) {
                       <td className="c"><input type="checkbox" disabled={!done?.statements.length} checked={dataPicked.has(t.table)}
                         onChange={(e) => { const p = new Set(dataPicked); if (e.target.checked) p.add(t.table); else p.delete(t.table); setDataPicked(p); }} /></td>
                       <td>{t.table}{t.reason && <span className="muted"> · {t.reason}</span>}</td>
-                      {r === 'running' ? <td colSpan={4} className="muted">confronto… {progress[t.table] ? `${progress[t.table].toLocaleString('it-IT')} righe` : ''}</td>
-                        : r && 'error' in r ? <td colSpan={4} className="err" title={r.error}>errore</td>
+                      {r === 'running' ? <td colSpan={4} className="muted">{tr('confronto…')}{' '}{progress[t.table] ? tr('{0} righe', progress[t.table].toLocaleString(locale())) : ''}</td>
+                        : r && 'error' in r ? <td colSpan={4} className="err" title={r.error}>{tr('errore')}</td>
                           : done ? <><td>{done.equal}</td><td className={done.diff ? 'st-diff' : ''}>{done.diff}</td><td className={done.source ? 'st-source' : ''}>{done.source}</td><td className={done.target ? 'st-target' : ''}>{done.target}</td></>
-                            : <td colSpan={4}>{!t.reason && <button className="mini" onClick={() => compareData([t.table])}>Confronta</button>}</td>}
+                            : <td colSpan={4}>{!t.reason && <button className="mini" onClick={() => compareData([t.table])}>{tr('Confronta')}</button>}</td>}
                     </tr>
                   );
                 })}
@@ -266,19 +267,19 @@ export default function CompareView({ doc }: { doc: Doc }) {
             {detail && typeof detail === 'object' && 'error' in detail && <div className="status error">{detail.error}</div>}
             {detailGrid ? <>
               <div className="cmp-diff-head">
-                <span className="add">verde: solo in origine</span><span className="del">rosso: solo in destinazione</span><span className="warn">giallo: valori diversi (dell'origine)</span>
-                {detailGrid.rows.length === 1000 && <span className="muted">prime 1000 differenze</span>}
-                {(detail as DataResult).scriptTooLarge && <span className="warn">troppe differenze per uno script</span>}
+                <span className="add">{tr('verde: solo in origine')}</span><span className="del">{tr('rosso: solo in destinazione')}</span><span className="warn">{tr('giallo: valori diversi (dell\'origine)')}</span>
+                {detailGrid.rows.length === 1000 && <span className="muted">{tr('prime 1000 differenze')}</span>}
+                {(detail as DataResult).scriptTooLarge && <span className="warn">{tr('troppe differenze per uno script')}</span>}
               </div>
-              {detailGrid.rows.length ? <ResultGrid columns={detailGrid.columns} rows={detailGrid.rows} editing={detailGrid.editing} /> : <div className="empty">Dati identici.</div>}
-            </> : !detail && <div className="empty">Confronta una tabella e selezionala per vedere le differenze.</div>}
+              {detailGrid.rows.length ? <ResultGrid columns={detailGrid.columns} rows={detailGrid.rows} editing={detailGrid.editing} /> : <div className="empty">{tr('Dati identici.')}</div>}
+            </> : !detail && <div className="empty">{tr('Confronta una tabella e selezionala per vedere le differenze.')}</div>}
           </div>
         </div>
         <div className="designer-foot">
-          <span className="muted">{dataPicked.size} tabelle · {dataStmts.length.toLocaleString('it-IT')} istruzioni</span>
+          <span className="muted">{dataPicked.size}{' '}{tr('tabelle ·')}{' '}{dataStmts.length.toLocaleString(locale())}{' '}{tr('istruzioni')}</span>
           <div className="spacer" />
-          <button disabled={!dataStmts.length} onClick={() => openScript(`START TRANSACTION;\n${dataStmts.map((s) => inline(s) + ';').join('\n')}\nCOMMIT;\n`, `sync-dati-${cmp.tgt.db}.sql`)}>Apri script nell'editor</button>
-          <button className="primary" disabled={!dataStmts.length || !!busy} onClick={syncData}>Sincronizza dati</button>
+          <button disabled={!dataStmts.length} onClick={() => openScript(`START TRANSACTION;\n${dataStmts.map((s) => inline(s) + ';').join('\n')}\nCOMMIT;\n`, `sync-dati-${cmp.tgt.db}.sql`)}>{tr('Apri script nell\'editor')}</button>
+          <button className="primary" disabled={!dataStmts.length || !!busy} onClick={syncData}>{tr('Sincronizza dati')}</button>
         </div>
       </>}
     </div>

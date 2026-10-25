@@ -8,6 +8,7 @@ import { editsBySet, metaKey, useStore, type MetaEntry } from '../store';
 import type { Cell, Doc, IndexInfo, ResultSet } from '../types';
 import { openMenu, type MenuItem } from './ContextMenu';
 import ResultGrid, { type GridCell, type GridEditing, type GridSelection } from './ResultGrid';
+import { t, locale } from '../i18n';
 
 interface Filter { col: number; op: 'eq' | 'ne'; value: Cell }
 
@@ -64,7 +65,7 @@ export default function ResultView({ doc, set, sql, at }: { doc: Doc; set: Resul
     state: (i) => (ids[i] >= rows.length ? 'new' : edits.deleted.includes(ids[i]) ? 'deleted' : undefined),
     onEdit: (i, c, v) => {
       if (columns[c].binary && !isHex(v)) {
-        api.confirm('Valore binario non valido', 'Scrivere byte esadecimali (es. 0xDEADBEEF) o caricare un file dal visualizzatore.', ['OK']);
+        api.confirm(t('Valore binario non valido'), t('Scrivere byte esadecimali (es. 0xDEADBEEF) o caricare un file dal visualizzatore.'), ['OK']);
         return;
       }
       setEdits(setCell(editsBySet.get(set) ?? edits, rows, ids[i], c, columns[c].binary ? toHex(v) : typed(c, v)));
@@ -106,9 +107,9 @@ export default function ResultView({ doc, set, sql, at }: { doc: Doc; set: Resul
       }
       const updated = Object.keys(edits.updates).filter((r) => !edits.deleted.includes(Number(r))).length;
       const counts = [
-        updated && plural(updated, 'aggiornata', 'aggiornate'),
-        edits.inserted.length && plural(edits.inserted.length, 'inserita', 'inserite'),
-        edits.deleted.length && plural(edits.deleted.length, 'eliminata', 'eliminate'),
+        updated && plural(updated, t('aggiornata'), t('aggiornate')),
+        edits.inserted.length && plural(edits.inserted.length, t('inserita'), t('inserite')),
+        edits.deleted.length && plural(edits.deleted.length, t('eliminata'), t('eliminate')),
       ].filter(Boolean).join(', ');
       const nextSet: ResultSet = { ...set, rows: next, total: set.total - edits.deleted.length + edits.inserted.length };
       editsBySet.delete(set);
@@ -118,10 +119,10 @@ export default function ResultView({ doc, set, sql, at }: { doc: Doc; set: Resul
           results: d.run.results.map((x, i) => (i !== at[0] ? x : { ...x, sets: x.sets.map((s, j) => (j === at[1] ? nextSet : s)) })),
         },
       }));
-      logMessage(doc.id, 'ok', `Modifiche applicate a ${target.table}, righe: ${counts}.`);
+      logMessage(doc.id, 'ok', t('Modifiche applicate a {0}, righe: {1}.', target.table, counts));
     } catch (err) {
       logMessage(doc.id, 'error', (err as Error).message);
-      await api.confirm('Modifiche non applicate', (err as Error).message, ['OK']);
+      await api.confirm(t('Modifiche non applicate'), (err as Error).message, ['OK']);
     } finally {
       setBusy(false);
     }
@@ -137,21 +138,21 @@ export default function ResultView({ doc, set, sql, at }: { doc: Doc; set: Resul
     const f = sel.focus;
     const v = f ? gridRows[f.row][f.col] ?? null : null;
     const items: MenuItem[] = [
-      { label: 'Copia', action: () => copy(sel, false), disabled: !sel.rows.length },
-      { label: 'Copia con intestazioni', action: () => copy(sel, true), disabled: !sel.rows.length },
+      { label: t('Copia'), action: () => copy(sel, false), disabled: !sel.rows.length },
+      { label: t('Copia con intestazioni'), action: () => copy(sel, true), disabled: !sel.rows.length },
     ];
     if (f) {
       items.push('sep',
-        { label: `Filtra per «${shown(v)}»`, action: () => setFilters((fs) => [...fs, { col: f.col, op: 'eq', value: v }]) },
-        { label: `Escludi «${shown(v)}»`, action: () => setFilters((fs) => [...fs, { col: f.col, op: 'ne', value: v }]) });
+        { label: t('Filtra per «{0}»', shown(v)), action: () => setFilters((fs) => [...fs, { col: f.col, op: 'eq', value: v }]) },
+        { label: t('Escludi «{0}»', shown(v)), action: () => setFilters((fs) => [...fs, { col: f.col, op: 'ne', value: v }]) });
     }
-    if (filters.length) items.push({ label: 'Rimuovi filtri', action: () => setFilters([]) });
+    if (filters.length) items.push({ label: t('Rimuovi filtri'), action: () => setFilters([]) });
     if (editing) {
       const deleted = sel.rows.length > 0 && sel.rows.every((i) => editing.state(i) === 'deleted');
       items.push('sep',
-        { label: 'Imposta NULL', action: () => { let x = editsBySet.get(set) ?? edits; for (const i of sel.rows) for (const c of sel.cols) if (editing.state(i) !== 'deleted') x = setCell(x, rows, ids[i], c, null); setEdits(x); }, disabled: !sel.rows.length },
-        { label: 'Aggiungi riga', action: () => setEdits(addRow(edits)) },
-        { label: deleted ? 'Ripristina righe' : 'Elimina righe', danger: !deleted, action: () => editing.onDeleteRows(sel.rows), disabled: !sel.rows.length });
+        { label: t('Imposta NULL'), action: () => { let x = editsBySet.get(set) ?? edits; for (const i of sel.rows) for (const c of sel.cols) if (editing.state(i) !== 'deleted') x = setCell(x, rows, ids[i], c, null); setEdits(x); }, disabled: !sel.rows.length },
+        { label: t('Aggiungi riga'), action: () => setEdits(addRow(edits)) },
+        { label: deleted ? t('Ripristina righe') : t('Elimina righe'), danger: !deleted, action: () => editing.onDeleteRows(sel.rows), disabled: !sel.rows.length });
     }
     openMenu(e, items);
   };
@@ -179,38 +180,38 @@ export default function ResultView({ doc, set, sql, at }: { doc: Doc; set: Resul
   return (
     <div className="result-view">
       <div className="result-bar">
-        <input className="search" placeholder="Filtra righe…" value={search} onChange={(e) => setSearch(e.target.value)} />
+        <input className="search" placeholder={t('Filtra righe…')} value={search} onChange={(e) => setSearch(e.target.value)} />
         {filters.map((f, i) => (
           <span key={i} className="chip">
             {columns[f.col].name} {f.op === 'eq' ? '=' : '≠'} {shown(f.value)}
             <button onClick={() => setFilters((fs) => fs.filter((_, j) => j !== i))}>×</button>
           </span>
         ))}
-        {(search || filters.length > 0) && <span className="muted">{ids.length.toLocaleString('it-IT')} di {(rows.length + edits.inserted.length).toLocaleString('it-IT')}</span>}
+        {(search || filters.length > 0) && <span className="muted">{ids.length.toLocaleString(locale())}{' '}{t('di')}{' '}{(rows.length + edits.inserted.length).toLocaleString(locale())}</span>}
         <div className="spacer" />
         {canEdit ? <>
-          <button onClick={() => setEdits(addRow(edits))} title="Aggiungi riga">+ Riga</button>
+          <button onClick={() => setEdits(addRow(edits))} title={t('Aggiungi riga')}>{t('+ Riga')}</button>
           {pending > 0 && <>
-            <span className="pending">{pending} {pending === 1 ? 'modifica' : 'modifiche'}</span>
-            <button onClick={() => setPreview(stmts().map(inline).join(';\n') + ';')}>Anteprima SQL</button>
-            <button onClick={discard} disabled={busy}>Annulla</button>
-            <button className="primary" onClick={apply} disabled={busy}>{busy ? 'Applico…' : 'Applica'}</button>
+            <span className="pending">{pending} {pending === 1 ? t('modifica') : t('modifiche')}</span>
+            <button onClick={() => setPreview(stmts().map(inline).join(';\n') + ';')}>{t('Anteprima SQL')}</button>
+            <button onClick={discard} disabled={busy}>{t('Annulla')}</button>
+            <button className="primary" onClick={apply} disabled={busy}>{busy ? t('Applico…') : t('Applica')}</button>
           </>}
-        </> : <span className="muted" title={typeof target === 'string' ? target : 'Connessione non aperta'}>🔒 {connOpen ? target as string : 'Sola lettura'}</span>}
-        <button onClick={exportData} title="Esporta">Esporta…</button>
+        </> : <span className="muted" title={typeof target === 'string' ? target : t('Connessione non aperta')}>🔒 {connOpen ? target as string : t('Sola lettura')}</span>}
+        <button onClick={exportData} title={t('Esporta')}>{t('Esporta…')}</button>
       </div>
       <ResultGrid columns={columns} rows={gridRows} editing={editing} onMenu={menu} />
       {preview !== null && (
         <div className="modal-back" onMouseDown={() => setPreview(null)}>
           <div className="modal viewer" onMouseDown={(e) => e.stopPropagation()} onKeyDown={(e) => { if (e.key === 'Escape') setPreview(null); }}>
-            <div className="modal-title">Anteprima modifiche <span className="hint">eseguite in un'unica transazione</span></div>
+            <div className="modal-title">{t('Anteprima modifiche')}{' '}<span className="hint">{t('eseguite in un\'unica transazione')}</span></div>
             <textarea readOnly autoFocus value={preview} />
             <div className="modal-buttons">
-              <button onClick={() => navigator.clipboard.writeText(preview)}>Copia</button>
-              <button onClick={() => { newDoc({ connId, db: doc.db, sql: `START TRANSACTION;\n${preview}\nCOMMIT;\n` }); setPreview(null); }}>Apri nell'editor</button>
+              <button onClick={() => navigator.clipboard.writeText(preview)}>{t('Copia')}</button>
+              <button onClick={() => { newDoc({ connId, db: doc.db, sql: `START TRANSACTION;\n${preview}\nCOMMIT;\n` }); setPreview(null); }}>{t('Apri nell\'editor')}</button>
               <div className="spacer" />
-              <button onClick={() => setPreview(null)}>Chiudi</button>
-              <button className="primary" onClick={apply} disabled={busy}>Applica</button>
+              <button onClick={() => setPreview(null)}>{t('Chiudi')}</button>
+              <button className="primary" onClick={apply} disabled={busy}>{t('Applica')}</button>
             </div>
           </div>
         </div>

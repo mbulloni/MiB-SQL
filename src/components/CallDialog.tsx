@@ -3,6 +3,7 @@ import { api } from '../api';
 import { newDoc, runDoc } from '../actions';
 import { callScript, type ParamValue, type RoutineParam } from '../routines';
 import { useStore } from '../store';
+import { t } from '../i18n';
 
 /** Values for a routine's parameters, then CALL (procedure) or SELECT (function) in a new SQL document. */
 export default function CallDialog({ connId, db, kind, name }: { connId: string; db: string; kind: 'procedure' | 'function'; name: string }) {
@@ -31,13 +32,13 @@ export default function CallDialog({ connId, db, kind, name }: { connId: string;
   return (
     <div className="modal-back" onMouseDown={close}>
       <form className="modal call" onMouseDown={(e) => e.stopPropagation()} onSubmit={(e) => { e.preventDefault(); if (params) go(true); }} onKeyDown={(e) => { if (e.key === 'Escape') close(); }}>
-        <div className="modal-title">Esegui {kind === 'procedure' ? 'la procedura' : 'la funzione'} {db}.{name}{returns && <span className="hint">restituisce {returns}</span>}</div>
+        <div className="modal-title">{t('Esegui')}{' '}{kind === 'procedure' ? t('la procedura') : t('la funzione')} {db}.{name}{returns && <span className="hint">{t('restituisce')}{' '}{returns}</span>}</div>
         <div className="form">
           {error && <div className="status error">{error}</div>}
-          {params && !params.length && <p className="note">Nessun parametro.</p>}
+          {params && !params.length && <p className="note">{t('Nessun parametro.')}</p>}
           {params && params.length > 0 && (
             <table className="dtable">
-              <thead><tr><th>Modo</th><th>Parametro</th><th>Tipo</th><th>Valore</th><th>NULL</th><th title="Il valore è un'espressione SQL (es. NOW(), @variabile), non un testo da quotare">Espr.</th></tr></thead>
+              <thead><tr><th>{t('Modo')}</th><th>{t('Parametro')}</th><th>{t('Tipo')}</th><th>{t('Valore')}</th><th>NULL</th><th title={t('Il valore è un\'espressione SQL (es. NOW(), @variabile), non un testo da quotare')}>{t('Espr.')}</th></tr></thead>
               <tbody>
                 {params.map((p, i) => {
                   const out = p.mode.toUpperCase() === 'OUT';
@@ -55,13 +56,13 @@ export default function CallDialog({ connId, db, kind, name }: { connId: string;
               </tbody>
             </table>
           )}
-          {params && <><div className="props-title">Script</div><pre className="hist-sql">{sql}</pre></>}
+          {params && <><div className="props-title">{t('Script')}</div><pre className="hist-sql">{sql}</pre></>}
         </div>
         <div className="modal-buttons">
           <div className="spacer" />
-          <button type="button" onClick={close}>Annulla</button>
-          <button type="button" disabled={!params} onClick={() => go(false)}>Apri nell'editor</button>
-          <button type="submit" className="primary" disabled={!params}>Esegui</button>
+          <button type="button" onClick={close}>{t('Annulla')}</button>
+          <button type="button" disabled={!params} onClick={() => go(false)}>{t('Apri nell\'editor')}</button>
+          <button type="submit" className="primary" disabled={!params}>{t('Esegui')}</button>
         </div>
       </form>
     </div>

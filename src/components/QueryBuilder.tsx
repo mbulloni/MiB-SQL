@@ -9,6 +9,7 @@ import { metaKey, useStore, type MetaEntry } from '../store';
 import type { DbObjects, Doc } from '../types';
 import { openMenu } from './ContextMenu';
 import ResultsPanel from './ResultsPanel';
+import { t as tr } from '../i18n';
 
 const W = 210;
 const HEAD = 28;
@@ -161,15 +162,15 @@ export default function QueryBuilder({ doc }: { doc: Doc }) {
     <div className="qb">
       <div className="er-bar">
         <select value="" onChange={(e) => { if (e.target.value) addTable(db, e.target.value); }}>
-          <option value="">+ Aggiungi tabella…</option>
-          {tables.length > 0 && <optgroup label="Tabelle">{tables.map((t) => <option key={t}>{t}</option>)}</optgroup>}
-          {views.length > 0 && <optgroup label="Viste">{views.map((t) => <option key={t}>{t}</option>)}</optgroup>}
+          <option value="">{tr('+ Aggiungi tabella…')}</option>
+          {tables.length > 0 && <optgroup label={tr('Tabelle')}>{tables.map((t) => <option key={t}>{t}</option>)}</optgroup>}
+          {views.length > 0 && <optgroup label={tr('Viste')}>{views.map((t) => <option key={t}>{t}</option>)}</optgroup>}
         </select>
-        <button className="primary" disabled={!m.tables.length || doc.running} onClick={() => runDoc('all', doc.id)}>▶ Esegui</button>
-        <button disabled={!sql} onClick={() => newDoc({ connId, db, sql: sql + ';\n' })}>Apri nell'editor</button>
-        <button disabled={!m.tables.length} onClick={() => set(emptyQuery())}>Svuota</button>
+        <button className="primary" disabled={!m.tables.length || doc.running} onClick={() => runDoc('all', doc.id)}>{tr('▶ Esegui')}</button>
+        <button disabled={!sql} onClick={() => newDoc({ connId, db, sql: sql + ';\n' })}>{tr('Apri nell\'editor')}</button>
+        <button disabled={!m.tables.length} onClick={() => set(emptyQuery())}>{tr('Svuota')}</button>
         <div className="spacer" />
-        <span className="muted">Trascina le tabelle dall'Explorer · clic su una colonna per selezionarla · trascina una colonna su un'altra per un join</span>
+        <span className="muted">{tr('Trascina le tabelle dall\'Explorer · clic su una colonna per selezionarla · trascina una colonna su un\'altra per un join')}</span>
       </div>
       <div className="qb-canvas" ref={canvas} onDragOver={(e) => e.preventDefault()} onDrop={onDrop}>
         <div style={{ width: extent.w, height: extent.h, position: 'relative' }}>
@@ -181,11 +182,11 @@ export default function QueryBuilder({ doc }: { doc: Doc }) {
               const p = joinPath(a, j.left.col, b, j.right.col);
               const menu = (e: React.MouseEvent) => openMenu(e, [
                 ...(['INNER', 'LEFT', 'RIGHT'] as JoinType[]).map((type) => ({
-                  label: `${j.type === type ? '✓ ' : ''}${type} JOIN${type === 'LEFT' ? ` (tutte le righe di ${a.alias})` : type === 'RIGHT' ? ` (tutte le righe di ${b.alias})` : ''}`,
+                  label: `${j.type === type ? '✓ ' : ''}${type} JOIN${type === 'LEFT' ? tr(' (tutte le righe di {0})', a.alias) : type === 'RIGHT' ? tr(' (tutte le righe di {0})', b.alias) : ''}`,
                   action: () => set({ ...m, joins: m.joins.map((x) => (x.id === j.id ? { ...x, type } : x)) }),
                 })),
                 'sep' as const,
-                { label: 'Elimina join', danger: true, action: () => set({ ...m, joins: m.joins.filter((x) => x.id !== j.id) }) },
+                { label: tr('Elimina join'), danger: true, action: () => set({ ...m, joins: m.joins.filter((x) => x.id !== j.id) }) },
               ]);
               return (
                 <g key={j.id} className="qb-join" onClick={menu} onContextMenu={menu}>
@@ -202,9 +203,9 @@ export default function QueryBuilder({ doc }: { doc: Doc }) {
             <div key={t.id} className="qb-t" style={{ left: t.x, top: t.y, width: W }}>
               <div className="qb-head" onMouseDown={(e) => moveTable(e, t)} title={`${t.db}.${t.table}`}>
                 <span className="name">{t.table}</span>
-                <input className="alias" value={t.alias} title="Alias"
+                <input className="alias" value={t.alias} title={tr('Alias')}
                   onChange={(e) => set({ ...m, tables: m.tables.map((x) => (x.id === t.id ? { ...x, alias: e.target.value.replace(/[^\w$]/g, '') || x.alias } : x)) })} />
-                <button title="Rimuovi" onClick={() => removeTable(t.id)}>×</button>
+                <button title={tr('Rimuovi')} onClick={() => removeTable(t.id)}>×</button>
               </div>
               {t.columns.map((c) => {
                 const on = m.columns.some((x) => x.t === t.id && x.col === c);
@@ -217,19 +218,19 @@ export default function QueryBuilder({ doc }: { doc: Doc }) {
               })}
             </div>
           ))}
-          {!m.tables.length && <div className="qb-empty">Trascina qui una tabella dal Database Explorer, oppure usa «+ Aggiungi tabella…».</div>}
+          {!m.tables.length && <div className="qb-empty">{tr('Trascina qui una tabella dal Database Explorer, oppure usa «+ Aggiungi tabella…».')}</div>}
         </div>
       </div>
       <div className="qb-design">
         <div className="tabs-row">
-          {([['columns', `Colonne (${m.columns.length})`], ['filters', `Filtri (${m.filters.length})`], ['options', 'Opzioni'], ['sql', 'SQL']] as [Tab, string][]).map(([k, l]) => (
+          {([['columns', tr('Colonne ({0})', m.columns.length)], ['filters', tr('Filtri ({0})', m.filters.length)], ['options', tr('Opzioni')], ['sql', 'SQL']] as [Tab, string][]).map(([k, l]) => (
             <button key={k} className={tab === k ? 'active' : ''} onClick={() => setTab(k)}>{l}</button>
           ))}
         </div>
         <div className="qb-panel">
           {tab === 'columns' && (m.columns.length ? (
             <table className="dtable">
-              <thead><tr><th>Output</th><th>Colonna</th><th>Alias</th><th>Aggregato</th><th>Ordina</th><th /></tr></thead>
+              <thead><tr><th>{tr('Output')}</th><th>{tr('Colonna')}</th><th>{tr('Alias')}</th><th>{tr('Aggregato')}</th><th>{tr('Ordina')}</th><th /></tr></thead>
               <tbody>
                 {m.columns.map((c, i) => (
                   <tr key={c.id}>
@@ -247,10 +248,10 @@ export default function QueryBuilder({ doc }: { doc: Doc }) {
                 ))}
               </tbody>
             </table>
-          ) : <div className="empty">Nessuna colonna selezionata: SELECT *. Spunta le colonne nelle tabelle.</div>)}
+          ) : <div className="empty">{tr('Nessuna colonna selezionata: SELECT *. Spunta le colonne nelle tabelle.')}</div>)}
           {tab === 'filters' && <>
             <table className="dtable">
-              <thead><tr><th>Colonna</th><th>Operatore</th><th>Valore</th><th title="Condizione sull'aggregato (HAVING)">Su aggregato</th><th /></tr></thead>
+              <thead><tr><th>{tr('Colonna')}</th><th>{tr('Operatore')}</th><th>{tr('Valore')}</th><th title={tr('Condizione sull\'aggregato (HAVING)')}>{tr('Su aggregato')}</th><th /></tr></thead>
               <tbody>
                 {m.filters.map((f) => (
                   <tr key={f.id}>
@@ -259,7 +260,7 @@ export default function QueryBuilder({ doc }: { doc: Doc }) {
                     </select></td>
                     <td><select value={f.op} onChange={(e) => setFilter(f.id, { op: e.target.value as QbFilter['op'] })}>{OPS.map((o) => <option key={o}>{o}</option>)}</select></td>
                     <td><input value={f.value} disabled={f.op === 'IS NULL' || f.op === 'IS NOT NULL'}
-                      placeholder={f.op === 'IN' || f.op === 'NOT IN' ? 'a, b, c' : f.op === 'BETWEEN' ? 'da e a' : f.op.includes('LIKE') ? '%testo%' : 'valore'}
+                      placeholder={f.op === 'IN' || f.op === 'NOT IN' ? 'a, b, c' : f.op === 'BETWEEN' ? tr('da e a') : f.op.includes('LIKE') ? '%testo%' : 'valore'}
                       onChange={(e) => setFilter(f.id, { value: e.target.value })} /></td>
                     <td className="c"><input type="checkbox" checked={f.having} disabled={!m.columns.some((c) => c.t === f.t && c.col === f.col && c.agg)} onChange={(e) => setFilter(f.id, { having: e.target.checked })} /></td>
                     <td className="act"><button className="danger" onClick={() => set({ ...m, filters: m.filters.filter((x) => x.id !== f.id) })}>✕</button></td>
@@ -270,15 +271,15 @@ export default function QueryBuilder({ doc }: { doc: Doc }) {
             <button className="add" disabled={!allCols.length} onClick={() => {
               const [t, col] = allCols[0].key.split('|');
               set({ ...m, filters: [...m.filters, { id: qid('f'), t, col, op: '=', value: '', having: false }] });
-            }}>+ Aggiungi filtro</button>
+            }}>{tr('+ Aggiungi filtro')}</button>
           </>}
           {tab === 'options' && (
             <div className="form qb-options">
-              <label className="check"><input type="checkbox" checked={m.distinct} onChange={(e) => set({ ...m, distinct: e.target.checked })} /> DISTINCT (righe uniche)</label>
-              <label>LIMIT<input value={m.limit} placeholder="nessun limite" onChange={(e) => set({ ...m, limit: e.target.value })} /></label>
+              <label className="check"><input type="checkbox" checked={m.distinct} onChange={(e) => set({ ...m, distinct: e.target.checked })} />{' '}{tr('DISTINCT (righe uniche)')}</label>
+              <label>LIMIT<input value={m.limit} placeholder={tr('nessun limite')} onChange={(e) => set({ ...m, limit: e.target.value })} /></label>
             </div>
           )}
-          {tab === 'sql' && <pre className="script">{sql || '-- Aggiungi una tabella.'}</pre>}
+          {tab === 'sql' && <pre className="script">{sql || tr('-- Aggiungi una tabella.')}</pre>}
         </div>
       </div>
       <div className="hsplit" onMouseDown={startResize} />

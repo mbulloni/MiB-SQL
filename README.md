@@ -2,13 +2,24 @@
 
 # MiB-SQL
 
+**Italiano** · [English](README.en.md)
+
 IDE educativo per **MariaDB e MySQL** su Linux, ispirato a [dbForge Studio](https://www.devart.com/dbforge/) (che su Linux gira solo tramite CrossOver/Wine). Electron + React + Monaco, driver nativo `mariadb`.
 
 ![Pagina iniziale con gli editor visuali](docs/screenshot-16.png)
 
 ![Database Explorer ed editor SQL](docs/screenshot-1.png)
 
-## Funzioni (v1.2)
+## Novità della v1.3
+
+- **Prestazioni** (pulsante in toolbar, pagina iniziale, tasto destro sulla connessione): consigli sulla configurazione del server con punteggio, query più pesanti, indici duplicati/inutilizzati/mancanti, analisi e ottimizzazione di una query, variabili
+- **Processi**: connessioni e query in corso, transazioni aperte, chi blocca chi (lock di riga e di metadati), riepiloghi, ultimo deadlock; termina una o più connessioni
+- **Dati di test**: riempie le tabelle con dati verosimili rispettando tipi, chiavi esterne e valori unici
+- **Documentazione** del database in HTML o Markdown, con diagramma
+- **Interfaccia in italiano e inglese** (globo in fondo alla toolbar)
+- Editor oggetti su MySQL: i privilegi sulla routine vengono riassegnati da soli dopo DROP + CREATE
+
+## Funzioni
 
 **Connessioni**
 - Profili salvati con colore d'ambiente (sviluppo/test/produzione: tinge scheda e barra di stato)
@@ -92,6 +103,34 @@ IDE educativo per **MariaDB e MySQL** su Linux, ispirato a [dbForge Studio](http
 - «Ripristina / esegui file SQL…»: file di qualsiasi dimensione letti a flusso (anche .gz e dump di mariadb-dump/mysqldump, con DELIMITER e commenti /*!…*/), byte per byte (i BLOB non vengono alterati), avanzamento, continua dopo gli errori con elenco
 - «Importa dati…»: CSV (separatore rilevato, virgolette, UTF-8/Latin-1), Excel .xlsx (scelta del foglio), JSON/NDJSON; anteprima con tipi dedotti, virgola decimale, date gg/mm/aaaa, valori NULL; nuova tabella (con id facoltativo) o esistente con mappatura delle colonne, INSERT/IGNORE/REPLACE, svuota prima; tutto in un'unica transazione
 
+**Prestazioni e ottimizzazione**
+- **Consigli**: oltre 30 controlli su contatori e variabili del server (buffer pool e letture da disco, redo log, tabelle temporanee su disco, ordinamenti, join senza indice, scansioni complete, cache di tabelle e thread, query cache, connessioni vicine al limite o rifiutate, tentativi falliti, log delle query lente, performance_schema, lock e deadlock, tabelle MyISAM, senza chiave primaria o frammentate) con punteggio, spiegazione e correzione proposta: **Applica ora** (SET GLOBAL, su MySQL 8 anche SET PERSIST) o **Copia per my.cnf**; collegamenti diretti a Processi, Indici, Query pesanti e Manutenzione
+- **Query pesanti**: istruzioni raggruppate per forma da performance_schema (esecuzioni, tempo totale/medio/massimo, righe lette e restituite, segnali «senza indice», «temporanee su disco», «ordinamento su disco») oppure dal log delle query lente su tabella, attivabile con un clic senza riavvio; esempio reale (MySQL 8), apri nell'editor, azzera statistiche
+- **Indici** del database scelto: duplicati e ridondanti (prefisso di un altro indice), mai usati dall'avvio (performance_schema, o userstat su MariaDB attivabile al volo) tenendo quelli che servono alle chiavi esterne e ai vincoli UNIQUE, tabelle senza chiave primaria con l'istruzione per aggiungerla (promuove un UNIQUE NOT NULL se c'è), tabelle lette senza indice, indici poco selettivi; le istruzioni scelte si aprono come script
+- **Ottimizza query** (anche dal tasto destro nell'editor «Analizza e ottimizza query», o da Query pesanti): EXPLAIN senza eseguire la query, problemi riconosciuti (scansioni complete, join senza indice, filesort, tabelle temporanee, funzioni su colonne indicizzate, LIKE '%…', conversioni implicite, OR su colonne diverse, NOT IN con sottoquery, OFFSET grandi, SELECT *, ORDER BY RAND()) e **indici suggeriti** (uguaglianze e join, poi intervallo, poi ORDER BY/GROUP BY) da creare con un clic e piano ricalcolato
+- **Variabili**: le più importanti per le prestazioni con spiegazione, oppure tutte, modificabili
+
+**Processi e transazioni**
+- Elenco aggiornato in automatico (o a mano), ordinabile, filtrabile, senza i thread di sistema; selezione multipla per terminare query o connessioni, «Seleziona inattive da ≥ N s»
+- Righe colorate: chi blocca altri, chi è in attesa, connessioni inattive con una transazione aperta (la causa più comune dei blocchi)
+- Dettaglio del thread: query formattata, transazione (età, righe bloccate e modificate, isolamento), chi aspetta e chi blocca, **piano di esecuzione della query in corso** (SHOW EXPLAIN FOR su MariaDB, EXPLAIN FOR CONNECTION su MySQL)
+- **Transazioni** InnoDB aperte; **Blocchi**: per ogni thread bloccante tutti quelli che tiene fermi, anche a catena, con lock di riga (tabella, indice, modo) e di metadati (ALTER TABLE in attesa) e «Termina il bloccante»
+- **Riepilogo** per utente, host, database, comando o stato; **Ultimo deadlock** letto da SHOW ENGINE INNODB STATUS, diviso per transazione con lock posseduti e attesi e vittima
+- Su MariaDB senza il plugin METADATA_LOCK_INFO chi tiene un lock di metadati viene dedotto dalle transazioni aperte
+
+**Dati di test**
+- Strumenti › Generatore di dati di test, pagina iniziale o tasto destro sul database: tabelle scelte con numero di righe, ordine di inserimento calcolato dalle chiavi esterne (padri prima dei figli)
+- Un generatore per colonna proposto da nome e tipo: nomi, cognomi, email coerenti con il nome, telefoni, città, indirizzi, CAP, paesi, aziende, URL, IP, UUID, parole e frasi, interi e decimali con intervallo, date e orari, sì/no, valori ENUM, modelli (`P-######`), JSON, binari, sequenze, valori fissi, espressioni SQL; dati italiani o inglesi, % di NULL
+- Chiavi esterne riempite con valori esistenti della tabella padre, colonne e chiavi composte uniche senza duplicati (anche rispetto alle righe già presenti), lunghezze e tipi rispettati; AUTO_INCREMENT, DEFAULT e colonne generate lasciati al server
+- Stesso seme, stessi dati; anteprima; **Genera script** (INSERT a blocchi) o **Genera e inserisci** a blocchi con avanzamento e interruzione, eventualmente svuotando prima (DELETE o TRUNCATE)
+
+**Documentazione del database**
+- HTML in pagina unica (indice laterale, riepilogo, diagramma delle relazioni, tema chiaro/scuro e stampa) o Markdown
+- Tabelle con colonne (chiavi, tipo, NULL, default, extra, commenti), indici, chiavi esterne in entrambe le direzioni («Riferita da»), vincoli CHECK, trigger e CREATE TABLE facoltativo; viste, procedure, funzioni ed eventi; scelta delle tabelle e delle sezioni, anteprima, salva
+
+**Lingua**
+- Interfaccia in italiano o inglese: globo in fondo alla toolbar; la finestra si ricarica tenendo schede e connessioni aperte. Alla prima apertura segue la lingua del sistema
+
 **Profiler, monitor, utenti**
 - **Profila** (Ctrl+Maiusc+P) l'istruzione sotto il cursore: tempo, fasi di esecuzione (SHOW PROFILE), contatori di sessione con spiegazione, piano reale (ANALYZE FORMAT=JSON su MariaDB, EXPLAIN ANALYZE su MySQL) con righe stimate/reali e tempi per tabella, consigli (join senza indice, scansioni complete, tabelle temporanee su disco, statistiche vecchie)
 - **Monitor sessioni** (tasto destro sulla connessione): processi in tempo reale con durata, stato e query, termina query o connessione; indicatori e grafici di query/s, thread, connessioni, scritture, rete, hit ratio del buffer pool, query lente; aggiornamento 1-10 s, pausa
@@ -155,6 +194,24 @@ IDE educativo per **MariaDB e MySQL** su Linux, ispirato a [dbForge Studio](http
 
 ![Piano di esecuzione](docs/screenshot-3.png)
 
+![Prestazioni: consigli sul server](docs/screenshot-24.png)
+
+![Query pesanti](docs/screenshot-25.png)
+
+![Ottimizza query](docs/screenshot-26.png)
+
+![Indici](docs/screenshot-27.png)
+
+![Processi](docs/screenshot-28.png)
+
+![Blocchi](docs/screenshot-29.png)
+
+![Dati di test](docs/screenshot-30.png)
+
+![Documentazione del database](docs/screenshot-31.png)
+
+![Interfaccia in inglese](docs/screenshot-32.png)
+
 ## Installazione
 
 Dalle [release](https://github.com/mbulloni/MiB-SQL/releases):
@@ -184,6 +241,7 @@ Su Ubuntu 24.04 serve `libfuse2t64` per avviare le AppImage.
 | Ctrl+Maiusc+P | Profila l'istruzione corrente |
 | Maiusc+F5 | Interrompi |
 | Ctrl+Maiusc+F | Formatta script o selezione |
+| Ctrl+Invio (Ottimizza query) | Analizza la query |
 | prefisso + Tab | Inserisci uno snippet |
 | F5 / Ctrl+S (editor oggetti) | Applica la definizione al server |
 | Ctrl+N / Ctrl+O / Ctrl+S / Ctrl+W | Nuovo, apri, salva, chiudi documento |
@@ -198,7 +256,9 @@ Su Ubuntu 24.04 serve `libfuse2t64` per avviare le AppImage.
 ```bash
 npm install
 npm run dev        # Vite (porta 5174) + Electron
-npm test           # splitter (anche a flusso), formattatore, griglia, export, designer (partizioni comprese), ER, query builder, confronto, import, assistente, editor oggetti
+npm test           # splitter, formattatore, griglia, export, designer, ER, query builder, confronto, import, assistente, editor oggetti,
+                   # consigli, indici, analisi query, processi e deadlock, dati di test, documentazione, traduzioni
+node scripts/i18n-keys.mjs   # testi da tradurre mancanti in locales/en.json
 npm run typecheck
 npm run dist       # AppImage e .deb in release/ (npm run dist:deb solo .deb)
 ```
@@ -211,7 +271,7 @@ mysql -u root -p < scripts/demo.sql
 
 ## Roadmap
 
-Completata: le otto fasi previste (connessioni ed editor, griglia e modifica dati, designer, ER, confronto, backup/import, profiler/monitor/utenti) più Query Builder, tema scuro, partizioni, confronto dati a memoria costante, pacchetto .deb e assistente AI; in v1.2 formattatore, cronologia, snippet, editor di oggetti e manutenzione tabelle.
+Completata: le otto fasi previste (connessioni ed editor, griglia e modifica dati, designer, ER, confronto, backup/import, profiler/monitor/utenti) più Query Builder, tema scuro, partizioni, confronto dati a memoria costante, pacchetto .deb e assistente AI; in v1.2 formattatore, cronologia, snippet, editor di oggetti e manutenzione tabelle; in v1.3 prestazioni, processi, dati di test, documentazione e interfaccia in inglese.
 
 
 ## Limiti noti
@@ -222,7 +282,11 @@ Completata: le otto fasi previste (connessioni ed editor, griglia e modifica dat
 - Le istruzioni DDL non sono transazionali: se una fallisce a metà, quelle precedenti restano applicate (designer e confronto lo segnalano e ricaricano lo stato dal server)
 - Designer: sottopartizioni solo in lettura; colonne spaziali in sola lettura nella griglia
 - Formattatore: i corpi di routine, trigger ed eventi ricevono solo le maiuscole delle parole chiave; le espressioni CASE e le liste tra parentesi restano su una riga
-- Editor oggetti su MySQL: senza CREATE OR REPLACE la modifica è DROP + CREATE (ripristinata in caso di errore), quindi i privilegi EXECUTE dati alla singola routine vanno riassegnati; con un DEFINER diverso dal proprio servono i privilegi SET USER/SET_USER_ID
+- Editor oggetti su MySQL: senza CREATE OR REPLACE la modifica è DROP + CREATE (ripristinata in caso di errore); i privilegi dati alla singola routine vengono riassegnati se l'account può leggere mysql.procs_priv, altrimenti vanno riassegnati a mano; con un DEFINER diverso dal proprio servono i privilegi SET USER/SET_USER_ID
+- Prestazioni: Query pesanti e Indici › mai usati richiedono performance_schema (MySQL lo ha attivo, MariaDB no: serve il riavvio) oppure il log delle query lente / userstat; i contatori sono cumulativi dall'avvio del server; i suggerimenti di indice sono euristici, basati su EXPLAIN (stime) e sulla forma della query: vanno provati
+- Processi: senza il privilegio PROCESS si vedono solo le proprie connessioni e non le transazioni; su MariaDB i lock di metadati sono esatti solo con il plugin METADATA_LOCK_INFO
+- Dati di test: le chiavi esterne composte (su più colonne) non vengono riconosciute: le loro colonne ricevono valori casuali e l'inserimento fallisce se non esistono nella tabella padre (usa un valore fisso o un'espressione); nello script (non inserito) le chiavi esterne usano solo i valori già presenti nel database
+- Lingua: i messaggi del server MariaDB/MySQL restano nella lingua configurata sul server (lc_messages)
 - Assistente AI: richiede una chiave API Anthropic (a pagamento); la conversazione resta solo per la sessione
 
 ## Licenza

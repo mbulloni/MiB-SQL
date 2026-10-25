@@ -1,5 +1,6 @@
 // Schema compare: source vs target database, sync script for the target, line diff. Pure functions for tests.
 import { alterSql, createSql, foreignKeySql, fromServer, qi, type ServerTable, type TableDef } from './design.ts';
+import { t as tr } from './i18n.ts';
 
 export type ObjectKind = 'table' | 'view' | 'procedure' | 'function' | 'trigger' | 'event';
 export type Status = 'equal' | 'diff' | 'source' | 'target';
@@ -96,7 +97,7 @@ export function compareSchemas(source: Snapshot, target: Snapshot, sourceDb: str
     const kind = (s ?? t)!.kind;
     const name = (s ?? t)!.name;
     const drop = `DROP ${DROP[kind]} IF EXISTS ${qi(targetDb)}.${qi(name)}`;
-    const unreadable = 'Definizione non leggibile: servono i privilegi sul definer (o SHOW_ROUTINE/SELECT su mysql.proc).';
+    const unreadable = tr('Definizione non leggibile: servono i privilegi sul definer (o SHOW_ROUTINE/SELECT su mysql.proc).');
     if (s && !t) out.push({ kind, name, status: 'source', sourceDdl: s.ddl ?? '', targetDdl: '', sync: s.ddl ? [createOther(kind, s.ddl)] : [], ...(s.ddl ? {} : { note: unreadable }) });
     else if (!s && t) out.push({ kind, name, status: 'target', sourceDdl: '', targetDdl: t.ddl ?? '', sync: [drop] });
     else if (s && t) {

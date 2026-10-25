@@ -3,6 +3,7 @@
 const fs = require('fs');
 const ExcelJS = require('exceljs');
 const server = require('./server.cjs');
+const { t } = require('./i18n.cjs');
 
 const qi = (s) => '`' + String(s).replace(/`/g, '``') + '`';
 
@@ -184,7 +185,7 @@ async function preview(file, opts = {}) {
   const sheets = [];
   if (format === 'xlsx') {
     const reader = new ExcelJS.stream.xlsx.WorkbookReader(file, { worksheets: 'emit', sharedStrings: 'ignore', styles: 'ignore' });
-    for await (const ws of reader) { sheets.push(ws.name ?? `Foglio ${sheets.length + 1}`); }
+    for await (const ws of reader) { sheets.push(ws.name ?? t('Foglio {0}', sheets.length + 1)); }
   }
   const rows = [];
   for await (const r of readRows(file, { ...opts, format, delimiter })) {
@@ -207,7 +208,7 @@ async function preview(file, opts = {}) {
 async function importFile(connId, file, opts, onProgress = () => {}) {
   const batch = Math.max(1, opts.batch ?? 500);
   const map = opts.mapping.filter((m) => m.target);
-  if (!map.length) throw new Error('Nessuna colonna da importare.');
+  if (!map.length) throw new Error(t('Nessuna colonna da importare.'));
   const verb = opts.mode === 'replace' ? 'REPLACE' : opts.mode === 'ignore' ? 'INSERT IGNORE' : 'INSERT';
   const head = `${verb} INTO ${qi(opts.db)}.${qi(opts.table)} (${map.map((m) => qi(m.target)).join(', ')}) VALUES `;
   const tuple = `(${map.map(() => '?').join(', ')})`;
@@ -240,7 +241,7 @@ async function importFile(connId, file, opts, onProgress = () => {}) {
     } catch (err) {
       await c.rollback().catch(() => {});
       const e = err.sqlMessage ? new server.DbError(err) : err;
-      e.message = `Importazione annullata (nessuna riga inserita): ${e.message} — blocco che termina alla riga ${line} del file.`;
+      e.message = t('Importazione annullata (nessuna riga inserita): {0} — blocco che termina alla riga {1} del file.', e.message, line);
       throw e;
     }
     return { rows };
