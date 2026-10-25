@@ -7,9 +7,15 @@ import type { ProcSnapshot } from './procs';
 import type { Overview } from './advisor';
 import type { IndexData } from './indexes';
 import type { PlanRow, SlowRow, TopRow } from './queryadvisor';
+import type { DataHit, ObjectHit } from './search';
+import type { ErrorEntry } from './logs';
 import type {
   EditableKind, HistoryEntry, MaintOp, MaintResult, Snippet, TableStat, ServerOptions, ApplyStmt, Cell, Column, ExportFormat, ExportOptions, ColumnInfo, ConnDef, DbObjects, ExecMode, ExecResult, ForeignKeyInfo, IndexInfo, ObjectKind, Schema, Secrets, ServerInfo,
 } from './types';
+
+export interface UpdateInfo { current: string; latest: string; newer: boolean; notes: string; url: string; published: string | null; mode: 'appimage' | 'deb' | 'manual'; asset: { name: string; url: string; size: number } | null }
+
+export type LogStatus = Record<string, string | null> & { local: boolean; mariadb: boolean };
 
 export interface SqlFile {
   path: string;
@@ -92,6 +98,7 @@ interface Api {
     explainFor(connId: string, id: number, flavor: 'mariadb' | 'mysql'): Promise<{ columns: string[]; rows: (string | null)[][] }>;
     kill(connId: string, ids: number[], queryOnly: boolean): Promise<{ killed: number; failed: { id: number; message: string }[] }>;
     innodbStatus(connId: string): Promise<string>;
+    installMdl(connId: string): Promise<void>;
   };
   perf: {
     overview(connId: string): Promise<Overview>;
@@ -109,8 +116,31 @@ interface Api {
     tables(connId: string, db: string): Promise<(ServerTable & { rows: number | null })[]>;
     values(connId: string, db: string, table: string, column: string, limit?: number): Promise<(string | number)[]>;
     tuples(connId: string, db: string, table: string, columns: string[]): Promise<string[]>;
+    rowsOf(connId: string, db: string, table: string, columns: string[]): Promise<(string | number | null)[][]>;
     clear(connId: string, db: string, tables: string[], truncate: boolean): Promise<void>;
     counts(connId: string, db: string, tables: string[]): Promise<Record<string, number>>;
+  };
+  search: {
+    objects(connId: string, dbs: string[], text: string, opts: { names: boolean; code: boolean; comments: boolean }): Promise<ObjectHit[]>;
+    data(id: string, connId: string, dbs: string[], text: string, opts: { caseSensitive: boolean; exact: boolean; maxRows: number; skipAbove: number }): Promise<{ results: DataHit[]; stopped: boolean; tables: number }>;
+    stop(id: string): Promise<void>;
+  };
+  logs: {
+    status(connId: string): Promise<LogStatus>;
+    error(connId: string): Promise<{ status: LogStatus; source: 'table' | 'file' | 'load_file' | 'journal' | null; path?: string | null; text?: string; entries?: ErrorEntry[]; truncated?: boolean; reason?: string }>;
+    query(connId: string, which: 'slow' | 'general'): Promise<{ status: LogStatus; on: boolean; source: 'table' | 'file' | 'load_file' | null; path?: string | null; text?: string; rows?: Record<string, unknown>[]; truncated?: boolean; reason?: string }>;
+    set(connId: string, which: 'slow' | 'general', on: boolean, toTable: boolean): Promise<LogStatus>;
+    clear(connId: string, which: 'slow' | 'general'): Promise<void>;
+  };
+  copy: {
+    target(connId: string, db: string): Promise<{ exists: boolean; tables: number }>;
+    run(id: string, src: { connId: string; db: string }, tgt: { connId: string; db: string }, opts: { structure: boolean; data: boolean; routines: boolean; stripDefiner: boolean; tables?: string[]; ifExists: 'fail' | 'replace' | 'merge' }): Promise<{ statements: number; ms: number; created: boolean }>;
+  };
+  openRelease(url: string): Promise<void>;
+  update: {
+    check(): Promise<UpdateInfo>;
+    install(): Promise<{ done: boolean; restart?: boolean; version?: string; reason?: 'current' | 'manual' | 'installer'; file?: string }>;
+    restart(): Promise<void>;
   };
   setLang(lang: string): Promise<void>;
   monitor: { snapshot(connId: string): Promise<MonitorSnapshot>; kill(connId: string, id: number, queryOnly: boolean): Promise<void> };

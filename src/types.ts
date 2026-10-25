@@ -121,7 +121,8 @@ export interface MaintResult { table: string; op: string; type: string; text: st
 
 export interface Doc {
   id: string;
-  kind: 'sql' | 'table' | 'er' | 'query' | 'compare' | 'monitor' | 'users' | 'history' | 'maint' | 'procs' | 'perf' | 'datagen' | 'docgen';
+  kind: 'sql' | 'table' | 'er' | 'query' | 'compare' | 'monitor' | 'users' | 'history' | 'maint' | 'procs' | 'perf' | 'datagen' | 'docgen' | 'search' | 'logs';
+  search?: { text: string; db: string | null }; // database search: last text and scope (null = every database)
   perf?: { tab?: string; sql?: string; db?: string | null };
   datagen?: import('./datagen').GenSettings; // test data generator: tables, row counts, column generators // performance center: tab to show, query to analyze
   obj?: { kind: EditableKind; name: string | null }; // SQL document editing a view/routine/trigger/event (name null = new)

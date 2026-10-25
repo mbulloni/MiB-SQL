@@ -54,7 +54,7 @@ export default function SnippetsDialog({ body }: { body?: string }) {
     } catch (err) { setError((err as Error).message); }
   };
   const reset = async () => {
-    if ((await api.confirm('Ripristinare gli snippet predefiniti?', 'Gli snippet aggiunti o modificati verranno persi.', ['Ripristina', 'Annulla'])) !== 0) return;
+    if ((await api.confirm(t('Ripristinare gli snippet predefiniti?'), t('Gli snippet aggiunti o modificati verranno persi.'), [t('Ripristina'), t('Annulla')])) !== 0) return;
     const r = await api.snippets.save(null);
     setSnippets(r.list);
     setList(r.list);

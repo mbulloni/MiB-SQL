@@ -29,7 +29,7 @@ export interface GenColumn {
   hasDefault: boolean;
   unique: boolean;      // in a PRIMARY or UNIQUE index of its own
   maxLen: number | null;
-  fk: { table: string; column: string } | null;
+  fk: { table: string; column: string; group?: string; index?: number } | null; // group: name of a composite foreign key
 }
 
 export interface GenSettings {
@@ -137,7 +137,8 @@ export const compositeKeys = (tb: ServerTable) => tb.indexes.filter((ix) => (ix.
 export function columnsOf(tb: ServerTable): GenColumn[] {
   const uniqueCols = new Set(tb.indexes.filter((ix) => (ix.kind === 'PRIMARY' || ix.kind === 'UNIQUE') && ix.columns.length === 1).map((ix) => ix.columns[0].name.toLowerCase()));
   return tb.columns.map((c) => {
-    const fk = tb.foreignKeys.find((f) => f.columns.length === 1 && f.columns[0].toLowerCase() === c.name.toLowerCase());
+    const fk = tb.foreignKeys.find((f) => f.columns.some((x) => x.toLowerCase() === c.name.toLowerCase()));
+    const fkAt = fk ? fk.columns.findIndex((x) => x.toLowerCase() === c.name.toLowerCase()) : -1;
     // MariaDB stores JSON as LONGTEXT with a json_valid() check
     const json = /json_valid/i.test(c.check ?? '') || (tb.checks ?? []).some((k) => new RegExp(`json_valid\\(\\s*\`?${c.name.replace(/[.*+?^${}()|[\]\\]/g, '\\$&')}\`?\\s*\\)`, 'i').test(k.expr));
     const b = baseType(c.type);
@@ -145,7 +146,7 @@ export function columnsOf(tb: ServerTable): GenColumn[] {
       name: c.name, type: json ? 'json' : c.type, nullable: c.nullable, autoIncrement: c.autoIncrement, generated: !!c.generated, hasDefault: c.default !== null,
       unique: uniqueCols.has(c.name.toLowerCase()),
       maxLen: /char|binary/.test(b) ? lengthOf(c.type) : b === 'tinytext' || b === 'tinyblob' ? 255 : b === 'text' || b === 'blob' ? 65535 : null,
-      fk: fk ? { table: fk.refTable, column: fk.refColumns[0] } : null,
+      fk: fk ? { table: fk.refTable, column: fk.refColumns[fkAt], ...(fk.columns.length > 1 ? { group: fk.name, index: fkAt } : {}) } : null,
     };
   });
 }
@@ -233,6 +234,7 @@ export interface GenContext {
   lang: 'it' | 'en';
   table: string;
   fkValues?: Record<string, (string | number)[]>;   // column → values of the referenced column
+  fkTuples?: Record<string, (string | number | null)[][]>; // composite foreign key → rows of the referenced columns
   existing?: Record<string, Set<string>>;          // unique column → values already in the table
   keys?: string[][];                               // composite unique keys (column names)
   existingKeys?: Set<string>[];                    // per key: tuples already in the table (values joined by \u001f)
@@ -245,6 +247,7 @@ export function generator(cols: GenColumn[], specs: Record<string, ColSpec>, ctx
   let row = 0;
   // names generated in the current row, so the email of the same row matches the person
   const person: { first?: string; last?: string } = {};
+  const tuples: Record<string, (string | number | null)[] | null> = {}; // composite foreign keys: one parent row per row
   const gens = used.map((c) => {
     const spec = specs[c.name];
     const r = rng(hash(`${ctx.seed}:${ctx.table}.${c.name}`));
@@ -280,6 +283,14 @@ export function generator(cols: GenColumn[], specs: Record<string, ColSpec>, ctx
         case 'year': return int(spec.min ?? 2000, spec.max ?? 2030);
         case 'list': return list.length ? pick(list) : null;
         case 'fk':
+          if (c.fk?.group) {
+            const all = ctx.fkTuples?.[c.fk.group] ?? [];
+            if (!(c.fk.group in tuples)) tuples[c.fk.group] = all.length ? pick(all) : null;
+            const tu = tuples[c.fk.group];
+            if (tu) return tu[c.fk.index ?? 0];
+            if (c.nullable) return null;
+            throw new Error(t('Nessun valore in {0}.{1} per riempire la chiave esterna {2}: genera prima le righe di {0}.', c.fk.table, c.fk.column, c.fk.group));
+          }
           if (!fks.length) {
             if (c.nullable) return null;
             throw new Error(t('Nessun valore in {0}.{1} per riempire la chiave esterna {2}: genera prima le righe di {0}.', c.fk?.table ?? '?', c.fk?.column ?? '?', c.name));
@@ -349,6 +360,7 @@ export function generator(cols: GenColumn[], specs: Record<string, ColSpec>, ctx
       for (let attempt = 0; attempt < 50; attempt++) {
         delete person.first;
         delete person.last;
+        for (const k of Object.keys(tuples)) delete tuples[k];
         const out = gens.map((g) => g());
         row++;
         if (keys.every((k) => !k.seen.has(keyOf(out, k.at)))) {

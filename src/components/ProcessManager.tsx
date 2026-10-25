@@ -124,6 +124,15 @@ export default function ProcessManager({ doc }: { doc: Doc }) {
     } catch (err) { setPlan({ id: p.id, error: (err as Error).message }); }
   };
 
+  const installMdl = async () => {
+    if ((await api.confirm(t('Installare il plugin METADATA_LOCK_INFO?'), t('INSTALL SONAME \'metadata_lock_info\' aggiunge la tabella information_schema.METADATA_LOCK_INFO: chi blocca una tabella diventa esatto. Serve il privilegio INSERT su mysql.plugin; il plugin resta installato anche dopo il riavvio.'), [t('Installa'), t('Annulla')])) !== 0) return;
+    try {
+      await api.procs.installMdl(connId);
+      setNotice(t('Plugin installato.'));
+      setTick((n) => n + 1);
+    } catch (err) { setError((err as Error).message); }
+  };
+
   const loadDeadlock = async () => {
     try {
       const raw = await api.procs.innodbStatus(connId);
@@ -297,6 +306,7 @@ export default function ProcessManager({ doc }: { doc: Doc }) {
           );
         })}
         {missing.filter((m) => m.what !== 'trx').map((m) => <p key={m.what} className="note">{m.what === 'locks' ? t('Lock di riga non leggibili: {0}', m.message) : m.message}</p>)}
+        {snap?.flavor === 'mariadb' && missing.some((m) => m.what === 'mdl') && <button className="link" onClick={installMdl}>{t('Installa il plugin METADATA_LOCK_INFO…')}</button>}
       </div>}
 
       {tab === 'summary' && <div className="maint-body">

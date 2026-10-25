@@ -10,6 +10,18 @@ Educational IDE for **MariaDB and MySQL** on Linux, inspired by [dbForge Studio]
 
 ![Performance advice in English](docs/screenshot-33.png)
 
+## What's new in 1.4
+
+- **Database search** (magnifier button, Ctrl+Shift+D, right click on a connection or database): a text in the names of tables, columns, indexes, views, routines, triggers and events, in their code, in comments and in data, with highlighted matches
+- **Server logs**: error log (performance_schema.error_log, the log file or the systemd journal), slow query log and general log, with filters; turn logs on and off from the app
+- **Copy database** to another database, on the same server or another connection
+- **Built-in updates**: a notice when a new release is out, release notes and «Update now» (the AppImage is replaced and the app restarts, the .deb is installed with apt)
+- Test data: composite foreign keys; Processes: one-click install of the METADATA_LOCK_INFO plugin on MariaDB
+
+![Database search](docs/screenshot-34.png)
+
+![Update available](docs/screenshot-38.png)
+
 ## What's new in 1.3
 
 - **Performance** (toolbar, start page, right click on the connection): server configuration advice with a score, heaviest queries, duplicate/unused/missing indexes, query analysis and tuning, variables
@@ -101,7 +113,7 @@ Test database: `scripts/demo.sql` creates `mibsql_demo` and the `mibsql`/`mibsql
 
 ## Known limits
 
-See the Italian [README](README.md#limiti-noti). In short: grid edits use their own connection; DDL is not transactional; performance_schema (or the slow log / userstat) is needed for heavy queries and unused indexes; index suggestions are heuristic; without the PROCESS privilege only your own connections are visible; composite foreign keys are not recognized by the test data generator; server error messages follow the server's lc_messages.
+See the Italian [README](README.md#limiti-noti). In short: log files of remote servers are readable only through log tables or the FILE privilege; searching data reads every table; grid edits use their own connection; DDL is not transactional; performance_schema (or the slow log / userstat) is needed for heavy queries and unused indexes; index suggestions are heuristic; without the PROCESS privilege only your own connections are visible; the AppImage must live in a writable folder for self-update; server error messages follow the server's lc_messages.
 
 ## License
 

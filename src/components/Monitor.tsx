@@ -115,7 +115,7 @@ export default function Monitor({ doc }: { doc: Doc }) {
   const killIt = async (queryOnly: boolean) => {
     if (!picked) return;
     const what = queryOnly ? t('la query del thread {0}', picked.id) : t('la connessione {0} ({1}@{2})', picked.id, picked.user, picked.host);
-    if ((await api.confirm(`Terminare ${what}?`, picked.info ? picked.info.slice(0, 300) : '', ['Termina', 'Annulla'])) !== 0) return;
+    if ((await api.confirm(t('Terminare {0}?', what), picked.info ? picked.info.slice(0, 300) : '', [t('Termina'), t('Annulla')])) !== 0) return;
     try { await api.monitor.kill(connId, picked.id, queryOnly); } catch (err) { setError((err as Error).message); }
   };
 

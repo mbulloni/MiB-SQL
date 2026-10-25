@@ -119,7 +119,7 @@ export default function ErDiagram({ doc }: { doc: Doc }) {
 
   const dropRelation = async (fkKey: string) => {
     const [table, name] = fkKey.split('/');
-    if ((await api.confirm(`Eliminare la relazione ${name}?`, `ALTER TABLE ${table} DROP FOREIGN KEY ${name}`, ['Elimina', 'Annulla'])) !== 0) return;
+    if ((await api.confirm(tr('Eliminare la relazione {0}?', name), `ALTER TABLE ${table} DROP FOREIGN KEY ${name}`, [tr('Elimina'), tr('Annulla')])) !== 0) return;
     if (await runDdl([`ALTER TABLE ${qi(db)}.${qi(table)} DROP FOREIGN KEY ${qi(name)}`])) setPicked(null);
   };
 
@@ -266,7 +266,7 @@ export default function ErDiagram({ doc }: { doc: Doc }) {
     { label: tr('Nascondi dal diagramma'), action: () => save({ ...saved, hidden: [...saved.hidden, name] }) },
     ...(kind === 'table' ? ['sep' as const, {
       label: tr('Elimina tabella…'), danger: true, action: async () => {
-        if ((await api.confirm(`Eliminare la tabella ${db}.${name}?`, 'La tabella e tutti i suoi dati verranno eliminati definitivamente.', ['Elimina', 'Annulla'])) === 0) await runDdl([`DROP TABLE ${qi(db)}.${qi(name)}`]);
+        if ((await api.confirm(tr('Eliminare la tabella {0}.{1}?', db, name), tr('La tabella e tutti i suoi dati verranno eliminati definitivamente.'), [tr('Elimina'), tr('Annulla')])) === 0) await runDdl([`DROP TABLE ${qi(db)}.${qi(name)}`]);
       },
     }] : []),
   ]);

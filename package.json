@@ -1,6 +1,6 @@
 {
   "name": "mib-sql",
-  "version": "1.3.0",
+  "version": "1.4.0",
   "description": "MiB-SQL - IDE educativo per MariaDB/MySQL su Linux, ispirato a dbForge Studio",
   "main": "electron/main.cjs",
   "type": "commonjs",
@@ -45,7 +45,7 @@
       "syncDesktopName": true,
       "maintainer": "Michele <m.bulloni@gmail.com>",
       "vendor": "Michele",
-      "description": "IDE per MariaDB e MySQL: editor SQL, griglia modificabile, designer tabelle, diagramma ER, query builder, confronto, backup, prestazioni, processi, dati di test, documentazione. Italiano e inglese."
+      "description": "IDE per MariaDB e MySQL: editor SQL, griglia modificabile, designer tabelle, diagramma ER, query builder, confronto, backup, prestazioni, processi, dati di test, documentazione, ricerca, log del server, copia database, aggiornamenti integrati. Italiano e inglese."
     },
     "directories": {
       "buildResources": "build",

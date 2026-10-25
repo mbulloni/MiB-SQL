@@ -222,7 +222,7 @@ function ConnNode({ conn }: { conn: ConnDef }) {
   const expandDb = (db: string) => load(metaKey.objects(conn.id, db), () => api.meta.objects(conn.id, db));
   const disconnect = () => { s.closeConn(conn.id); toggle(conn.id, false); };
   const remove = async () => {
-    if ((await api.confirm(`Eliminare la connessione «${conn.name}»?`, 'La password salvata verrà rimossa dal portachiavi.', ['Elimina', 'Annulla'])) !== 0) return;
+    if ((await api.confirm(tr('Eliminare la connessione «{0}»?', conn.name), tr('La password salvata verrà rimossa dal portachiavi.'), [tr('Elimina'), tr('Annulla')])) !== 0) return;
     await api.conn.remove(conn.id);
     await s.loadConns();
   };
@@ -231,6 +231,8 @@ function ConnNode({ conn }: { conn: ConnDef }) {
     { label: tr('Nuovo SQL'), action: () => newDoc({ connId: conn.id, db: conn.database || null }) },
     { label: tr('Prestazioni e ottimizzazione'), action: () => openServerTool(conn.id, 'perf') },
     { label: tr('Processi e transazioni'), action: () => openServerTool(conn.id, 'procs') },
+    { label: tr('Log del server'), action: () => openServerTool(conn.id, 'logs') },
+    { label: tr('Cerca nel server…'), action: () => openServerTool(conn.id, 'search') },
     { label: tr('Monitor sessioni'), disabled: state !== 'open', action: () => openServerTool(conn.id, 'monitor') },
     { label: tr('Utenti e privilegi'), disabled: state !== 'open', action: () => openServerTool(conn.id, 'users') },
     { label: tr('Esegui file SQL…'), disabled: state !== 'open', action: () => s.set({ task: { kind: 'restore', connId: conn.id, db: null } }) },
@@ -263,6 +265,8 @@ function ConnNode({ conn }: { conn: ConnDef }) {
             { label: 'Manutenzione tabelle…', action: () => openMaint(conn.id, db) },
             { label: tr('Genera dati di test…'), action: () => openDbTool(conn.id, db, 'datagen') },
             { label: tr('Documentazione del database…'), action: () => openDbTool(conn.id, db, 'docgen') },
+            { label: tr('Cerca nel database…'), action: () => { const d = openServerTool(conn.id, 'search'); useStore.getState().updateDoc(d.id, { search: { text: d.search?.text ?? '', db } }); } },
+            { label: tr('Copia database…'), action: () => s.set({ task: { kind: 'copy', connId: conn.id, db } }) },
             { label: tr('Indici: duplicati, inutilizzati, mancanti'), action: () => openServerTool(conn.id, 'perf', { tab: 'indexes', db }) },
             'sep',
             { label: 'Backup…', action: () => s.set({ task: { kind: 'backup', connId: conn.id, db } }) },

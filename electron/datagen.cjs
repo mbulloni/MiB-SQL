@@ -40,6 +40,13 @@ async function tuples(connId, db, table, columns, limit = 500000) {
   return rows.map((r) => plain(r.k));
 }
 
+/** Distinct rows of several columns (composite foreign keys). */
+async function rowsOf(connId, db, table, columns, limit = 50000) {
+  const cols = columns.map(qi).join(', ');
+  const res = await server.withConnection(connId, (c) => c.query({ sql: `SELECT DISTINCT ${cols} FROM ${qi(db)}.${qi(table)} WHERE ${columns.map((x) => `${qi(x)} IS NOT NULL`).join(' AND ')} LIMIT ${Number(limit)}`, rowsAsArray: true }));
+  return Array.from(res).map((r) => r.map(plain));
+}
+
 async function counts(connId, db, list) {
   const out = {};
   for (const t of list) {
@@ -49,4 +56,4 @@ async function counts(connId, db, list) {
   return out;
 }
 
-module.exports = { tables, values, tuples, clear, counts };
+module.exports = { tables, values, tuples, rowsOf, clear, counts };

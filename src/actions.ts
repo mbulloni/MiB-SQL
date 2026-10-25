@@ -47,8 +47,8 @@ export function openEr(connId: string, db: string) {
 }
 
 /** Server-wide tools of a connection (session monitor, users): one tab per connection and kind. */
-export type ServerTool = 'monitor' | 'users' | 'procs' | 'perf';
-const SERVER_TOOL_TITLE: Record<ServerTool, () => string> = { monitor: () => 'Monitor', users: () => t('Utenti'), procs: () => t('Processi'), perf: () => t('Prestazioni') };
+export type ServerTool = 'monitor' | 'users' | 'procs' | 'perf' | 'search' | 'logs';
+const SERVER_TOOL_TITLE: Record<ServerTool, () => string> = { monitor: () => 'Monitor', users: () => t('Utenti'), procs: () => t('Processi'), perf: () => t('Prestazioni'), search: () => t('Cerca'), logs: () => 'Log' };
 
 export function openServerTool(connId: string, kind: ServerTool, perf?: Doc['perf']) {
   const existing = st().docs.find((d) => d.kind === kind && d.connId === connId);
@@ -83,6 +83,7 @@ export function openVisual(kind: import('./store').VisualKind, target: { connId:
   else if (kind === 'table') openDesigner(connId, db, null);
   else if (kind === 'maint') openMaint(connId, db);
   else if (kind === 'datagen' || kind === 'docgen') openDbTool(connId, db, kind);
+  else if (kind === 'copy') st().set({ task: { kind: 'copy', connId, db } });
   else openCompare(connId, db);
 }
 
@@ -163,7 +164,7 @@ export async function closeDoc(id = st().activeDoc) {
     return;
   }
   if (doc.kind === 'table') {
-    if (doc.dirty && (await api.confirm(`Scartare le modifiche a ${doc.title}?`, 'La struttura della tabella non è stata applicata al server.', ['Scarta', 'Annulla'])) !== 0) return;
+    if (doc.dirty && (await api.confirm(t('Scartare le modifiche a {0}?', doc.title), t('La struttura della tabella non è stata applicata al server.'), [t('Scarta'), t('Annulla')])) !== 0) return;
     designByDoc.delete(doc.id);
     st().removeDoc(doc.id);
     persist();
@@ -256,7 +257,7 @@ export const pendingEdits = (doc: Doc) =>
 async function discardEdits(doc: Doc, action: string) {
   const n = pendingEdits(doc);
   if (!n) return true;
-  return (await api.confirm(`${n} modifiche ai dati non applicate`, `${action} le scarta.`, ['Scarta modifiche', 'Annulla'])) === 0;
+  return (await api.confirm(t('{0} modifiche ai dati non applicate', n), t('{0} le scarta.', action), [t('Scarta modifiche'), t('Annulla')])) === 0;
 }
 
 /** Executes the document: selection or whole script (all), statement under cursor (current) or its plan. */
@@ -436,7 +437,7 @@ export function formatDoc(id = st().activeDoc) {
 // ---- Views, routines, triggers, events edited as SQL documents ----
 
 export const OBJECT_WORD: Record<EditableKind, string> = { view: 'VIEW', procedure: 'PROCEDURE', function: 'FUNCTION', trigger: 'TRIGGER', event: 'EVENT' };
-export const OBJECT_LABEL: Record<EditableKind, string> = { view: 'vista', procedure: 'procedura', function: 'funzione', trigger: 'trigger', event: 'evento' };
+export const OBJECT_LABEL: Record<EditableKind, string> = { view: t('vista'), procedure: t('procedura'), function: t('funzione'), trigger: 'trigger', event: t('evento') };
 const FEMININE = new Set<EditableKind>(['view', 'procedure', 'function']);
 const g = (kind: EditableKind, f: string, m: string) => (FEMININE.has(kind) ? f : m);
 const objectTitle = (kind: EditableKind, name: string | null) => name ?? `${g(kind, t('Nuova'), t('Nuovo'))} ${OBJECT_LABEL[kind]}`;
@@ -538,7 +539,7 @@ export async function optimizeDoc(id = st().activeDoc) {
 
 /** DROP of a view/routine/trigger/event after confirmation; its editor tabs are closed. */
 export async function dropObject(connId: string, db: string, kind: EditableKind, name: string) {
-  if ((await api.confirm(`Eliminare ${g(kind, t('la'), t('il'))} ${OBJECT_LABEL[kind]} ${db}.${name}?`, `DROP ${OBJECT_WORD[kind]} non si può annullare.`, ['Elimina', 'Annulla'])) !== 0) return;
+  if ((await api.confirm(t('Eliminare {0} {1} {2}.{3}?', g(kind, t('la'), t('il')), OBJECT_LABEL[kind], db, name), t('DROP {0} non si può annullare.', OBJECT_WORD[kind]), [t('Elimina'), t('Annulla')])) !== 0) return;
   try {
     await api.ddl.run(connId, [`DROP ${OBJECT_WORD[kind]} ${qi(db)}.${qi(name)}`]);
   } catch (err) {
@@ -563,7 +564,7 @@ export function persist(now = false) {
     const { docs, activeDoc: active } = st();
     // designer tabs reopen on the server's definition: unapplied structure changes are not kept
     const data = docs.map((d) => (d.kind !== 'sql'
-      ? { id: d.id, kind: d.kind, design: d.design, qb: d.qb, cmp: d.cmp, perf: d.perf, datagen: d.datagen, title: d.title, connId: d.connId, db: d.db, file: null, dirty: false, sql: '' }
+      ? { id: d.id, kind: d.kind, design: d.design, qb: d.qb, cmp: d.cmp, perf: d.perf, datagen: d.datagen, search: d.search, title: d.title, connId: d.connId, db: d.db, file: null, dirty: false, sql: '' }
       : { id: d.id, kind: d.kind, obj: d.obj, title: d.title, connId: d.connId, db: d.db, file: d.file, dirty: d.dirty, sql: modelOf(d.id).getValue() }))
       .filter((d) => d.kind !== 'table' || d.design?.table);
     try { localStorage.setItem(KEY, JSON.stringify({ docs: data, active })); } catch { /* storage unavailable */ }
@@ -596,7 +597,7 @@ function toolTitle(kind: Doc['kind'], connId: string | null, db: string | null, 
     case 'compare': return t('Confronto {0}', db ?? '');
     case 'datagen': return `${t('Dati di test')} ${db}`;
     case 'docgen': return `${t('Documentazione')} ${db}`;
-    case 'monitor': case 'users': case 'procs': case 'perf': return `${SERVER_TOOL_TITLE[kind]()} ${name}`;
+    case 'monitor': case 'users': case 'procs': case 'perf': case 'logs': return `${SERVER_TOOL_TITLE[kind]()} ${name}`;
     default: return saved;
   }
 }
@@ -607,14 +608,14 @@ export function restore() {
     sessionStorage.removeItem('mibsql.reopen');
     for (const id of reopen) if (st().conns.some((c) => c.id === id)) st().openConn(id);
   } catch { /* ignore */ }
-  let saved: { docs: { id: string; kind?: Doc['kind']; obj?: Doc['obj']; design?: Doc['design']; qb?: Doc['qb']; cmp?: Doc['cmp']; perf?: Doc['perf']; datagen?: Doc['datagen']; title: string; connId: string | null; db: string | null; file: string | null; dirty: boolean; sql: string }[]; active: string | null } | null = null;
+  let saved: { docs: { id: string; kind?: Doc['kind']; obj?: Doc['obj']; design?: Doc['design']; qb?: Doc['qb']; cmp?: Doc['cmp']; perf?: Doc['perf']; datagen?: Doc['datagen']; search?: Doc['search']; title: string; connId: string | null; db: string | null; file: string | null; dirty: boolean; sql: string }[]; active: string | null } | null = null;
   try { saved = JSON.parse(localStorage.getItem(KEY) ?? 'null'); } catch { saved = null; }
   if (!saved?.docs?.length) return;
   const known = new Set(st().conns.map((c) => c.id));
   for (const d of saved.docs) {
     if (d.kind && d.kind !== 'sql') {
       if (d.kind === 'history') st().addDoc({ id: d.id, kind: d.kind, title: toolTitle(d.kind, null, null, d.title) });
-      else if (d.connId && known.has(d.connId) && (d.db || d.kind === 'monitor' || d.kind === 'users' || d.kind === 'procs' || d.kind === 'perf')) st().addDoc({ id: d.id, kind: d.kind, design: d.design, qb: d.qb, cmp: d.cmp, perf: d.perf, datagen: d.datagen, title: toolTitle(d.kind, d.connId, d.db, d.title), connId: d.connId, db: d.db });
+      else if (d.connId && known.has(d.connId) && (d.db || d.kind === 'monitor' || d.kind === 'users' || d.kind === 'procs' || d.kind === 'perf' || d.kind === 'search' || d.kind === 'logs')) st().addDoc({ id: d.id, kind: d.kind, design: d.design, qb: d.qb, cmp: d.cmp, perf: d.perf, datagen: d.datagen, search: d.search, title: toolTitle(d.kind, d.connId, d.db, d.title), connId: d.connId, db: d.db });
       continue;
     }
     const m = /^SQL(\d+)\.sql$/.exec(d.title);

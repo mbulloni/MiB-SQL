@@ -10,6 +10,15 @@ IDE educativo per **MariaDB e MySQL** su Linux, ispirato a [dbForge Studio](http
 
 ![Database Explorer ed editor SQL](docs/screenshot-1.png)
 
+## Novità della v1.4
+
+- **Cerca nel database** (pulsante con la lente, Ctrl+Maiusc+D, tasto destro su connessione o database): un testo nei nomi di tabelle, colonne, indici, viste, routine, trigger ed eventi, nel loro codice, nei commenti e nei dati
+- **Log del server**: errori, query lente e log generale, con filtri; si attivano e disattivano dall'app
+- **Copia database**: struttura, dati e routine in un altro database, sullo stesso server o su un'altra connessione
+- **Aggiornamenti integrati**: avviso quando esce una nuova versione, novità e «Aggiorna ora» (AppImage sostituito e riavvio, .deb installato con apt)
+- Generatore di dati: chiavi esterne su più colonne; Processi: installazione con un clic del plugin METADATA_LOCK_INFO su MariaDB
+- Correzioni: connessioni il cui database predefinito è stato eliminato, conferme e pulsanti di alcune finestre rimasti in italiano nell'interfaccia inglese
+
 ## Novità della v1.3
 
 - **Prestazioni** (pulsante in toolbar, pagina iniziale, tasto destro sulla connessione): consigli sulla configurazione del server con punteggio, query più pesanti, indici duplicati/inutilizzati/mancanti, analisi e ottimizzazione di una query, variabili
@@ -128,6 +137,23 @@ IDE educativo per **MariaDB e MySQL** su Linux, ispirato a [dbForge Studio](http
 - HTML in pagina unica (indice laterale, riepilogo, diagramma delle relazioni, tema chiaro/scuro e stampa) o Markdown
 - Tabelle con colonne (chiavi, tipo, NULL, default, extra, commenti), indici, chiavi esterne in entrambe le direzioni («Riferita da»), vincoli CHECK, trigger e CREATE TABLE facoltativo; viste, procedure, funzioni ed eventi; scelta delle tabelle e delle sezioni, anteprima, salva
 
+**Ricerca nel database**
+- Un testo in nomi di oggetti, codice (viste, procedure, funzioni, trigger, eventi), commenti e dati, su un database o su tutti; maiuscole/minuscole e parola intera
+- Risultati raggruppati per tipo con il testo trovato evidenziato e la riga del codice; doppio clic apre l'oggetto nell'editor sul punto trovato (o la tabella nel designer)
+- Nei dati: colonne di testo (e numeriche se il testo è un numero), valore esatto o «contiene», righe per tabella, tabelle troppo grandi saltabili, avanzamento e interruzione; «Apri query» prepara la SELECT con le stesse condizioni
+
+**Log del server**
+- **Errori**: da performance_schema.error_log (MySQL 8), dal file indicato da log_error (diretto se il server è su questo computer, altrimenti LOAD_FILE) o dal journal di systemd (MariaDB su Ubuntu); livelli Errori/Avvisi/Note/Sistema, codici e componenti, righe su più linee riunite
+- **Query lente** e **Log generale**: dalla tabella (mysql.slow_log, mysql.general_log) o dal file; attiva/disattiva, uscita anche su tabella con un clic, svuota, filtro, aggiornamento ogni 5 s, doppio clic apre l'istruzione nell'editor; quando un file non è leggibile viene spiegato perché
+
+**Copia database**
+- Strumenti › Copia database, pagina iniziale o tasto destro sul database: destinazione su qualsiasi connessione, nome del nuovo database, struttura/dati/routine, scelta delle tabelle, DEFINER rimovibile; se la destinazione esiste: annulla, sostituisci o copia dentro
+- Usa il dump e il ripristino dell'app tramite un file temporaneo compresso: provata MariaDB 10.11 → MariaDB 11.4, → MySQL 8.4 e sullo stesso server
+
+**Aggiornamenti**
+- All'avvio (al massimo ogni 12 ore, disattivabile) l'app legge l'ultima release su GitHub: se è più recente compare una barra sotto la toolbar e il numero di versione nella barra di stato diventa verde
+- «Novità e aggiornamento…» mostra le note della release; **Aggiorna ora** scarica il file adatto: l'AppImage viene sostituito e l'app si riavvia con le schede aperte; il .deb viene installato con `pkexec apt-get` (chiede la password), altrimenti si apre l'installatore di sistema. «Salta questa versione» o «Più tardi». Controllo manuale da Strumenti › Controlla aggiornamenti o dal numero di versione
+
 **Lingua**
 - Interfaccia in italiano o inglese: globo in fondo alla toolbar; la finestra si ricarica tenendo schede e connessioni aperte. Alla prima apertura segue la lingua del sistema
 
@@ -212,6 +238,16 @@ IDE educativo per **MariaDB e MySQL** su Linux, ispirato a [dbForge Studio](http
 
 ![Interfaccia in inglese](docs/screenshot-32.png)
 
+![Ricerca nel database](docs/screenshot-34.png)
+
+![Log delle query lente](docs/screenshot-35.png)
+
+![Log degli errori](docs/screenshot-36.png)
+
+![Copia database](docs/screenshot-37.png)
+
+![Aggiornamento disponibile](docs/screenshot-38.png)
+
 ## Installazione
 
 Dalle [release](https://github.com/mbulloni/MiB-SQL/releases):
@@ -242,6 +278,7 @@ Su Ubuntu 24.04 serve `libfuse2t64` per avviare le AppImage.
 | Maiusc+F5 | Interrompi |
 | Ctrl+Maiusc+F | Formatta script o selezione |
 | Ctrl+Invio (Ottimizza query) | Analizza la query |
+| Ctrl+Maiusc+D | Cerca nel database |
 | prefisso + Tab | Inserisci uno snippet |
 | F5 / Ctrl+S (editor oggetti) | Applica la definizione al server |
 | Ctrl+N / Ctrl+O / Ctrl+S / Ctrl+W | Nuovo, apri, salva, chiudi documento |
@@ -271,7 +308,7 @@ mysql -u root -p < scripts/demo.sql
 
 ## Roadmap
 
-Completata: le otto fasi previste (connessioni ed editor, griglia e modifica dati, designer, ER, confronto, backup/import, profiler/monitor/utenti) più Query Builder, tema scuro, partizioni, confronto dati a memoria costante, pacchetto .deb e assistente AI; in v1.2 formattatore, cronologia, snippet, editor di oggetti e manutenzione tabelle; in v1.3 prestazioni, processi, dati di test, documentazione e interfaccia in inglese.
+Completata: le otto fasi previste (connessioni ed editor, griglia e modifica dati, designer, ER, confronto, backup/import, profiler/monitor/utenti) più Query Builder, tema scuro, partizioni, confronto dati a memoria costante, pacchetto .deb e assistente AI; in v1.2 formattatore, cronologia, snippet, editor di oggetti e manutenzione tabelle; in v1.3 prestazioni, processi, dati di test, documentazione e interfaccia in inglese; in v1.4 ricerca, log del server, copia database e aggiornamenti integrati.
 
 
 ## Limiti noti
@@ -284,8 +321,11 @@ Completata: le otto fasi previste (connessioni ed editor, griglia e modifica dat
 - Formattatore: i corpi di routine, trigger ed eventi ricevono solo le maiuscole delle parole chiave; le espressioni CASE e le liste tra parentesi restano su una riga
 - Editor oggetti su MySQL: senza CREATE OR REPLACE la modifica è DROP + CREATE (ripristinata in caso di errore); i privilegi dati alla singola routine vengono riassegnati se l'account può leggere mysql.procs_priv, altrimenti vanno riassegnati a mano; con un DEFINER diverso dal proprio servono i privilegi SET USER/SET_USER_ID
 - Prestazioni: Query pesanti e Indici › mai usati richiedono performance_schema (MySQL lo ha attivo, MariaDB no: serve il riavvio) oppure il log delle query lente / userstat; i contatori sono cumulativi dall'avvio del server; i suggerimenti di indice sono euristici, basati su EXPLAIN (stime) e sulla forma della query: vanno provati
-- Processi: senza il privilegio PROCESS si vedono solo le proprie connessioni e non le transazioni; su MariaDB i lock di metadati sono esatti solo con il plugin METADATA_LOCK_INFO
-- Dati di test: le chiavi esterne composte (su più colonne) non vengono riconosciute: le loro colonne ricevono valori casuali e l'inserimento fallisce se non esistono nella tabella padre (usa un valore fisso o un'espressione); nello script (non inserito) le chiavi esterne usano solo i valori già presenti nel database
+- Processi: senza il privilegio PROCESS si vedono solo le proprie connessioni e non le transazioni; su MariaDB i lock di metadati sono esatti solo con il plugin METADATA_LOCK_INFO (installabile dalla scheda Blocchi)
+- Dati di test: nello script (non inserito) le chiavi esterne usano solo i valori già presenti nel database
+- Log: su server remoti senza tabelle di log né privilegio FILE i file non sono leggibili (l'app propone l'uscita su tabella); il journal di systemd è letto solo per server su questo computer
+- Ricerca nei dati: legge ogni tabella per intero (LIKE '%…%'): su database molto grandi usare «salta tabelle oltre»
+- Aggiornamenti: l'AppImage deve stare in una cartella scrivibile; il .deb richiede pkexec (polkit) per l'installazione automatica
 - Lingua: i messaggi del server MariaDB/MySQL restano nella lingua configurata sul server (lc_messages)
 - Assistente AI: richiede una chiave API Anthropic (a pagamento); la conversazione resta solo per la sessione
 

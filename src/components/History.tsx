@@ -44,7 +44,7 @@ export default function History({ doc: _doc }: { doc: Doc }) {
     load();
   };
   const clear = async () => {
-    if ((await api.confirm('Svuotare la cronologia?', `Verranno eliminate tutte le ${data?.all.toLocaleString(locale()) ?? ''} istruzioni registrate, di tutte le connessioni.`, ['Svuota', 'Annulla'])) !== 0) return;
+    if ((await api.confirm(t('Svuotare la cronologia?'), t('Verranno eliminate tutte le {0} istruzioni registrate, di tutte le connessioni.', data?.all.toLocaleString(locale()) ?? ''), [t('Svuota'), t('Annulla')])) !== 0) return;
     await api.history.clear();
     setSel(null);
     load();

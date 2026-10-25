@@ -148,7 +148,7 @@ export default function CompareView({ doc }: { doc: Doc }) {
   const dataStmts = [...dataPicked].flatMap((t) => { const r = data[t]; return r && typeof r === 'object' && 'statements' in r ? r.statements : []; });
   const syncData = async () => {
     if (!dataStmts.length) return;
-    if ((await api.confirm(`Modificare i dati di ${tgtName}?`, `${dataStmts.length.toLocaleString(locale())} istruzioni INSERT/UPDATE/DELETE in un'unica transazione.`, ['Sincronizza', 'Annulla'])) !== 0) return;
+    if ((await api.confirm(tr('Modificare i dati di {0}?', tgtName), tr('{0} istruzioni INSERT/UPDATE/DELETE in un\'unica transazione.', dataStmts.length.toLocaleString(locale())), [tr('Sincronizza'), tr('Annulla')])) !== 0) return;
     setBusy(tr('Sincronizzazione dei dati…'));
     try {
       await api.data.apply(cmp.tgt.connId!, dataStmts);

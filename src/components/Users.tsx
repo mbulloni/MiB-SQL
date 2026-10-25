@@ -63,7 +63,7 @@ export default function Users({ doc }: { doc: Doc }) {
 
   const run = async (sqls: string[], what: string) => {
     if (!sqls.length) return false;
-    if ((await api.confirm(what, sqls.map(maskPasswords).join(';\n') + ';', ['Esegui', 'Annulla'])) !== 0) return false;
+    if ((await api.confirm(what, sqls.map(maskPasswords).join(';\n') + ';', [t('Esegui'), t('Annulla')])) !== 0) return false;
     try {
       await api.ddl.run(connId, sqls);
       setOk(t('Modifiche applicate.'));

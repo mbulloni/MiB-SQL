@@ -40,7 +40,7 @@ export default function ObjectBar({ doc }: { doc: Doc }) {
   };
   const reload = async () => {
     if (!doc.connId || !doc.db || !obj.name) return;
-    if (doc.dirty && (await api.confirm(`Ricaricare ${obj.name} dal server?`, 'Le modifiche non applicate andranno perse.', ['Ricarica', 'Annulla'])) !== 0) return;
+    if (doc.dirty && (await api.confirm(t('Ricaricare {0} dal server?', obj.name), t('Le modifiche non applicate andranno perse.'), [t('Ricarica'), t('Annulla')])) !== 0) return;
     try {
       let sql = await api.meta.ddl(doc.connId, doc.db, obj.kind, obj.name);
       if (obj.kind === 'view') sql = formatText(sql);

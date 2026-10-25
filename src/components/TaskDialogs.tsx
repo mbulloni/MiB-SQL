@@ -17,10 +17,10 @@ function useProgress(id: string) {
   return p;
 }
 
-function Modal({ title, busy, children, buttons, wide }: { title: string; busy?: boolean; children: React.ReactNode; buttons: React.ReactNode; wide?: boolean }) {
+function Modal({ title, busy, children, buttons, wide, medium }: { title: string; busy?: boolean; children: React.ReactNode; buttons: React.ReactNode; wide?: boolean; medium?: boolean }) {
   return (
     <div className="modal-back" onMouseDown={() => !busy && close()}>
-      <div className={`modal ${wide ? 'wizard' : 'small'}`} onMouseDown={(e) => e.stopPropagation()} onKeyDown={(e) => { if (e.key === 'Escape' && !busy) close(); }}>
+      <div className={`modal ${wide ? 'wizard' : medium ? 'medium' : 'small'}`} onMouseDown={(e) => e.stopPropagation()} onKeyDown={(e) => { if (e.key === 'Escape' && !busy) close(); }}>
         <div className="modal-title">{title}</div>
         <div className="form">{children}</div>
         <div className="modal-buttons">{buttons}</div>
@@ -48,10 +48,10 @@ export function BackupDialog({ connId, db }: { connId: string; db: string }) {
   };
   return (
     <Modal title={t('Backup di {0}', db)} busy={state.busy} buttons={<>
-      {state.done && <button onClick={() => api.showItem(state.done!.file)}>Mostra nella cartella</button>}
+      {state.done && <button onClick={() => api.showItem(state.done!.file)}>{t('Mostra nella cartella')}</button>}
       <div className="spacer" />
-      <button onClick={close} disabled={state.busy}>{state.done ? 'Chiudi' : 'Annulla'}</button>
-      {!state.done && <button className="primary" disabled={state.busy || (!o.structure && !o.data)} onClick={run}>Esegui backup…</button>}
+      <button onClick={close} disabled={state.busy}>{state.done ? t('Chiudi') : t('Annulla')}</button>
+      {!state.done && <button className="primary" disabled={state.busy || (!o.structure && !o.data)} onClick={run}>{t('Esegui backup…')}</button>}
     </>}>
       <div className="cols2">
         <label className="check"><input type="checkbox" checked={o.structure} onChange={set('structure')} />{' '}{t('Struttura (CREATE TABLE)')}</label>
@@ -91,7 +91,7 @@ export function RestoreDialog({ connId, db }: { connId: string; db: string | nul
   const [state, setState] = useState<{ busy?: boolean; done?: { statements: number; errors: { statement: number; message: string; sql: string }[] }; error?: string }>({});
   const run = async () => {
     if (!file) return;
-    if ((await api.confirm(`Eseguire ${file.split('/').pop()}${target ? ` su ${target}` : ''}?`, 'Lo script può creare, modificare o eliminare oggetti e dati. Le istruzioni DDL non si possono annullare.', ['Esegui', 'Annulla'])) !== 0) return;
+    if ((await api.confirm(t('Eseguire {0}{1}?', file.split('/').pop(), target ? ` su ${target}` : ''), t('Lo script può creare, modificare o eliminare oggetti e dati. Le istruzioni DDL non si possono annullare.'), [t('Esegui'), t('Annulla')])) !== 0) return;
     setState({ busy: true });
     try {
       const r = await api.tasks.restore(id, connId, target || null, file, { continueOnError: cont });
@@ -103,8 +103,8 @@ export function RestoreDialog({ connId, db }: { connId: string; db: string | nul
   return (
     <Modal title={t('Ripristina / esegui file SQL')} busy={state.busy} buttons={<>
       <div className="spacer" />
-      <button onClick={close} disabled={state.busy}>{state.done ? 'Chiudi' : 'Annulla'}</button>
-      {!state.done && <button className="primary" disabled={!file || state.busy} onClick={run}>Esegui</button>}
+      <button onClick={close} disabled={state.busy}>{state.done ? t('Chiudi') : t('Annulla')}</button>
+      {!state.done && <button className="primary" disabled={!file || state.busy} onClick={run}>{t('Esegui')}</button>}
     </>}>
       <label>{t('File (.sql o .sql.gz)')}
         <div className="row"><input readOnly value={file ?? ''} placeholder={t('nessun file')} className="grow" /><button type="button" onClick={async () => setFile(await api.pickFile('sql'))}>{t('Sfoglia…')}</button></div>
@@ -191,7 +191,7 @@ export function ImportWizard({ connId, db, table }: { connId: string; db: string
 
   const run = async () => {
     if (!pv || !file) return;
-    if (truncate && (await api.confirm(`Svuotare ${existing} prima dell'importazione?`, 'Tutte le righe attuali verranno eliminate.', ['Svuota e importa', 'Annulla'])) !== 0) return;
+    if (truncate && (await api.confirm(t('Svuotare {0} prima dell\'importazione?', existing), t('Tutte le righe attuali verranno eliminate.'), [t('Svuota e importa'), t('Annulla')])) !== 0) return;
     setState({ busy: true });
     try {
       const r = await api.tasks.importRun(id, connId, file, {
@@ -207,12 +207,12 @@ export function ImportWizard({ connId, db, table }: { connId: string; db: string
   const finalTable = mode === 'new' ? name : existing;
   return (
     <Modal wide title={t('Importa dati in {0}', db)} busy={state.busy} buttons={<>
-      {step > 1 && !state.busy && state.done === undefined && <button onClick={() => setStep(step - 1)}>Indietro</button>}
+      {step > 1 && !state.busy && state.done === undefined && <button onClick={() => setStep(step - 1)}>{t('Indietro')}</button>}
       <div className="spacer" />
-      <button onClick={close} disabled={state.busy}>{state.done !== undefined ? 'Chiudi' : 'Annulla'}</button>
-      {state.done !== undefined && <button className="primary" onClick={() => { close(); selectTop(connId, db, finalTable); }}>Apri {finalTable}</button>}
-      {step === 1 && <button className="primary" disabled={!pv} onClick={() => setStep(2)}>Avanti</button>}
-      {step === 2 && state.done === undefined && <button className="primary" disabled={!ready || state.busy} onClick={run}>{state.busy ? 'Importazione…' : 'Importa'}</button>}
+      <button onClick={close} disabled={state.busy}>{state.done !== undefined ? t('Chiudi') : t('Annulla')}</button>
+      {state.done !== undefined && <button className="primary" onClick={() => { close(); selectTop(connId, db, finalTable); }}>{t('Apri')}{' '}{finalTable}</button>}
+      {step === 1 && <button className="primary" disabled={!pv} onClick={() => setStep(2)}>{t('Avanti')}</button>}
+      {step === 2 && state.done === undefined && <button className="primary" disabled={!ready || state.busy} onClick={run}>{state.busy ? t('Importazione…') : t('Importa')}</button>}
     </>}>
       <div className="steps"><span className={step === 1 ? 'on' : ''}>{t('1 · File')}</span><span className={step === 2 ? 'on' : ''}>{t('2 · Destinazione e colonne')}</span></div>
       {step === 1 && <>
@@ -275,6 +275,86 @@ export function ImportWizard({ connId, db, table }: { connId: string; db: string
         {state.error && <div className="status error">{state.error}</div>}
         {state.done !== undefined && <div className="status ok">{t('Importate')}{' '}{n(state.done)}{' '}{t('righe in')}{' '}{finalTable}.</div>}
       </>}
+    </Modal>
+  );
+}
+
+/** Copy of a database to another database, on this server or another connection (dump + restore). */
+export function CopyDialog({ connId, db }: { connId: string; db: string }) {
+  const [id] = useState(() => newId('task'));
+  const p = useProgress(id);
+  const conns = useStore((s) => s.conns);
+  const objects = useStore((s) => s.meta[metaKey.objects(connId, db)]) as MetaEntry<DbObjects> | undefined;
+  useEffect(() => { useStore.getState().loadMeta(metaKey.objects(connId, db), () => api.meta.objects(connId, db)); }, []);
+  const [tgtConn, setTgtConn] = useState(connId);
+  const [tgtDb, setTgtDb] = useState(`${db}_${t('copia')}`);
+  const [o, setO] = useState({ structure: true, data: true, routines: true, stripDefiner: true, ifExists: 'fail' as 'fail' | 'replace' | 'merge' });
+  const [skip, setSkip] = useState<Set<string>>(new Set());
+  const [info, setInfo] = useState<{ exists: boolean; tables: number } | null>(null);
+  const [state, setState] = useState<{ busy?: boolean; done?: { statements: number; ms: number }; error?: string }>({});
+  const tgtOpen = useStore((s) => s.connState[tgtConn]?.status === 'open');
+  const tables = objects?.data?.tables.map((x) => x.name) ?? [];
+  useEffect(() => { if (!tgtOpen) useStore.getState().openConn(tgtConn); }, [tgtConn]);
+  useEffect(() => {
+    if (!tgtOpen || !tgtDb.trim()) { setInfo(null); return; }
+    const h = setTimeout(() => api.copy.target(tgtConn, tgtDb.trim()).then(setInfo).catch(() => setInfo(null)), 250);
+    return () => clearTimeout(h);
+  }, [tgtConn, tgtDb, tgtOpen]);
+  const same = tgtConn === connId && tgtDb.trim() === db;
+  const blocked = same || !tgtDb.trim() || (info?.exists && o.ifExists === 'fail') || (!o.structure && !o.data);
+  const run = async () => {
+    const target = `${conns.find((c) => c.id === tgtConn)?.name ?? ''} › ${tgtDb.trim()}`;
+    if (info?.exists && o.ifExists === 'replace' && (await api.confirm(t('Sostituire il database {0}?', target), t('Il database di destinazione ({0} tabelle) verrà eliminato e ricreato: i suoi dati andranno persi.', info.tables), [t('Sostituisci'), t('Annulla')])) !== 0) return;
+    setState({ busy: true });
+    try {
+      const r = await api.copy.run(id, { connId, db }, { connId: tgtConn, db: tgtDb.trim() }, { ...o, tables: skip.size ? tables.filter((x) => !skip.has(x)) : undefined });
+      setState({ done: r });
+      useStore.getState().dropMeta(`${tgtConn}/`);
+      loadDatabases(tgtConn, true);
+    } catch (err) { setState({ error: (err as Error).message }); }
+  };
+  const phase = p.phase === 'dump' ? t('Lettura di {0}: tabella {1}/{2}{3}', db, p.done ?? 0, p.total ?? '?', p.table ? ` (${p.table})` : '')
+    : p.phase === 'restore' ? t('Scrittura in {0}: {1}%', tgtDb, p.total ? Math.round((Number(p.bytes) / Number(p.total)) * 100) : 0) : '';
+  return (
+    <Modal title={t('Copia il database {0}', db)} busy={state.busy} medium buttons={<>
+      <div className="spacer" />
+      <button onClick={close} disabled={state.busy}>{state.done ? t('Chiudi') : t('Annulla')}</button>
+      {!state.done && <button className="primary" disabled={state.busy || !!blocked} onClick={run}>{t('Copia')}</button>}
+    </>}>
+      <div className="row">
+        <label className="grow">{t('Connessione di destinazione')}
+          <select value={tgtConn} onChange={(e) => setTgtConn(e.target.value)} disabled={state.busy}>{conns.map((c) => <option key={c.id} value={c.id}>{c.name}</option>)}</select>
+        </label>
+        <label className="grow">{t('Database di destinazione')}<input value={tgtDb} onChange={(e) => setTgtDb(e.target.value)} disabled={state.busy} /></label>
+      </div>
+      {same && <div className="status error">{t('Origine e destinazione coincidono.')}</div>}
+      {info?.exists && <label><span className="warn-text">{t('{0} esiste già ({1} tabelle).', tgtDb, info.tables)}</span>
+        <select value={o.ifExists} onChange={(e) => setO({ ...o, ifExists: e.target.value as typeof o.ifExists })}>
+          <option value="fail">{t('scegli cosa fare…')}</option>
+          <option value="replace">{t('eliminalo e ricrealo')}</option>
+          <option value="merge">{t('copia dentro (le tabelle omonime vengono sostituite)')}</option>
+        </select>
+      </label>}
+      <div className="cols2">
+        <label className="check"><input type="checkbox" checked={o.structure} onChange={(e) => setO({ ...o, structure: e.target.checked })} />{' '}{t('Struttura (CREATE TABLE)')}</label>
+        <label className="check"><input type="checkbox" checked={o.data} onChange={(e) => setO({ ...o, data: e.target.checked })} />{' '}{t('Dati (INSERT)')}</label>
+        <label className="check"><input type="checkbox" checked={o.routines} disabled={!o.structure} onChange={(e) => setO({ ...o, routines: e.target.checked })} />{' '}{t('Viste, routine, trigger, eventi')}</label>
+        <label className="check" title={t('Necessario se l\'utente che ha creato gli oggetti non esiste sulla destinazione')}><input type="checkbox" checked={o.stripDefiner} onChange={(e) => setO({ ...o, stripDefiner: e.target.checked })} />{' '}{t('Rimuovi DEFINER (portabile)')}</label>
+      </div>
+      {tables.length > 0 && (
+        <details>
+          <summary>{t('Tabelle (')}{tables.length - skip.size}{' '}{t('di')}{' '}{tables.length})</summary>
+          <div className="table-pick">
+            {tables.map((x) => (
+              <label key={x} className="check"><input type="checkbox" checked={!skip.has(x)} onChange={(e) => { const s = new Set(skip); if (e.target.checked) s.delete(x); else s.add(x); setSkip(s); }} /> {x}</label>
+            ))}
+          </div>
+        </details>
+      )}
+      <p className="note">{t('La copia passa da un file temporaneo compresso (eliminato alla fine): struttura e dati vengono letti dall\'origine e scritti sulla destinazione, anche su un altro server.')}</p>
+      {state.busy && <div className="status">{phase || t('Avvio…')}</div>}
+      {state.error && <div className="status error">{state.error}</div>}
+      {state.done && <div className="status ok">{t('Copia completata: {0} istruzioni in {1} s.', n(state.done.statements), (state.done.ms / 1000).toLocaleString(locale(), { maximumFractionDigits: 1 }))}</div>}
     </Modal>
   );
 }

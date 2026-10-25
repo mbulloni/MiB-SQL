@@ -6,7 +6,7 @@ import { loadDatabases, metaKey, useStore, type MetaEntry } from './store';
 import ContextMenu, { openMenu } from './components/ContextMenu';
 import { ConnectionDialog, PasswordPrompt, ValueViewer } from './components/Dialogs';
 import ExportDialog from './components/ExportDialog';
-import { BackupDialog, ImportWizard, RestoreDialog } from './components/TaskDialogs';
+import { BackupDialog, CopyDialog, ImportWizard, RestoreDialog } from './components/TaskDialogs';
 import Explorer from './components/Explorer';
 import Icon from './components/Icon';
 import ResultsPanel from './components/ResultsPanel';
@@ -25,6 +25,9 @@ import ProcessManager from './components/ProcessManager';
 import Performance from './components/Performance';
 import DataGenerator from './components/DataGenerator';
 import DocGenerator from './components/DocGenerator';
+import Search from './components/Search';
+import Logs from './components/Logs';
+import { checkUpdates, UpdateBanner, UpdateDialog } from './components/Updates';
 import ObjectBar from './components/ObjectBar';
 import SnippetsDialog from './components/SnippetsDialog';
 import CallDialog from './components/CallDialog';
@@ -144,15 +147,20 @@ function toolsMenu(e: React.MouseEvent) {
     { label: t('Manutenzione tabelle{0}', tg ? ` (${tg.db})` : '…'), action: () => openVisual('maint') },
     { label: `${t('Generatore di dati di test')}${tg ? ` (${tg.db})` : '…'}`, action: () => openVisual('datagen') },
     { label: `${t('Documentazione del database')}${tg ? ` (${tg.db})` : '…'}`, action: () => openVisual('docgen') },
+    { label: `${t('Copia database')}${tg ? ` (${tg.db})` : ''}…`, action: () => openVisual('copy') },
+    { label: t('Cerca nel database…'), action: () => openVisual('search') },
     'sep',
     { label: t('Prestazioni e ottimizzazione'), action: () => openVisual('perf') },
     { label: t('Processi e transazioni'), action: () => openVisual('procs') },
+    { label: t('Log del server'), action: () => openVisual('logs') },
     { label: t('Monitor sessioni'), action: () => (open ? openServerTool(connId!, 'monitor') : openVisual('monitor')) },
     { label: t('Utenti e privilegi'), action: () => (open ? openServerTool(connId!, 'users') : openVisual('users')) },
     'sep',
     { label: tg ? t('Backup di {0}…', tg.db) : t('Backup…'), disabled: !tg, action: task('backup') },
     { label: t('Ripristina / esegui file SQL…'), disabled: !tg, action: task('restore') },
     { label: t('Importa dati…'), disabled: !tg, action: task('import') },
+    'sep',
+    { label: t('Controlla aggiornamenti…'), action: () => checkUpdates(false) },
   ]);
 }
 
@@ -185,6 +193,7 @@ function Toolbar() {
       <button title={t('Cronologia delle query eseguite')} onClick={openHistory}><Icon name="history" /><span>{t('Cronologia')}</span></button>
       <button title={t('Snippet SQL: modelli richiamabili con prefisso + Tab')} onClick={() => set({ snippetDialog: {} })}><Icon name="snippet" /><span>{t('Snippet')}</span></button>
       <button title={t('Prestazioni: consigli sul server, query pesanti, indici, ottimizzazione delle query, variabili')} onClick={() => openVisual('perf')}><Icon name="perf" /><span className="keep">{t('Prestazioni')}</span></button>
+      <button title={t('Cerca un testo in nomi, codice e dati del database (Ctrl+Maiusc+D)')} onClick={() => openVisual('search')}><Icon name="search" /><span>{t('Cerca')}</span></button>
       <button title={t('Processi: connessioni, transazioni, blocchi e deadlock; termina query e connessioni')} onClick={() => openVisual('procs')}><Icon name="procs" /><span>{t('Processi')}</span></button>
       <button title={t('Strumenti: manutenzione tabelle, monitor, utenti, backup, import')} onClick={toolsMenu}><Icon name="tools" /><span className="keep">{t('Strumenti ▾')}</span></button>
       <div className="sep" />
@@ -228,7 +237,7 @@ function DocTabs() {
             {d.obj && <Icon name={d.obj.kind} size={14} />}
             {d.kind === 'history' && <Icon name="history" size={14} />}
             {d.kind === 'maint' && <Icon name="maint" size={14} />}
-            {(d.kind === 'perf' || d.kind === 'procs' || d.kind === 'datagen' || d.kind === 'docgen') && <Icon name={d.kind} size={14} />}
+            {(d.kind === 'perf' || d.kind === 'procs' || d.kind === 'datagen' || d.kind === 'docgen' || d.kind === 'search' || d.kind === 'logs') && <Icon name={d.kind} size={14} />}
             <span className="name">{d.title}{d.dirty ? ' •' : ''}</span>
             <button className="x" onMouseDown={(e) => e.stopPropagation()} onClick={() => closeDoc(d.id)}><Icon name="close" size={12} /></button>
           </div>
@@ -265,6 +274,8 @@ function StartPage() {
         <button onClick={() => openVisual('maint')}><Icon name="maint" size={28} /><b>{t('Manutenzione tabelle')}</b><span>{t('Dimensioni e frammentazione; Analizza, Ottimizza, Controlla, Ripara, Checksum')}</span></button>
         <button onClick={() => openVisual('datagen')}><Icon name="datagen" size={28} /><b>{t('Dati di test')}</b><span>{t('Riempie le tabelle con dati verosimili (nomi, email, date, importi) rispettando tipi, chiavi esterne e valori unici')}</span></button>
         <button onClick={() => openVisual('docgen')}><Icon name="docgen" size={28} /><b>{t('Documentazione')}</b><span>{t('Documento HTML o Markdown del database: tabelle, colonne, indici, relazioni, viste e routine, con diagramma')}</span></button>
+        <button onClick={() => openVisual('search')}><Icon name="search" size={28} /><b>{t('Cerca nel database')}</b><span>{t('Un testo in nomi di tabelle e colonne, nel codice di viste, routine e trigger, nei commenti e nei dati')}</span></button>
+        <button onClick={() => openVisual('copy')}><Icon name="copy" size={28} /><b>{t('Copia database')}</b><span>{t('Struttura, dati e routine in un altro database, sullo stesso server o su un\'altra connessione')}</span></button>
         <button onClick={() => newDoc()}><Icon name="format" size={28} /><b>{t('Formattatore SQL')}</b><span>{t('Nell\'editor: Ctrl+Maiusc+F o «Formatta» riordina parole chiave, rientri e clausole')}</span></button>
       </div>
       <h2>{t('Server')}</h2>
@@ -272,8 +283,10 @@ function StartPage() {
         <button onClick={() => openVisual('perf')}><Icon name="perf" size={28} /><b>{t('Prestazioni')}</b><span>{t('Consigli sulla configurazione, query più pesanti, indici inutili o mancanti, analisi e ottimizzazione delle query')}</span></button>
         <button onClick={() => openVisual('procs')}><Icon name="procs" size={28} /><b>{t('Processi')}</b><span>{t('Connessioni e query in corso, transazioni aperte, chi blocca chi, ultimo deadlock; termina una o più connessioni')}</span></button>
         <button onClick={() => openVisual('monitor')}><Icon name="profile" size={28} /><b>{t('Monitor')}</b><span>{t('Grafici in tempo reale: query al secondo, connessioni, rete, buffer pool')}</span></button>
+        <button onClick={() => openVisual('logs')}><Icon name="logs" size={28} /><b>{t('Log del server')}</b><span>{t('Errori, query lente e log generale: filtri, attivazione e disattivazione dei log')}</span></button>
         <button onClick={() => openVisual('users')}><Icon name="key" size={28} /><b>{t('Utenti e privilegi')}</b><span>{t('Account, ruoli e permessi del server')}</span></button>
       </div>
+      <p className="start-version">MiB-SQL {__APP_VERSION__} · <button className="link" onClick={() => checkUpdates(false)}>{t('Controlla aggiornamenti')}</button></p>
       {conns.length > 0 && <>
         <h2>{t('Connessioni')}</h2>
         <div className="start-conns">
@@ -286,6 +299,14 @@ function StartPage() {
       </>}
     </div>
   );
+}
+
+/** Version in the status bar; green when a newer release has been found. */
+function UpdateBadge() {
+  const u = useStore((s) => s.update);
+  return u?.newer
+    ? <button className="sb-update" onClick={() => useStore.getState().set({ updateDialog: true })}><Icon name="update" size={12} /> {t('Aggiornamento {0} disponibile', u.latest)}</button>
+    : <button className="sb-version" title={t('Controlla aggiornamenti')} onClick={() => checkUpdates(false)}>v{__APP_VERSION__}</button>;
 }
 
 function StatusBar({ cursor }: { cursor: [number, number] }) {
@@ -302,6 +323,7 @@ function StatusBar({ cursor }: { cursor: [number, number] }) {
         {doc?.db && <span>{doc.db}</span>}
       </> : <span>{t('Nessuna connessione')}</span>}
       <div className="spacer" />
+      <UpdateBadge />
       {doc?.kind === 'sql' && <span>Rg {cursor[0]}{t(', Col')}{' '}{cursor[1]}</span>}
     </div>
   );
@@ -318,6 +340,7 @@ export default function App() {
   const pickTarget = useStore((s) => s.pickTarget);
   const snippetDialog = useStore((s) => s.snippetDialog);
   const callDialog = useStore((s) => s.callDialog);
+  const updateDialog = useStore((s) => s.updateDialog);
   const [cursor, setCursor] = useState<[number, number]>([1, 1]);
   const [side, startSide] = useDrag(300, 'x', 180, 'mibsql.side');
   const [bottom, startBottom] = useDrag(320, 'y', 80, 'mibsql.bottom');
@@ -330,6 +353,8 @@ export default function App() {
     ready.current = true;
     useStore.getState().loadConns().then(restore);
     loadSnippets().catch(() => {});
+    // newer release on GitHub: banner under the toolbar (at most every 12 hours, can be turned off)
+    setTimeout(() => checkUpdates(true), 4000);
     api.file.onOpenArg(openSql);
     api.onCloseRequest(requestQuit);
   }, []);
@@ -342,7 +367,7 @@ export default function App() {
   useEffect(() => {
     const onKey = (e: KeyboardEvent) => {
       const s = useStore.getState();
-      if (s.connDialog || s.passwordPrompt || s.exportDialog || s.viewer || s.task || s.pickTarget || s.snippetDialog || s.callDialog) return;
+      if (s.connDialog || s.passwordPrompt || s.exportDialog || s.viewer || s.task || s.pickTarget || s.snippetDialog || s.callDialog || s.updateDialog) return;
       // the grid has its own Ctrl+Maiusc+N (NULL) and text inputs keep their keys
       const t = e.target as HTMLElement;
       if (t.closest?.('.grid, .result-bar') && (t.tagName === 'INPUT' || ((e.ctrlKey || e.metaKey) && e.shiftKey && e.key.toLowerCase() === 'n'))) return;
@@ -355,6 +380,7 @@ export default function App() {
       else if (ctrl && k === 'e') run(() => runDoc('explain'));
       else if (ctrl && e.shiftKey && k === 'p') run(() => profileDoc());
       else if (ctrl && e.shiftKey && k === 'f') run(() => formatDoc());
+      else if (ctrl && e.shiftKey && k === 'd') run(() => openVisual('search'));
       else if (ctrl && e.shiftKey && k === 'n') run(() => useStore.getState().set({ connDialog: { def: {} } }));
       else if (ctrl && k === 'n') run(() => newDoc());
       else if (ctrl && k === 'o') run(openFiles);
@@ -374,6 +400,7 @@ export default function App() {
   return (
     <div className="app">
       <Toolbar />
+      <UpdateBanner />
       <div className="main">
         <div style={{ width: side }} className="side"><Explorer /></div>
         <div className="vsplit" onMouseDown={startSide} />
@@ -400,6 +427,8 @@ export default function App() {
           {active?.kind === 'perf' && <Performance key={active.id} doc={active} />}
           {active?.kind === 'datagen' && <DataGenerator key={active.id} doc={active} />}
           {active?.kind === 'docgen' && <DocGenerator key={active.id} doc={active} />}
+          {active?.kind === 'search' && <Search key={active.id} doc={active} />}
+          {active?.kind === 'logs' && <Logs key={active.id} doc={active} />}
           {!docs.length && <StartPage />}
         </div>
       </div>
@@ -414,6 +443,8 @@ export default function App() {
       {callDialog && <CallDialog key={callDialog.name} {...callDialog} />}
       {task?.kind === 'backup' && task.db && <BackupDialog connId={task.connId} db={task.db} />}
       {task?.kind === 'restore' && <RestoreDialog connId={task.connId} db={task.db} />}
+      {task?.kind === 'copy' && task.db && <CopyDialog connId={task.connId} db={task.db} />}
+      {updateDialog && <UpdateDialog />}
       {task?.kind === 'import' && task.db && <ImportWizard connId={task.connId} db={task.db} table={task.table} />}
     </div>
   );

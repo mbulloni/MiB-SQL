@@ -28,9 +28,9 @@ export interface ExportRequest {
   filtered?: boolean;
 }
 
-export type VisualKind = 'er' | 'query' | 'table' | 'compare' | 'maint' | 'datagen' | 'docgen' | 'perf' | 'procs' | 'monitor' | 'users';
+export type VisualKind = 'er' | 'query' | 'table' | 'compare' | 'maint' | 'datagen' | 'docgen' | 'perf' | 'procs' | 'monitor' | 'users' | 'search' | 'logs' | 'copy';
 /** Tools that work on a whole server: the target dialog asks only for the connection. */
-export const SERVER_KINDS = new Set<VisualKind>(['perf', 'procs', 'monitor', 'users']);
+export const SERVER_KINDS = new Set<VisualKind>(['perf', 'procs', 'monitor', 'users', 'search', 'logs']);
 
 interface PasswordRequest {
   conn: ConnDef;
@@ -54,11 +54,14 @@ interface State {
   connDialog: { def: Partial<ConnDef> } | null;
   passwordPrompt: PasswordRequest | null;
   exportDialog: ExportRequest | null;
-  task: { kind: 'backup' | 'restore' | 'import'; connId: string; db: string | null; table?: string } | null;
+  task: { kind: 'backup' | 'restore' | 'import' | 'copy'; connId: string; db: string | null; table?: string } | null;
   viewer: { title: string; value: string; isNull?: boolean; binary?: boolean; onSave?: (v: string | null) => void } | null;
   snippetDialog: { body?: string } | null;
   callDialog: { connId: string; db: string; kind: 'procedure' | 'function'; name: string } | null;
   historyTick: number; // bumped when statements are added to the history
+  update: import('./api').UpdateInfo | null; // newer release found by the update check
+  updateDialog: boolean;
+  updateError: string | null;
 
   loadConns(): Promise<void>;
   openConn(id: string): Promise<ServerInfo | null>;
@@ -98,6 +101,9 @@ export const useStore = create<State>((set, get) => ({
   snippetDialog: null,
   callDialog: null,
   historyTick: 0,
+  update: null,
+  updateDialog: false,
+  updateError: null,
 
   async loadConns() {
     const { list, keyring } = await api.conn.list();

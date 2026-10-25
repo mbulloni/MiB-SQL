@@ -131,7 +131,12 @@ async function open(connId, given) {
   try {
     // A plain connection first: it fails fast with the real error, a pool would retry until acquireTimeout.
     const opts = await driverOptions(def, sec);
-    await (await mariadb.createConnection(opts)).end();
+    try { await (await mariadb.createConnection(opts)).end(); } catch (err) {
+      // the profile's default database was dropped: connect without it rather than not at all
+      if (err.errno !== 1049 || !opts.database) throw err;
+      delete opts.database;
+      await (await mariadb.createConnection(opts)).end();
+    }
     pools.set(connId, mariadb.createPool({ ...opts, connectionLimit: 3, minimumIdle: 0, idleTimeout: 300 }));
   } catch (err) {
     tunnels.get(connId)?.close();
@@ -177,10 +182,14 @@ async function openSession(connId, db) {
   pool(connId); // the connection must be open
   const sec = await connections.secretsFor(def);
   let conn;
-  try { conn = await mariadb.createConnection({ ...(await driverOptions(def, sec)), database: db || def.database || undefined }); }
-  catch (err) { throw new DbError(err); }
+  const opts = await driverOptions(def, sec);
+  try { conn = await mariadb.createConnection({ ...opts, database: db || def.database || undefined }); }
+  catch (err) {
+    if (err.errno !== 1049 || db || !def.database) throw new DbError(err);
+    try { conn = await mariadb.createConnection({ ...opts, database: undefined }); } catch (again) { throw new DbError(again); }
+  }
   const id = crypto.randomUUID();
-  const s = { connId, conn, db: db || def.database || null, busy: false, cancelled: false };
+  const s = { connId, conn, db: db || null, busy: false, cancelled: false };
   sessions.set(id, s);
   if (!s.db) s.db = (await conn.query('SELECT DATABASE()'))[0][0];
   return { id, db: s.db };

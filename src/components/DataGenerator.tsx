@@ -39,7 +39,7 @@ function SpecOptions({ c, spec, set, mysql }: { c: GenColumn; spec: ColSpec; set
     case 'expr': return text('value', t('espressione'), mysql ? 'NOW()' : 'NOW() - INTERVAL RAND() * 30 DAY');
     case 'pattern': return text('value', t('modello'), 'ABC-####');
     case 'list': return <label className="grow">{t('valori (uno per riga o separati da virgola)')}<textarea rows={2} value={spec.value ?? ''} onChange={(e) => set({ value: e.target.value })} /></label>;
-    case 'fk': return <span className="muted">{c.fk ? `→ ${c.fk.table}.${c.fk.column}` : t('nessuna chiave esterna su questa colonna')}</span>;
+    case 'fk': return <span className="muted">{c.fk ? `→ ${c.fk.table}.${c.fk.column}${c.fk.group ? ` (${t('chiave composta {0}', c.fk.group)})` : ''}` : t('nessuna chiave esterna su questa colonna')}</span>;
     default: return null;
   }
 }
@@ -95,15 +95,20 @@ export default function DataGenerator({ doc }: { doc: Doc }) {
     const specs = specsOf(name);
     const fkValues: Record<string, (string | number)[]> = {};
     const existing: Record<string, Set<string>> = {};
+    const fkTuples: Record<string, (string | number | null)[][]> = {};
+    const def = (tables ?? []).find((x) => x.name === name);
     for (const c of cols) {
-      if (specs[c.name]?.kind === 'fk' && c.fk) fkValues[c.name] = await api.datagen.values(connId, db, c.fk.table, c.fk.column, 50000);
+      if (specs[c.name]?.kind === 'fk' && c.fk?.group && !fkTuples[c.fk.group]) {
+        const fk = def?.foreignKeys.find((f) => f.name === c.fk!.group);
+        if (fk) fkTuples[c.fk.group] = await api.datagen.rowsOf(connId, db, fk.refTable, fk.refColumns);
+      } else if (specs[c.name]?.kind === 'fk' && c.fk) fkValues[c.name] = await api.datagen.values(connId, db, c.fk.table, c.fk.column, 50000);
       if (withExisting && c.unique && specs[c.name]?.kind !== 'skip') existing[c.name] = new Set((await api.datagen.values(connId, db, name, c.name, 200000)).map(String));
     }
     // adding to existing rows: a different stream each time, so the same seed does not repeat the rows already there
     const before = withExisting ? (await api.datagen.counts(connId, db, [name]))[name] : 0;
     const keys = compositeKeys((tables ?? []).find((x) => x.name === name)!);
     const existingKeys = withExisting && before ? await Promise.all(keys.map(async (k) => new Set(await api.datagen.tuples(connId, db, name, k)))) : [];
-    return { seed: g.seed + before, lang: g.lang, table: name, fkValues, existing, keys, existingKeys };
+    return { seed: g.seed + before, lang: g.lang, table: name, fkValues, fkTuples, existing, keys, existingKeys };
   };
 
   const doPreview = async () => {
@@ -174,7 +179,7 @@ export default function DataGenerator({ doc }: { doc: Doc }) {
       }
       const counts = await api.datagen.counts(connId, db, plan.order);
       const secs = (Date.now() - t0) / 1000;
-      setNotice(`${stop.current ? t('Interrotto.') : t('Completato.')} ${t('{0} righe inserite in {1} s', fmt(all), secs.toLocaleString(locale(), { maximumFractionDigits: 1 }))}. ${plan.order.map((n) => `${n}: ${fmt(counts[n])}`).join(' · ')}${skippedNote.length ? ` · ${skippedNote.join(' · ')}` : ''}`);
+      setNotice(`${stop.current ? t('Interrotto.') : t('Completato.')} ${(secs < 1 ? t('{0} righe inserite in {1} ms', fmt(all), Math.round(secs * 1000)) : t('{0} righe inserite in {1} s', fmt(all), secs.toLocaleString(locale(), { maximumFractionDigits: 1 })))}. ${plan.order.map((n) => `${n}: ${fmt(counts[n])}`).join(' · ')}${skippedNote.length ? ` · ${skippedNote.join(' · ')}` : ''}`);
     } catch (err) {
       setError(`${(err as Error).message}${all ? `\n${t('Righe già inserite: {0} (tabelle completate: {1}).', fmt(all), done.join(', ') || '—')}` : ''}`);
     }

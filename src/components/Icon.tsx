@@ -41,6 +41,10 @@ const P: Record<string, ReactElement> = {
   procs: <><rect x="1.5" y="2" width="13" height="2.6" rx=".8" fill="#5b7fb5" /><rect x="1.5" y="6.7" width="13" height="2.6" rx=".8" fill="#e9a23b" /><rect x="1.5" y="11.4" width="13" height="2.6" rx=".8" fill="#5b7fb5" /><path d="M11 6.2l3 3.6M14 6.2l-3 3.6" stroke="#d64545" strokeWidth="1.3" /></>,
   datagen: <><rect x="1.5" y="2.5" width="9" height="11" fill="#fff" stroke="#3a7bd5" /><path d="M1.5 6h9M1.5 9.5h9M5 2.5v11" stroke="#3a7bd5" strokeWidth=".8" /><path d="M12.5 1.5l.7 1.6 1.6.7-1.6.7-.7 1.6-.7-1.6-1.6-.7 1.6-.7zM12.5 8.5l.5 1.1 1.1.5-1.1.5-.5 1.1-.5-1.1-1.1-.5 1.1-.5z" fill="#e9a23b" /></>,
   docgen: <><path d="M3 1.5h6.5l3.5 3.5v9.5H3z" fill="#fff" stroke="#6a7685" /><path d="M9.5 1.5V5H13" fill="none" stroke="#6a7685" /><path d="M5 7.5h6M5 10h6M5 12.5h4" stroke="#2a9d8f" strokeWidth="1.2" /></>,
+  search: <><circle cx="6.8" cy="6.8" r="4.6" fill="none" stroke="#3a7bd5" strokeWidth="1.7" /><path d="M10.2 10.2l4.2 4.2" stroke="#3a7bd5" strokeWidth="2" strokeLinecap="round" /></>,
+  logs: <><rect x="2.5" y="1.5" width="11" height="13" rx="1.2" fill="#fff" stroke="#6a7685" /><path d="M5 5h6M5 7.8h6M5 10.6h4" stroke="#6a7685" strokeWidth="1.1" /><circle cx="12.3" cy="12.3" r="2.6" fill="#d64545" /><path d="M12.3 11v1.6" stroke="#fff" strokeWidth="1.1" /></>,
+  copy: <><rect x="1.5" y="4.5" width="8" height="10" rx="1.2" fill="#e8b04a" /><rect x="6.5" y="1.5" width="8" height="10" rx="1.2" fill="#d99b2b" stroke="#fff" /><path d="M9 6.5h3.5M9 9h3.5" stroke="#fff" strokeWidth="1" /></>,
+  update: <><circle cx="8" cy="8" r="6.2" fill="#2e9e44" /><path d="M8 4.5v6M5.3 8l2.7 2.7L10.7 8" stroke="#fff" strokeWidth="1.6" fill="none" strokeLinecap="round" strokeLinejoin="round" /></>,
   lang: <><circle cx="8" cy="8" r="6" fill="none" stroke="currentColor" strokeWidth="1.2" /><path d="M2 8h12M8 2c-2.2 2.5-2.2 9.5 0 12M8 2c2.2 2.5 2.2 9.5 0 12" fill="none" stroke="currentColor" strokeWidth="1.1" /></>,
   close: <path d="M4 4l8 8M12 4l-8 8" stroke="currentColor" strokeWidth="1.5" />,
 };

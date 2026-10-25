@@ -5,7 +5,7 @@ import { loadDatabases, metaKey, SERVER_KINDS, useStore, type MetaEntry, type Vi
 
 const TITLE: Record<VisualKind, () => string> = {
   er: () => t('Diagramma ER'), query: () => 'Query Builder', table: () => t('Nuova tabella'), compare: () => t('Confronto schema e dati'), maint: () => t('Manutenzione tabelle'),
-  datagen: () => t('Generatore di dati di test'), docgen: () => t('Documentazione del database'), perf: () => t('Prestazioni'), procs: () => t('Processi'), monitor: () => t('Monitor sessioni'), users: () => t('Utenti e privilegi'),
+  datagen: () => t('Generatore di dati di test'), docgen: () => t('Documentazione del database'), perf: () => t('Prestazioni'), procs: () => t('Processi'), monitor: () => t('Monitor sessioni'), users: () => t('Utenti e privilegi'), search: () => t('Cerca nel database'), logs: () => t('Log del server'), copy: () => t('Copia database'),
 };
 
 /** Which database to open a visual tool on, when none is selected in the explorer or active document. */

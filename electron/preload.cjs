@@ -94,6 +94,7 @@ contextBridge.exposeInMainWorld('api', {
     explainFor: (connId, id, flavor) => call('procs:explainFor', connId, id, flavor),
     kill: (connId, ids, queryOnly) => call('procs:kill', connId, ids, queryOnly),
     innodbStatus: (connId) => call('procs:innodbStatus', connId),
+    installMdl: (connId) => call('procs:installMdl', connId),
   },
   perf: {
     overview: (connId) => call('perf:overview', connId),
@@ -108,8 +109,31 @@ contextBridge.exposeInMainWorld('api', {
     tables: (connId, db) => call('datagen:tables', connId, db),
     values: (connId, db, table, column, limit) => call('datagen:values', connId, db, table, column, limit),
     tuples: (connId, db, table, columns) => call('datagen:tuples', connId, db, table, columns),
+    rowsOf: (connId, db, table, columns) => call('datagen:rowsOf', connId, db, table, columns),
     clear: (connId, db, tables, truncate) => call('datagen:clear', connId, db, tables, truncate),
     counts: (connId, db, tables) => call('datagen:counts', connId, db, tables),
+  },
+  search: {
+    objects: (connId, dbs, text, opts) => call('search:objects', connId, dbs, text, opts),
+    data: (id, connId, dbs, text, opts) => call('search:data', id, connId, dbs, text, opts),
+    stop: (id) => call('search:stop', id),
+  },
+  logs: {
+    status: (connId) => call('logs:status', connId),
+    error: (connId) => call('logs:error', connId),
+    query: (connId, which) => call('logs:query', connId, which),
+    set: (connId, which, on, toTable) => call('logs:set', connId, which, on, toTable),
+    clear: (connId, which) => call('logs:clear', connId, which),
+  },
+  copy: {
+    target: (connId, db) => call('copy:target', connId, db),
+    run: (id, src, tgt, opts) => call('copy:run', id, src, tgt, opts),
+  },
+  openRelease: (url) => call('shell:openRelease', url),
+  update: {
+    check: () => call('update:check'),
+    install: () => call('update:install'),
+    restart: () => call('update:restart'),
   },
   setLang: (l) => call('app:setLang', l),
   monitor: {

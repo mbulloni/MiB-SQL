@@ -180,7 +180,7 @@ export default function TableDesigner({ doc }: { doc: Doc }) {
         dropParts ? t('Partizioni eliminate: {0} (le righe che contengono vanno perse).', dropParts) : '',
         rewrite ? t('Le righe vengono ridistribuite tra le partizioni: su tabelle grandi può richiedere tempo.') : '',
       ].filter(Boolean).join('\n');
-      if ((await api.confirm(`Applicare le modifiche a ${state!.orig!.name}?`, what, ['Applica', 'Annulla'])) !== 0) return;
+      if ((await api.confirm(t('Applicare le modifiche a {0}?', state!.orig!.name), what, [t('Applica'), t('Annulla')])) !== 0) return;
     }
     setBusy(true);
     setStatus(null);

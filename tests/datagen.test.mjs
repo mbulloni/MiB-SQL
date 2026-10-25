@@ -120,3 +120,19 @@ test('the email follows the name generated in the same row', () => {
     assert.ok(email.startsWith(`${norm(first)}.${norm(last.join(' '))}`), `${name} → ${email}`);
   }
 });
+
+test('composite foreign keys take whole parent rows', () => {
+  const tb = table('lines', [['order_id', 'int'], ['ver', 'int'], ['qty', 'int']], {
+    foreignKeys: [{ name: 'fk_ov', columns: ['order_id', 'ver'], refDb: 'd', refTable: 'order_versions', refColumns: ['id', 'version'], onDelete: '', onUpdate: '' }],
+  });
+  const cols = columnsOf(tb);
+  assert.deepEqual(cols.slice(0, 2).map((c) => c.fk), [{ table: 'order_versions', column: 'id', group: 'fk_ov', index: 0 }, { table: 'order_versions', column: 'version', group: 'fk_ov', index: 1 }]);
+  const specs = Object.fromEntries(cols.map((c) => [c.name, guess(c)]));
+  const parents = [[1, 1], [1, 2], [2, 1]];
+  const g = generator(cols, specs, { seed: 4, lang: 'it', table: 'lines', fkTuples: { fk_ov: parents } });
+  for (let i = 0; i < 30; i++) {
+    const [o, v] = g.next();
+    assert.ok(parents.some(([a, b]) => a === o && b === v), `${o},${v}`);
+  }
+  assert.throws(() => generator(cols, specs, { seed: 4, lang: 'it', table: 'lines' }).next(), /genera prima le righe di order_versions/);
+});

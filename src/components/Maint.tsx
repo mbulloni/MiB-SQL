@@ -80,10 +80,9 @@ export default function Maint({ doc }: { doc: Doc }) {
     if (!tables.length) return;
     const size = bytes(picked.reduce((n, t) => n + total(t), 0));
     const what = tables.length === 1 ? tr('la tabella {0}', tables[0]) : tr('{0} tabelle', tables.length);
-    if (op === 'optimize' && (await api.confirm(`Ottimizzare ${what} (${size})?`,
-      'OPTIMIZE ricostruisce ogni tabella per recuperare lo spazio libero e riordinare dati e indici. Su InnoDB equivale ad ALTER TABLE … FORCE: '
-      + 'richiede spazio su disco pari alla tabella e su tabelle grandi può durare a lungo. Le tabelle vengono elaborate una alla volta.', ['Ottimizza', 'Annulla'])) !== 0) return;
-    if (op === 'repair' && (await api.confirm(`Riparare ${what}?`, 'REPAIR TABLE può eliminare le righe che non riesce a recuperare: fai prima un backup. Vale solo per MyISAM, Aria, ARCHIVE e CSV.', ['Ripara', 'Annulla'])) !== 0) return;
+    if (op === 'optimize' && (await api.confirm(tr('Ottimizzare {0} ({1})?', what, size),
+      tr('OPTIMIZE ricostruisce ogni tabella per recuperare lo spazio libero e riordinare dati e indici. Su InnoDB equivale ad ALTER TABLE … FORCE: richiede spazio su disco pari alla tabella e su tabelle grandi può durare a lungo. Le tabelle vengono elaborate una alla volta.'), [tr('Ottimizza'), tr('Annulla')])) !== 0) return;
+    if (op === 'repair' && (await api.confirm(tr('Riparare {0}?', what), tr('REPAIR TABLE può eliminare le righe che non riesce a recuperare: fai prima un backup. Vale solo per MyISAM, Aria, ARCHIVE e CSV.'), [tr('Ripara'), tr('Annulla')])) !== 0) return;
     const option = op === 'check' ? checkOption : op === 'analyze' && persistent ? 'PERSISTENT FOR ALL' : '';
     const id = crypto.randomUUID();
     setRunning({ id, op, done: 0, total: tables.length, table: tables[0] });

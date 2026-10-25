@@ -121,4 +121,9 @@ async function innodbStatus(connId) {
   return str(r?.Status) ?? '';
 }
 
-module.exports = { snapshot, explainFor, kill, innodbStatus };
+/** MariaDB: the plugin that lists metadata locks (information_schema.METADATA_LOCK_INFO). */
+async function installMdlPlugin(connId) {
+  await server.runStatements(connId, ["INSTALL SONAME 'metadata_lock_info'"]);
+}
+
+module.exports = { snapshot, explainFor, kill, innodbStatus, installMdlPlugin };
