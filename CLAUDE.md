@@ -14,7 +14,7 @@ npm run dist        # AppImage + .deb
 
 ## Architettura
 
-- `electron/main.cjs` — finestra, IPC (`handle()` → `{ok}`/`{error, code}`), dialog file. Menu applicazione rimosso; F12 = DevTools.
+- `electron/main.cjs` — accelerazione GPU spenta di default dalla 1.4.1 (finestra nera con alcuni driver, nessun crash da intercettare: `--enable-gpu` / `MIBSQL_ENABLE_GPU=1` la riattivano); finestra, IPC (`handle()` → `{ok}`/`{error, code}`), dialog file. Menu applicazione rimosso; F12 = DevTools.
 - `electron/connections.cjs` — profili in `<userData>/connections.json`; segreti in `secrets.json` cifrati con `safeStorage` async. Backend `basic_text` = portachiavi non disponibile → segreti solo in memoria per la sessione.
 - `electron/server.cjs` — per connessione: pool metadati (explorer, completamento, `KILL QUERY`) + tunnel SSH condiviso (`ssh2`, server locale su porta 0). Per documento: connessione dedicata (sessione). `exec()` divide lo script, esegue in sequenza, normalizza celle (BigInt/DECIMAL → stringa, Buffer → `0x…`, JSON → stringa), limita a 50.000 righe per resultset. `open()` prova prima una connessione singola: il pool riproverebbe fino ad `acquireTimeout` perdendo il codice d'errore.
 - `electron/sqlsplit.cjs` — splitter tipo client mariadb (quote, commenti, `DELIMITER`), offset sul testo originale; `scan(text, delim, final)` e `Splitter` incrementale per i file grandi; `isBlank` è uno scanner (le regex con `\s` mangiavano le righe dopo `--`). Testato in `tests/`.

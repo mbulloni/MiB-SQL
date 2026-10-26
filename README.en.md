@@ -10,6 +10,10 @@ Educational IDE for **MariaDB and MySQL** on Linux, inspired by [dbForge Studio]
 
 ![Performance advice in English](docs/screenshot-33.png)
 
+## What's new in 1.4.1
+
+- **Black window at startup** fixed: hardware acceleration is off by default (some video drivers left the window black); `--enable-gpu` turns it back on
+
 ## What's new in 1.4
 
 - **Database search** (magnifier button, Ctrl+Shift+D, right click on a connection or database): a text in the names of tables, columns, indexes, views, routines, triggers and events, in their code, in comments and in data, with highlighted matches

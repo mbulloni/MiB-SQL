@@ -10,6 +10,10 @@ IDE educativo per **MariaDB e MySQL** su Linux, ispirato a [dbForge Studio](http
 
 ![Database Explorer ed editor SQL](docs/screenshot-1.png)
 
+## Novità della v1.4.1
+
+- **Finestra nera all'avvio** risolta: l'accelerazione grafica è spenta di default (alcuni driver video lasciavano la finestra nera); `--enable-gpu` la riattiva
+
 ## Novità della v1.4
 
 - **Cerca nel database** (pulsante con la lente, Ctrl+Maiusc+D, tasto destro su connessione o database): un testo nei nomi di tabelle, colonne, indici, viste, routine, trigger ed eventi, nel loro codice, nei commenti e nei dati
