@@ -267,6 +267,8 @@ chmod +x MiB-SQL-*.AppImage
 
 Su Ubuntu 24.04 serve `libfuse2t64` per avviare le AppImage.
 
+Dalla v1.4.1 l'accelerazione grafica è spenta: con alcuni driver (macchine virtuali, nouveau, Intel datati) la finestra restava nera. Per riattivarla: `./MiB-SQL-*.AppImage --enable-gpu` (o `MIBSQL_ENABLE_GPU=1`). Con la v1.4.0 la finestra nera si evita con `--disable-gpu`.
+
 ## Scorciatoie
 
 | Tasto | Azione |

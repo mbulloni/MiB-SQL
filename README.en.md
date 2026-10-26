@@ -96,6 +96,8 @@ sudo apt install ./mib-sql_x.y.z_amd64.deb    # Debian/Ubuntu
 chmod +x MiB-SQL-*.AppImage && ./MiB-SQL-*.AppImage   # any distribution (Ubuntu 24.04 needs libfuse2t64)
 ```
 
+Since 1.4.1 hardware acceleration is off: with some GPU drivers (virtual machines, nouveau, older Intel) the window stayed black. To turn it back on: `--enable-gpu` (or `MIBSQL_ENABLE_GPU=1`). With 1.4.0, `--disable-gpu` avoids the black window.
+
 ## Development
 
 ```bash

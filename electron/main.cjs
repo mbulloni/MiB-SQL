@@ -25,6 +25,9 @@ const { t } = require('./i18n.cjs');
 app.commandLine.appendSwitch('no-sandbox');
 // Separate profile for tests and screenshots, so they never touch the user's saved connections.
 if (process.env.MIBSQL_USERDATA) app.setPath('userData', process.env.MIBSQL_USERDATA);
+// Hardware acceleration off by default: with some GPU drivers (VMs, nouveau, old Intel) the window stays black
+// without any crash to detect. Editor, grid and SVG diagrams don't need it; `--enable-gpu` or MIBSQL_ENABLE_GPU=1 turn it on.
+if (!process.argv.includes('--enable-gpu') && !process.env.MIBSQL_ENABLE_GPU) app.disableHardwareAcceleration();
 
 let win;
 
