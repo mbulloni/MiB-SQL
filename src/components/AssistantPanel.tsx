@@ -1,11 +1,11 @@
 import { useEffect, useRef, useState } from 'react';
 import { api } from '../api';
 import { insertText, replaceDocText } from '../actions';
-import { inlineSegments, parseBlocks, schemaText, SYSTEM_PROMPT, userMessage, type TurnContext } from '../assistant';
+import { inlineSegments, parseBlocks, schemaText, SYSTEM_PROMPT, TSQL_PROMPT, userMessage, type TurnContext } from '../assistant';
 import { modelOf, monaco } from '../editor';
 import type { ErModel } from '../er';
 import { hints } from '../profile';
-import { useStore, type MetaEntry } from '../store';
+import { isTds, useStore, type MetaEntry } from '../store';
 import type { Doc } from '../types';
 import Icon from './Icon';
 import { t as tr } from '../i18n';
@@ -106,7 +106,7 @@ export default function AssistantPanel({ doc }: { doc: Doc }) {
       const er = (await useStore.getState().loadMeta(key, () => api.meta.erModel(doc.connId!, doc.db!))) as ErModel | undefined;
       if (er) schema = schemaText(er, doc.db, info?.version ?? 'MariaDB/MySQL');
     }
-    chat.system = [{ type: 'text', text: SYSTEM_PROMPT }, { type: 'text', text: tr('Schema del database:\n{0}', schema), cache_control: { type: 'ephemeral' } }];
+    chat.system = [{ type: 'text', text: isTds(doc.connId) ? `${SYSTEM_PROMPT}\n\n${TSQL_PROMPT}` : SYSTEM_PROMPT }, { type: 'text', text: tr('Schema del database:\n{0}', schema), cache_control: { type: 'ephemeral' } }];
     return chat.system;
   };
 

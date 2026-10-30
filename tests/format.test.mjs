@@ -112,3 +112,9 @@ test('CTE, UNION, CASE, EXPLAIN', () => {
 test('the demo script keeps its tokens and is stable', () => {
   invariant(readFileSync(new URL('../scripts/demo.sql', import.meta.url), 'utf8'));
 });
+
+test('T-SQL [quoted] identifiers stay untouched', () => {
+  const sql = "select top (10) [order], o.[Name], [a]]b] from [sales].[Orders] o where o.[from] = 'x'";
+  const out = formatSql(sql);
+  for (const id of ['[order]', 'o.[Name]', '[a]]b]', '[sales].[Orders]', 'o.[from]']) assert.ok(out.includes(id), `${id} in ${out}`);
+});

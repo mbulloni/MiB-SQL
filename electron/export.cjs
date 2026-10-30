@@ -4,7 +4,9 @@ const fs = require('fs');
 const ExcelJS = require('exceljs');
 const { t, locale } = require('./i18n.cjs');
 
-const NUMERIC = new Set(['TINY', 'SHORT', 'LONG', 'INT', 'INT24', 'LONGLONG', 'BIGINT', 'FLOAT', 'DOUBLE', 'DECIMAL', 'NEWDECIMAL', 'YEAR']);
+const NUMERIC = new Set(['TINY', 'SHORT', 'LONG', 'INT', 'INT24', 'LONGLONG', 'BIGINT', 'FLOAT', 'DOUBLE', 'DECIMAL', 'NEWDECIMAL', 'YEAR',
+  // T-SQL (Microsoft Fabric / SQL Server) result columns
+  'SMALLINT', 'TINYINT', 'NUMERIC', 'MONEY', 'SMALLMONEY', 'REAL']);
 const XLSX_MAX_ROWS = 1048575;
 
 const EXT = { csv: 'csv', json: 'json', sql: 'sql', xlsx: 'xlsx' };

@@ -3,6 +3,8 @@ const path = require('path');
 const fs = require('fs');
 const connections = require('./connections.cjs');
 const server = require('./server.cjs');
+const tds = require('./tds.cjs');
+const entra = require('./entra.cjs');
 const explorer = require('./explorer.cjs');
 const exporter = require('./export.cjs');
 const datacompare = require('./datacompare.cjs');
@@ -99,21 +101,29 @@ const readSql = (file) => ({ path: file, content: fs.readFileSync(file, 'utf8') 
 
 handle('conn:list', async () => ({ list: connections.list(), keyring: await connections.keyringAvailable() }));
 handle('conn:save', (def, secrets) => connections.save(def, secrets));
-handle('conn:delete', async (id) => { await server.close(id); await connections.remove(id); });
-handle('conn:test', (def, secrets) => server.test(def, secrets));
-handle('conn:open', (id, secrets) => server.open(id, secrets));
-handle('conn:close', (id) => server.close(id));
+// Microsoft Fabric / SQL Server profiles (engine 'mssql') go to tds.cjs, every other one to the MariaDB driver.
+const isTds = (connId) => { try { return tds.isTds(connections.get(connId)); } catch { return false; } };
 
-handle('meta:databases', (id) => explorer.databases(id));
-handle('meta:objects', (id, db) => explorer.objects(id, db));
-handle('meta:columns', (id, db, t) => explorer.columns(id, db, t));
-handle('meta:indexes', (id, db, t) => explorer.indexes(id, db, t));
-handle('meta:foreignKeys', (id, db, t) => explorer.foreignKeys(id, db, t));
-handle('meta:ddl', (id, db, kind, name) => explorer.ddl(id, db, kind, name));
-handle('meta:schema', (id, db) => explorer.schema(id, db));
+handle('conn:delete', async (id) => { await (isTds(id) ? tds : server).close(id); await connections.remove(id); });
+handle('conn:test', (def, secrets) => (tds.isTds(def) ? tds : server).test(def, secrets));
+handle('conn:open', (id, secrets) => (isTds(id) ? tds : server).open(id, secrets));
+handle('conn:close', (id) => (isTds(id) ? tds : server).close(id));
+handle('entra:account', (id) => entra.account(connections.get(id)));
+handle('entra:signOut', async (id) => { await tds.close(id); return entra.signOut(connections.get(id)); });
+entra.onPrompt((p) => win?.webContents.send('entra:prompt', p));
+// device code page: only Microsoft sign-in addresses open in the browser
+handle('entra:openUrl', (url) => (/^https:\/\/([a-z.]+\.)?(microsoft\.com|microsoftonline\.com)\//i.test(url) ? shell.openExternal(url) : null));
+
+handle('meta:databases', (id) => (isTds(id) ? tds : explorer).databases(id));
+handle('meta:objects', (id, db) => (isTds(id) ? tds : explorer).objects(id, db));
+handle('meta:columns', (id, db, t) => (isTds(id) ? tds : explorer).columns(id, db, t));
+handle('meta:indexes', (id, db, t) => (isTds(id) ? tds : explorer).indexes(id, db, t));
+handle('meta:foreignKeys', (id, db, t) => (isTds(id) ? [] : explorer.foreignKeys(id, db, t)));
+handle('meta:ddl', (id, db, kind, name) => (isTds(id) ? tds : explorer).ddl(id, db, kind, name));
+handle('meta:schema', (id, db) => (isTds(id) ? tds : explorer).schema(id, db));
 handle('meta:tableDefinition', (id, db, t) => explorer.tableDefinition(id, db, t));
 handle('meta:serverOptions', (id, db) => explorer.serverOptions(id, db));
-handle('meta:erModel', (id, db) => explorer.erModel(id, db));
+handle('meta:erModel', (id, db) => (isTds(id) ? tds : explorer).erModel(id, db));
 handle('meta:schemaSnapshot', (id, db) => explorer.schemaSnapshot(id, db));
 handle('meta:users', (id) => explorer.users(id));
 handle('meta:grants', (id, user, host) => explorer.grants(id, user, host));
@@ -132,12 +142,16 @@ handle('file:saveData', async (data, base64, suggested, filters) => {
 });
 handle('ddl:run', (connId, sqls) => server.runStatements(connId, sqls));
 
-handle('sess:open', (connId, db) => server.openSession(connId, db));
-handle('sess:close', (sid) => server.closeSession(sid));
-handle('sess:use', (sid, db) => server.useDb(sid, db));
-handle('sess:exec', (sid, text, opts) => server.exec(sid, text, opts));
-handle('sess:cancel', (sid) => server.cancel(sid));
-handle('sess:profile', (sid, text, cursor) => server.profile(sid, text, cursor));
+const sess = (sid) => (tds.hasSession(sid) ? tds : server);
+handle('sess:open', (connId, db) => (isTds(connId) ? tds : server).openSession(connId, db));
+handle('sess:close', (sid) => sess(sid).closeSession(sid));
+handle('sess:use', (sid, db) => sess(sid).useDb(sid, db));
+handle('sess:exec', (sid, text, opts) => sess(sid).exec(sid, text, opts));
+handle('sess:cancel', (sid) => sess(sid).cancel(sid));
+handle('sess:profile', (sid, text, cursor) => {
+  if (tds.hasSession(sid)) throw new Error(t('Il profilo non è disponibile per Microsoft Fabric.'));
+  return server.profile(sid, text, cursor);
+});
 handle('sql:split', (text) => server.split(text));
 handle('data:apply', (connId, stmts) => server.apply(connId, stmts));
 handle('data:select', (connId, sql, params) => server.selectRows(connId, sql, params));
@@ -163,7 +177,7 @@ handle('export:query', async (connId, db, sql, format, opts, suggested) => {
   if (!file) return null;
   let w = null;
   try {
-    const rows = await server.streamQuery(connId, db, sql, (cols) => { w = exporter.writer(format, file, opts, cols); }, async (row, n) => {
+    const rows = await (isTds(connId) ? tds : server).streamQuery(connId, db, sql, (cols) => { w = exporter.writer(format, file, opts, cols); }, async (row, n) => {
       await w.row(row);
       if (n % 5000 === 0) win.webContents.send('export:progress', { file, rows: n });
     });
@@ -308,5 +322,5 @@ handle('app:confirm', async (message, detail, buttons) => {
 ipcMain.on('win:title', (_e, title) => win.setTitle(title));
 
 app.whenReady().then(createWindow);
-app.on('before-quit', () => { server.shutdown(); });
+app.on('before-quit', () => { server.shutdown(); tds.shutdown(); });
 app.on('window-all-closed', () => app.quit());

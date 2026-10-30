@@ -1,7 +1,14 @@
 export type SshAuth = 'password' | 'key' | 'agent';
 
+export type Engine = 'mysql' | 'mssql';
+
 export interface ConnDef {
   id: string;
+  engine?: Engine; // undefined = MariaDB/MySQL; 'mssql' = Microsoft Fabric Warehouse, SQL Server, Azure SQL
+  auth?: 'entra' | 'sql'; // mssql: Microsoft Entra ID (default) or SQL login
+  entra?: { method: 'browser' | 'device'; tenant?: string; clientId?: string };
+  trustCert?: boolean; // mssql: accept a self-signed server certificate (local SQL Server)
+  readOnly?: boolean; // mssql: refuse statements that write (default true)
   name: string;
   host: string;
   port: number;

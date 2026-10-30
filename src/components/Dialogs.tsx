@@ -1,7 +1,7 @@
-import { useState } from 'react';
+import { useEffect, useState } from 'react';
 import { api } from '../api';
 import { useStore } from '../store';
-import type { ConnDef, Secrets, SshAuth } from '../types';
+import type { ConnDef, Engine, Secrets, SshAuth } from '../types';
 import { t as tr, locale } from '../i18n';
 
 const COLORS = [
@@ -22,14 +22,20 @@ export function ConnectionDialog() {
   const s = useStore();
   const [def, setDef] = useState<Omit<ConnDef, 'id'> & { id?: string }>(() => ({ ...EMPTY, ...dialog!.def, ssh: { ...EMPTY.ssh!, ...dialog!.def.ssh } }));
   const [secrets, setSecrets] = useState<Secrets>({});
-  const [tab, setTab] = useState<'general' | 'ssl' | 'ssh'>('general');
+  const [tab, setTab] = useState<'general' | 'ssl' | 'ssh' | 'advanced'>('general');
   const [status, setStatus] = useState<{ ok: boolean; text: string } | null>(null);
   const [busy, setBusy] = useState(false);
   const editing = !!def.id;
 
   const set = (patch: Partial<ConnDef>) => setDef((d) => ({ ...d, ...patch }));
   const setSsh = (patch: Partial<NonNullable<ConnDef['ssh']>>) => setDef((d) => ({ ...d, ssh: { ...d.ssh!, ...patch } }));
-  const name = def.name.trim() || (def.socket ? `${def.user}@socket` : `${def.user}@${def.host}`);
+  const tds = def.engine === 'mssql';
+  const entra = tds && def.auth !== 'sql';
+  const name = def.name.trim() || (tds ? `${def.database || def.host.split('.')[0]}` : def.socket ? `${def.user}@socket` : `${def.user}@${def.host}`);
+  const setEngine = (engine: Engine) => setDef((d) => (engine === 'mssql'
+    ? { ...d, engine, auth: d.auth ?? 'entra', entra: d.entra ?? { method: 'browser' }, readOnly: d.readOnly ?? true, port: d.port === 3306 ? 1433 : d.port, host: d.host === 'localhost' ? '' : d.host, user: d.user === 'root' ? '' : d.user, socket: '' }
+    : { ...d, engine: undefined, port: d.port === 1433 ? 3306 : d.port, host: d.host || 'localhost' }));
+  const setEntra = (patch: Partial<NonNullable<ConnDef['entra']>>) => setDef((d) => ({ ...d, entra: { method: 'browser', ...d.entra, ...patch } }));
   const close = () => s.set({ connDialog: null });
 
   const test = async () => {
@@ -44,7 +50,7 @@ export function ConnectionDialog() {
   };
 
   const save = async (connect: boolean) => {
-    const saved = await api.conn.save({ ...def, name, port: Number(def.port) || 3306 }, secrets);
+    const saved = await api.conn.save({ ...def, name, port: Number(def.port) || (tds ? 1433 : 3306) }, secrets);
     await s.loadConns();
     close();
     if (editing) await s.closeConn(saved.id);
@@ -57,12 +63,59 @@ export function ConnectionDialog() {
       <div className="modal conn-dialog" onMouseDown={(e) => e.stopPropagation()} onKeyDown={(e) => { if (e.key === 'Escape') close(); }}>
         <div className="modal-title">{editing ? tr('Modifica connessione') : tr('Nuova connessione')}</div>
         <div className="tabs-row">
-          {(['general', 'ssl', 'ssh'] as const).map((t) => (
-            <button key={t} className={tab === t ? 'active' : ''} onClick={() => setTab(t)}>{{ general: tr('Generale'), ssl: 'SSL', ssh: tr('Tunnel SSH') }[t]}</button>
+          {(tds ? ['general', 'advanced'] as const : ['general', 'ssl', 'ssh'] as const).map((t) => (
+            <button key={t} className={tab === t ? 'active' : ''} onClick={() => setTab(t)}>{{ general: tr('Generale'), ssl: 'SSL', ssh: tr('Tunnel SSH'), advanced: tr('Avanzate') }[t]}</button>
           ))}
         </div>
         <div className="form">
-          {tab === 'general' && <>
+          {tab === 'general' && <label>{tr('Tipo di database')}
+            <select value={def.engine ?? 'mysql'} disabled={editing} onChange={(e) => { setEngine(e.target.value as Engine); setStatus(null); }}>
+              <option value="mysql">MariaDB / MySQL</option>
+              <option value="mssql">{tr('Microsoft Fabric Warehouse / SQL Server')}</option>
+            </select>
+          </label>}
+          {tab === 'general' && tds && <>
+            <label>{tr('Nome')}<input autoFocus value={def.name} placeholder={name} onChange={(e) => set({ name: e.target.value })} /></label>
+            <div className="row">
+              <label className="grow">{tr('Server (stringa di connessione SQL)')}<input value={def.host} placeholder="xxxxxxxx.datawarehouse.fabric.microsoft.com" onChange={(e) => set({ host: e.target.value.trim().replace(/^tcp:/i, '').replace(/,(\d+)$/, '') })} /></label>
+              <label className="port">{tr('Porta')}<input type="number" value={def.port} onChange={(e) => set({ port: Number(e.target.value) })} /></label>
+            </div>
+            <label>{tr('Warehouse (database)')}<input value={def.database} placeholder={tr('nome del warehouse o del lakehouse')} onChange={(e) => set({ database: e.target.value })} /></label>
+            <label>{tr('Autenticazione')}
+              <select value={def.auth === 'sql' ? 'sql' : def.entra?.method === 'device' ? 'device' : 'browser'}
+                onChange={(e) => { const v = e.target.value; if (v === 'sql') set({ auth: 'sql' }); else { set({ auth: 'entra' }); setEntra({ method: v as 'browser' | 'device' }); } }}>
+                <option value="browser">{tr('Microsoft Entra ID: accesso nel browser (MFA)')}</option>
+                <option value="device">{tr('Microsoft Entra ID: codice dispositivo')}</option>
+                <option value="sql">{tr('Utente e password SQL')}</option>
+              </select>
+            </label>
+            {entra ? <>
+              <label>{tr('Account (opzionale)')}<input value={def.user} placeholder="nome.cognome@azienda.it" onChange={(e) => set({ user: e.target.value.trim() })} /></label>
+              <EntraAccount id={def.id} />
+            </> : <>
+              <div className="row">
+                <label className="grow">{tr('Utente')}<input value={def.user} onChange={(e) => set({ user: e.target.value })} /></label>
+                <label className="grow">{tr('Password')}<input type="password" placeholder={editing ? '(invariata)' : ''} value={secrets.password ?? ''} onChange={(e) => setSecrets((x) => ({ ...x, password: e.target.value }))} /></label>
+              </div>
+              <label className="check">
+                <input type="checkbox" checked={def.savePassword && keyring} disabled={!keyring} onChange={(e) => set({ savePassword: e.target.checked })} />
+                {tr('Salva password nel portachiavi di sistema')}{!keyring && tr(' (non disponibile: verrà chiesta a ogni avvio)')}
+              </label>
+            </>}
+            <label className="check"><input type="checkbox" checked={def.readOnly !== false} onChange={(e) => set({ readOnly: e.target.checked })} />{' '}{tr('Sola lettura: blocca INSERT, UPDATE, DELETE, CREATE, DROP, EXEC…')}</label>
+            <label>{tr('Colore ambiente')}
+              <select value={def.color} onChange={(e) => set({ color: e.target.value })}>
+                {COLORS.map((c) => <option key={c.value} value={c.value}>{c.label}</option>)}
+              </select>
+            </label>
+          </>}
+          {tab === 'advanced' && <>
+            <label>{tr('Tenant (ID o dominio, opzionale)')}<input value={def.entra?.tenant ?? ''} placeholder="organizations" disabled={!entra} onChange={(e) => setEntra({ tenant: e.target.value.trim() })} /></label>
+            <label>{tr('ID applicazione client (opzionale)')}<input value={def.entra?.clientId ?? ''} placeholder={tr('predefinito: client pubblico di Azure CLI')} disabled={!entra} onChange={(e) => setEntra({ clientId: e.target.value.trim() })} /></label>
+            <p className="note">{tr('Servono solo se l\'azienda richiede un\'app registrata: client pubblico con URI di reindirizzamento http://localhost e permesso Azure SQL Database (user_impersonation).')}</p>
+            <label className="check"><input type="checkbox" checked={!!def.trustCert} onChange={(e) => set({ trustCert: e.target.checked })} />{' '}{tr('Accetta il certificato del server senza verificarlo (solo SQL Server locale)')}</label>
+          </>}
+          {tab === 'general' && !tds && <>
             <label>{tr('Nome')}<input autoFocus value={def.name} placeholder={name} onChange={(e) => set({ name: e.target.value })} /></label>
             <div className="row">
               <label className="grow">{tr('Host')}<input value={def.host} disabled={!!def.socket} onChange={(e) => set({ host: e.target.value })} /></label>
@@ -178,6 +231,51 @@ export function ValueViewer() {
             <button onClick={close}>{tr('Annulla')}</button>
             <button className="primary" disabled={isNull && value === ''} onClick={() => save(value)}>{tr('Applica')}</button>
           </> : <button className="primary" onClick={close}>{tr('Chiudi')}</button>}
+        </div>
+      </div>
+    </div>
+  );
+}
+
+/** Account signed in for an Entra profile, with sign-out (the next connection asks to sign in again). */
+function EntraAccount({ id }: { id?: string }) {
+  const [account, setAccount] = useState<{ username: string } | null | undefined>(undefined);
+  useEffect(() => { if (id) api.entra.account(id).then(setAccount, () => setAccount(null)); }, [id]);
+  if (!id || account === undefined) return <p className="note">{tr('Alla prima connessione si apre il browser per l\'accesso Microsoft (anche con MFA); poi l\'accesso resta valido finché il token non scade.')}</p>;
+  return (
+    <div className="row note">
+      <span className="grow">{account ? tr('Accesso effettuato come {0}', account.username) : tr('Nessun accesso salvato: verrà chiesto alla connessione.')}</span>
+      {account && <button type="button" onClick={async () => {
+        await api.entra.signOut(id);
+        await useStore.getState().closeConn(id);
+        setAccount(null);
+      }}>{tr('Esci dall\'account')}</button>}
+    </div>
+  );
+}
+
+/** Microsoft Entra sign-in in progress: the browser is open, or a device code to type on another device. */
+export function EntraPromptDialog() {
+  const p = useStore((s) => s.entraPrompt);
+  if (!p || p.kind === 'done') return null;
+  const close = () => useStore.getState().set({ entraPrompt: null });
+  return (
+    <div className="modal-back">
+      <div className="modal small" onKeyDown={(e) => { if (e.key === 'Escape') close(); }}>
+        <div className="modal-title">{tr('Accesso Microsoft per {0}', p.name)}</div>
+        <div className="form">
+          {p.kind === 'browser' ? <p>{tr('Completa l\'accesso nella finestra del browser che si è aperta. La connessione prosegue da sola appena l\'accesso è riuscito.')}</p> : <>
+            <p>{tr('Apri {0} e inserisci il codice:', p.url)}</p>
+            <div className="device-code">{p.code}</div>
+          </>}
+        </div>
+        <div className="modal-buttons">
+          {p.kind === 'device' && <>
+            <button onClick={() => navigator.clipboard.writeText(p.code)}>{tr('Copia codice')}</button>
+            <button onClick={() => { navigator.clipboard.writeText(p.code); api.entra.openUrl(p.url); }}>{tr('Copia e apri la pagina')}</button>
+          </>}
+          <div className="spacer" />
+          <button onClick={close}>{tr('Nascondi')}</button>
         </div>
       </div>
     </div>

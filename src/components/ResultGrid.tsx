@@ -5,7 +5,9 @@ import { t } from '../i18n';
 
 const RH = 22;      // row height
 const NUM_W = 48;   // row number column
-const NUMERIC = new Set(['TINY', 'SHORT', 'LONG', 'INT', 'INT24', 'LONGLONG', 'BIGINT', 'FLOAT', 'DOUBLE', 'DECIMAL', 'NEWDECIMAL', 'YEAR']);
+const NUMERIC = new Set(['TINY', 'SHORT', 'LONG', 'INT', 'INT24', 'LONGLONG', 'BIGINT', 'FLOAT', 'DOUBLE', 'DECIMAL', 'NEWDECIMAL', 'YEAR',
+  // T-SQL (Microsoft Fabric / SQL Server) result columns
+  'SMALLINT', 'TINYINT', 'NUMERIC', 'MONEY', 'SMALLMONEY', 'REAL']);
 
 export const isNumeric = (c: Column) => NUMERIC.has(c.type);
 

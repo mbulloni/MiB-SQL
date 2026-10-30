@@ -1,4 +1,4 @@
-import { useEffect, useState } from 'react';
+import { useEffect, useMemo, useState } from 'react';
 import { openVisual } from '../actions';
 import { t } from '../i18n';
 import { loadDatabases, metaKey, SERVER_KINDS, useStore, type MetaEntry, type VisualKind } from '../store';
@@ -10,7 +10,9 @@ const TITLE: Record<VisualKind, () => string> = {
 
 /** Which database to open a visual tool on, when none is selected in the explorer or active document. */
 export default function TargetDialog({ kind }: { kind: VisualKind }) {
-  const conns = useStore((s) => s.conns);
+  const all = useStore((s) => s.conns);
+  // the visual and server tools are written for MariaDB/MySQL
+  const conns = useMemo(() => all.filter((c) => c.engine !== 'mssql'), [all]);
   const [connId, setConnId] = useState(conns[0]?.id ?? '');
   const [db, setDb] = useState('');
   const status = useStore((s) => (connId ? s.connState[connId]?.status : undefined));

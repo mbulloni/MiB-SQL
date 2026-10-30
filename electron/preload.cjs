@@ -19,6 +19,12 @@ contextBridge.exposeInMainWorld('api', {
     open: (id, secrets) => call('conn:open', id, secrets),
     close: (id) => call('conn:close', id),
   },
+  entra: {
+    account: (id) => call('entra:account', id),
+    signOut: (id) => call('entra:signOut', id),
+    openUrl: (url) => call('entra:openUrl', url),
+    onPrompt: (fn) => { const h = (_e, p) => fn(p); ipcRenderer.on('entra:prompt', h); return () => ipcRenderer.removeListener('entra:prompt', h); },
+  },
   meta: {
     databases: (id) => call('meta:databases', id),
     objects: (id, db) => call('meta:objects', id, db),

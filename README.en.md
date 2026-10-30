@@ -4,11 +4,22 @@
 
 [Italiano](README.md) · **English**
 
-Educational IDE for **MariaDB and MySQL** on Linux, inspired by [dbForge Studio](https://www.devart.com/dbforge/) (which runs on Linux only through CrossOver/Wine). Electron + React + Monaco, native `mariadb` driver. The interface is available in Italian and English (globe button at the end of the toolbar).
+Educational IDE for **MariaDB and MySQL** (and, read only, **Microsoft Fabric Warehouse / SQL Server**) on Linux, inspired by [dbForge Studio](https://www.devart.com/dbforge/) (which runs on Linux only through CrossOver/Wine). Electron + React + Monaco, native `mariadb` driver. The interface is available in Italian and English (globe button at the end of the toolbar).
 
 ![Process manager in English](docs/screenshot-32.png)
 
 ![Performance advice in English](docs/screenshot-33.png)
+
+## What's new in 1.5
+
+- **Microsoft Fabric Warehouse** (and SQL Server / Azure SQL), **read only**: new connection › *Database type* › *Microsoft Fabric Warehouse / SQL Server*, server = the warehouse's SQL connection string
+  - **Microsoft Entra ID** sign-in in the browser (MFA included) or with a device code; the sign-in is kept (encrypted in the keyring) until the token expires; "Sign out" from the connection's context menu
+  - Database Explorer with every warehouse and lakehouse of the workspace, tables and views as `schema.name`, columns, definitions; double click = first 1000 rows
+  - T-SQL editor: batches separated by `GO`, variables, `PRINT` in the messages, Cancel, errors with their line; completion with `[names]`
+  - results, export (CSV, Excel, JSON, SQL), history, snippets and the AI assistant (writing T-SQL)
+  - the connection refuses INSERT, UPDATE, DELETE, CREATE, DROP, EXEC… (can be turned off in its properties)
+
+![Microsoft Fabric: explorer and results](docs/screenshot-39.png)
 
 ## What's new in 1.4.1
 
@@ -119,7 +130,7 @@ Test database: `scripts/demo.sql` creates `mibsql_demo` and the `mibsql`/`mibsql
 
 ## Known limits
 
-See the Italian [README](README.md#limiti-noti). In short: log files of remote servers are readable only through log tables or the FILE privilege; searching data reads every table; grid edits use their own connection; DDL is not transactional; performance_schema (or the slow log / userstat) is needed for heavy queries and unused indexes; index suggestions are heuristic; without the PROCESS privilege only your own connections are visible; the AppImage must live in a writable folder for self-update; server error messages follow the server's lc_messages.
+See the Italian [README](README.md#limiti-noti). In short: log files of remote servers are readable only through log tables or the FILE privilege; searching data reads every table; grid edits use their own connection; DDL is not transactional; performance_schema (or the slow log / userstat) is needed for heavy queries and unused indexes; index suggestions are heuristic; without the PROCESS privilege only your own connections are visible; the AppImage must live in a writable folder for self-update; server error messages follow the server's lc_messages. Microsoft Fabric / SQL Server connections offer explorer, editor, results, export, history, snippets and the assistant only (no grid editing, plan, profile or the MariaDB tools); DECIMAL values past 15 significant digits lose precision; tested against SQL Server 2022 in Docker and with the real Microsoft sign-in start, not yet on a real Fabric warehouse.
 
 ## License
 

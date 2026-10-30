@@ -4,7 +4,7 @@ import EditorWorker from 'monaco-editor/editor/editor.worker?worker';
 import { language as mysql } from 'monaco-editor/languages/definitions/mysql/mysql';
 import { api } from './api';
 import { DEFAULT_FORMAT, formatSql, type FormatOptions } from './format';
-import { loadDatabases, loadSchema, useStore } from './store';
+import { isTds, loadDatabases, loadSchema, metaKey, useStore } from './store';
 import type { Schema, Snippet, StmtResult } from './types';
 import { t } from './i18n.ts';
 
@@ -74,10 +74,12 @@ const FUNCTION_SET = new Set(FUNCTIONS);
 const NOT_ALIAS = new Set(['WHERE', 'ON', 'USING', 'JOIN', 'LEFT', 'RIGHT', 'INNER', 'OUTER', 'CROSS', 'NATURAL', 'STRAIGHT_JOIN', 'SET',
   'GROUP', 'ORDER', 'LIMIT', 'HAVING', 'VALUES', 'VALUE', 'SELECT', 'UNION', 'WINDOW', 'FOR', 'LOCK', 'PARTITION', 'USE', 'FORCE', 'IGNORE', 'AS']);
 
-const unquote = (s: string) => (s.startsWith('`') ? s.slice(1, -1).replace(/``/g, '`') : s);
-const quote = (s: string) => (/^[A-Za-z_][\w$]*$/.test(s) && !RESERVED.has(s.toUpperCase()) ? s : '`' + s.replace(/`/g, '``') + '`');
+const unquote = (s: string) => (s.startsWith('`') ? s.slice(1, -1).replace(/``/g, '`') : s.startsWith('[') ? s.slice(1, -1).replace(/]]/g, ']') : s);
+// identifiers inserted by completion: [x] on Microsoft Fabric / SQL Server documents, `x` otherwise
+let brackets = false;
+const quote = (s: string) => (/^[A-Za-z_][\w$]*$/.test(s) && !RESERVED.has(s.toUpperCase()) ? s : brackets ? `[${s.replace(/]/g, ']]')}]` : '`' + s.replace(/`/g, '``') + '`');
 
-const NAME = '(`(?:[^`]|``)+`|[\\w$]+)';
+const NAME = '(`(?:[^`]|``)+`|\\[(?:[^\\]]|\\]\\])+\\]|[\\w$]+)';
 
 /** Tables referenced by a statement (FROM/JOIN/UPDATE/INTO and comma lists) with their aliases. */
 export function tableRefs(sql: string, defaultDb: string | null) {
@@ -125,10 +127,16 @@ monaco.languages.registerCompletionItemProvider('mysql', {
       items.push({ label, kind, detail, insertText: insert, range, sortText: sort + label.toLowerCase() });
 
     const open = doc?.connId && useStore.getState().connState[doc.connId]?.status === 'open';
+    brackets = isTds(doc?.connId);
     const { before, whole } = await statementBefore(model.getValue(), model.getOffsetAt(position));
     const connId = doc?.connId ?? '';
     const schemaOf = async (db: string | null): Promise<Schema | undefined> => (open && db ? loadSchema(connId, db) : undefined);
-    const refs = tableRefs(whole, doc?.db ?? null);
+    let refs = tableRefs(whole, doc?.db ?? null);
+    if (brackets) {
+      // T-SQL: in schema.table the qualifier is a schema of the document's database, not another database
+      const dbs = (useStore.getState().meta[metaKey.databases(connId)]?.data as string[] | undefined) ?? [];
+      refs = refs.map((r) => (r.db && !dbs.includes(r.db) ? { ...r, db: doc?.db ?? null } : r));
+    }
 
     const qual = new RegExp(`${NAME}\\s*\\.\\s*\`?[\\w$]*$`).exec(before);
     if (qual) {

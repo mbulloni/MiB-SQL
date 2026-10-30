@@ -1,8 +1,8 @@
 import { createContext, useContext, useState, type ReactNode } from 'react';
 import { api } from '../api';
 import { t as tr, locale } from '../i18n';
-import { openDbTool, closeDoc, dropObject, insertText, newDoc, openCompare, openMaint, openNewObject, openObject, openServerTool, openDesigner, openEr, openQueryBuilder, qi, refreshExplorer, runDoc, selectTop, showDdl } from '../actions';
-import { loadDatabases, metaKey, useStore, type MetaEntry } from '../store';
+import { openDbTool, closeDoc, dropObject, insertText, newDoc, openCompare, openMaint, openNewObject, openObject, openServerTool, openDesigner, openEr, openQueryBuilder, qi, qid, qtable, refreshExplorer, runDoc, selectTop, showDdl } from '../actions';
+import { isTds, loadDatabases, metaKey, useStore, type MetaEntry } from '../store';
 import type { ColumnInfo, ConnDef, DbObjects, EditableKind, ForeignKeyInfo, IndexInfo, ObjectKind } from '../types';
 import { openMenu, type MenuItem } from './ContextMenu';
 import Icon from './Icon';
@@ -99,11 +99,11 @@ function TableChildren({ c, db, t, depth, view }: { c: string; db: string; t: st
           <Node key={col.name} id={`${base}/c/${col.name}`} leaf depth={depth + 1} icon={col.key === 'PRI' ? 'key' : 'column'}
             label={col.name} hint={`${col.type}${col.nullable ? '' : ' NOT NULL'}`}
             title={[col.extra, col.def !== null ? `DEFAULT ${col.def}` : '', col.comment].filter(Boolean).join('\n') || undefined}
-            drag={qi(col.name)} onDouble={() => insertText(qi(col.name))}
-            menu={[{ label: 'Copia nome', action: () => copy(col.name) }, { label: 'Inserisci nell\'editor', action: () => insertText(qi(col.name)) }]} />
+            drag={qid(c, col.name)} onDouble={() => insertText(qid(c, col.name))}
+            menu={[{ label: 'Copia nome', action: () => copy(col.name) }, { label: 'Inserisci nell\'editor', action: () => insertText(qid(c, col.name)) }]} />
         )) : <Status entry={cols} depth={depth + 1} />}
       </Node>
-      {!view && <>
+      {!view && !isTds(c) && <>
         <Node id={`${base}/idx`} label={tr('Indici')} icon="folder" depth={depth} onExpand={() => load(metaKey.indexes(c, db, t), () => api.meta.indexes(c, db, t))}>
           {() => idx?.data ? (idx.data.length ? idx.data.map((ix) => (
             <Node key={ix.name} id={`${base}/i/${ix.name}`} leaf depth={depth + 1} icon={ix.primary ? 'key' : 'index'} label={ix.name}
@@ -132,14 +132,52 @@ const FOLDERS: { key: keyof DbObjects; label: string; icon: string; kind: Object
   { key: 'events', label: tr('Eventi'), icon: 'event', kind: 'event', add: tr('Nuovo evento…') },
 ];
 
+/**
+ * Folder of a Microsoft Fabric / SQL Server database: objects named schema.object, read-only actions
+ * (select, count, export, definition). Editing tools are MariaDB/MySQL only.
+ */
+function TdsFolder({ c, db, depth, F, items, entry }: { c: string; db: string; depth: number; F: (typeof FOLDERS)[number]; items: { name: string }[]; entry: MetaEntry<DbObjects> }) {
+  return (
+    <Node id={`${c}/${db}/${F.key}`} label={F.label} icon="folder" depth={depth} hint={String(items.length)}>
+      {() => items.length ? items.map((o) => {
+        const qn = qtable(c, db, o.name);
+        const id = `${c}/${db}/${F.key}/${o.name}`;
+        const common: MenuItem[] = [
+          { label: F.kind === 'table' ? tr('Mostra struttura (CREATE TABLE)') : tr('Mostra definizione'), action: () => showDdl(c, db, F.kind, o.name) },
+          { label: tr('Copia nome'), action: () => copy(o.name) },
+          { label: tr('Inserisci nell\'editor'), action: () => insertText(qn) },
+        ];
+        if (F.kind === 'table' || F.kind === 'view') {
+          return (
+            <Node key={o.name} id={id} label={o.name} icon={F.icon} depth={depth + 1} drag={qn} onDouble={() => selectTop(c, db, o.name)}
+              menu={[
+                { label: tr('Seleziona prime 1000 righe'), action: () => selectTop(c, db, o.name) },
+                { label: tr('Conta righe'), action: () => runDoc('all', newDoc({ connId: c, db, sql: `SELECT COUNT_BIG(*) AS righe FROM ${qn};\n` }).id) },
+                { label: tr('Esporta dati…'), action: () => useStore.getState().set({ exportDialog: { name: o.name, table: o.name, db, query: { connId: c, db, sql: `SELECT * FROM ${qn}` } } }) },
+                'sep', ...common,
+              ]}>
+              {() => <TableChildren c={c} db={db} t={o.name} depth={depth + 2} view={F.kind === 'view'} />}
+            </Node>
+          );
+        }
+        return <Node key={o.name} id={id} leaf label={o.name} icon={F.icon} depth={depth + 1} drag={qn}
+          title={tr('Doppio clic: mostra la definizione')} onDouble={() => showDdl(c, db, F.kind, o.name)}
+          menu={[...(F.kind === 'procedure' ? [{ label: tr('Genera EXEC'), action: () => newDoc({ connId: c, db, sql: `EXEC ${qn};\n` }) }, 'sep' as const] : []), ...common]} />;
+      }) : <Status entry={entry} depth={depth + 1} empty />}
+    </Node>
+  );
+}
+
 function DbChildren({ c, db, depth }: { c: string; db: string; depth: number }) {
   const entry = useStore((s) => s.meta[metaKey.objects(c, db)]) as MetaEntry<DbObjects> | undefined;
   const { filter } = useContext(Tree);
   if (!entry?.data) return <Status entry={entry} depth={depth} />;
   const f = filter.toLowerCase();
+  const tds = isTds(c);
   return (
     <>
-      {FOLDERS.map((F) => {
+      {FOLDERS.filter((F) => !tds || !['triggers', 'events'].includes(F.key)).map((F) => {
+        if (tds) return <TdsFolder key={F.key} c={c} db={db} depth={depth} F={F} items={(entry.data![F.key] as { name: string }[]).filter((o) => !f || o.name.toLowerCase().includes(f))} entry={entry} />;
         const items = (entry.data![F.key] as { name: string }[]).filter((o) => !f || o.name.toLowerCase().includes(f));
         return (
           <Node key={F.key} id={`${c}/${db}/${F.key}`} label={F.label} icon="folder" depth={depth} hint={String(items.length)}
@@ -226,7 +264,17 @@ function ConnNode({ conn }: { conn: ConnDef }) {
     await api.conn.remove(conn.id);
     await s.loadConns();
   };
-  const menu: MenuItem[] = [
+  const tds = conn.engine === 'mssql';
+  const menu: MenuItem[] = tds ? [
+    state === 'open' ? { label: tr('Disconnetti'), action: disconnect } : { label: tr('Connetti'), action: () => { connect().then((ok) => ok && toggle(conn.id, true)); } },
+    { label: tr('Nuovo SQL'), action: () => newDoc({ connId: conn.id, db: conn.database || null }) },
+    { label: tr('Aggiorna'), action: () => { refreshExplorer(conn.id); if (state === 'open') loadDatabases(conn.id, true); }, disabled: state !== 'open' },
+    'sep',
+    { label: tr('Modifica connessione…'), action: () => s.set({ connDialog: { def: conn } }) },
+    { label: tr('Duplica'), action: () => s.set({ connDialog: { def: { ...conn, id: undefined, name: `${conn.name} (copia)` } } }) },
+    ...(conn.auth !== 'sql' ? [{ label: tr('Esci dall\'account Microsoft'), action: async () => { await api.entra.signOut(conn.id); await s.closeConn(conn.id); toggle(conn.id, false); } }] : []),
+    { label: tr('Elimina'), danger: true, action: remove },
+  ] : [
     state === 'open' ? { label: tr('Disconnetti'), action: disconnect } : { label: tr('Connetti'), action: () => { connect().then((ok) => ok && toggle(conn.id, true)); } },
     { label: tr('Nuovo SQL'), action: () => newDoc({ connId: conn.id, db: conn.database || null }) },
     { label: tr('Prestazioni e ottimizzazione'), action: () => openServerTool(conn.id, 'perf') },
@@ -244,19 +292,24 @@ function ConnNode({ conn }: { conn: ConnDef }) {
   ];
   const info = s.connState[conn.id]?.info;
   const err = s.connState[conn.id]?.error;
-  const where = conn.socket ? conn.socket : `${conn.user}@${conn.host}:${conn.port}${conn.ssh?.enabled ? ` via ${conn.ssh.host}` : ''}`;
+  const where = tds ? `${conn.auth === 'sql' ? `${conn.user}@` : ''}${conn.host}${conn.database ? ` / ${conn.database}` : ''}${conn.readOnly !== false ? tr(' (sola lettura)') : ''}` : conn.socket ? conn.socket : `${conn.user}@${conn.host}:${conn.port}${conn.ssh?.enabled ? ` via ${conn.ssh.host}` : ''}`;
   return (
     <Node id={conn.id} depth={0} icon="server"
       label={<><span className={`dot ${state}`} style={conn.color ? { outline: `2px solid ${conn.color}` } : undefined} />{conn.name}</>}
-      hint={state === 'connecting' ? 'connessione…' : info ? info.version.split('-')[0] : undefined}
+      hint={state === 'connecting' ? tr('connessione…') : info ? (tds ? info.version.replace(/ [\d.]+$/, '') : info.version.split('-')[0]) : undefined}
       title={`${where}${info ? `\n${info.version} (${info.user})` : ''}${err ? `\n${err}` : ''}`}
       onExpand={() => { connect().then((ok) => { if (!ok) toggle(conn.id, false); }); }}
       menu={menu}>
       {() => dbs?.data ? dbs.data.map((db) => (
         <Scope.Provider key={db} value={{ connId: conn.id, db }}>
-        <Node key={db} id={`${conn.id}/${db}`} label={db} icon="database" depth={1} dim={SYSTEM_DBS.has(db)} drag={qi(db)}
+        <Node key={db} id={`${conn.id}/${db}`} label={db} icon="database" depth={1} dim={SYSTEM_DBS.has(db)} drag={qid(conn.id, db)}
           onExpand={() => expandDb(db)}
-          menu={[
+          menu={tds ? [
+            { label: tr('Nuovo SQL'), action: () => newDoc({ connId: conn.id, db }) },
+            'sep',
+            { label: tr('Aggiorna'), action: () => { s.dropMeta(`${conn.id}/${db}/`); expandDb(db); } },
+            { label: tr('Copia nome'), action: () => copy(db) },
+          ] : [
             { label: tr('Nuovo SQL'), action: () => newDoc({ connId: conn.id, db }) },
             { label: 'Nuova tabella…', action: () => openDesigner(conn.id, db, null) },
             { label: 'Diagramma ER (editor visuale)', action: () => openEr(conn.id, db) },

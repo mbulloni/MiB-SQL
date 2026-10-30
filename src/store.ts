@@ -53,6 +53,7 @@ interface State {
   setAssistantOpen(v: boolean): void;
   connDialog: { def: Partial<ConnDef> } | null;
   passwordPrompt: PasswordRequest | null;
+  entraPrompt: import('./api').EntraPrompt | null;
   exportDialog: ExportRequest | null;
   task: { kind: 'backup' | 'restore' | 'import' | 'copy'; connId: string; db: string | null; table?: string } | null;
   viewer: { title: string; value: string; isNull?: boolean; binary?: boolean; onSave?: (v: string | null) => void } | null;
@@ -80,6 +81,9 @@ export const setUntitled = (n: number) => { untitled = Math.max(untitled, n); };
 
 const ACCESS_DENIED = /ER_ACCESS_DENIED|authentication|Access denied/i;
 
+/** Microsoft Fabric / SQL Server profile (T-SQL over TDS) rather than MariaDB/MySQL. */
+export const isTds = (connId: string | null | undefined) => !!connId && useStore.getState().conns.find((c) => c.id === connId)?.engine === 'mssql';
+
 export const useStore = create<State>((set, get) => ({
   conns: [],
   keyring: true,
@@ -95,6 +99,7 @@ export const useStore = create<State>((set, get) => ({
   setAssistantOpen(v) { try { localStorage.setItem('mibsql.assistant', v ? '1' : '0'); } catch { /* ignore */ } set({ assistantOpen: v }); },
   connDialog: null,
   passwordPrompt: null,
+  entraPrompt: null,
   exportDialog: null,
   task: null,
   viewer: null,
@@ -123,7 +128,7 @@ export const useStore = create<State>((set, get) => ({
       } catch (err) {
         const msg = (err as Error).message;
         const conn = get().conns.find((c) => c.id === id);
-        if (!conn || !ACCESS_DENIED.test(`${(err as { code?: string }).code ?? ''} ${msg}`)) {
+        if (!conn || (conn.engine === 'mssql' && conn.auth !== 'sql') || !ACCESS_DENIED.test(`${(err as { code?: string }).code ?? ''} ${msg}`)) {
           state({ status: 'error', error: msg });
           return null;
         }

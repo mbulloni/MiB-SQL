@@ -1,10 +1,10 @@
 import { useEffect, useRef, useState, useSyncExternalStore } from 'react';
 import { api } from './api';
-import { cancelDoc, closeDoc, formatDoc, openAssistant, openHistory, openServerTool, openVisual, profileDoc, requestQuit, switchLanguage, newDoc, openFiles, openSql, restore, runDoc, saveDoc, setDocTarget, visualTarget } from './actions';
+import { cancelDoc, closeDoc, formatDoc, mysqlOnly, openAssistant, openHistory, openServerTool, openVisual, profileDoc, requestQuit, switchLanguage, newDoc, openFiles, openSql, restore, runDoc, saveDoc, setDocTarget, visualTarget } from './actions';
 import { formatOptions, loadSnippets, setFormatOptions } from './editor';
-import { loadDatabases, metaKey, useStore, type MetaEntry } from './store';
+import { isTds, loadDatabases, metaKey, useStore, type MetaEntry } from './store';
 import ContextMenu, { openMenu } from './components/ContextMenu';
-import { ConnectionDialog, PasswordPrompt, ValueViewer } from './components/Dialogs';
+import { ConnectionDialog, EntraPromptDialog, PasswordPrompt, ValueViewer } from './components/Dialogs';
 import ExportDialog from './components/ExportDialog';
 import { BackupDialog, CopyDialog, ImportWizard, RestoreDialog } from './components/TaskDialogs';
 import Explorer from './components/Explorer';
@@ -139,8 +139,8 @@ function toolsMenu(e: React.MouseEvent) {
   const s = useStore.getState();
   const tg = visualTarget();
   const connId = tg?.connId ?? s.selectedConn ?? (s.docs.find((d) => d.id === s.activeDoc)?.connId ?? null);
-  const open = !!connId && s.connState[connId]?.status === 'open';
-  const task = (kind: 'backup' | 'restore' | 'import') => () => (tg ? s.set({ task: { kind, connId: tg.connId, db: tg.db } }) : s.set({ pickTarget: { kind: 'maint' } }));
+  const open = !!connId && s.connState[connId]?.status === 'open' && !isTds(connId);
+  const task = (kind: 'backup' | 'restore' | 'import') => () => (!mysqlOnly(tg?.connId ?? connId) ? undefined : tg ? s.set({ task: { kind, connId: tg.connId, db: tg.db } }) : s.set({ pickTarget: { kind: 'maint' } }));
   openMenu(e, [
     { label: t('Cronologia query'), action: openHistory },
     { label: t('Snippet SQL…'), action: () => s.set({ snippetDialog: {} }) },
@@ -172,6 +172,8 @@ function Toolbar() {
   const obj = !!doc?.obj;
   const assistantOpen = useStore((s) => s.assistantOpen);
   const runnable = sql || doc?.kind === 'query';
+  // Fabric / SQL Server documents: no execution plan or profile (MariaDB/MySQL tools)
+  const tds = useStore((s) => !!doc?.connId && s.conns.find((c) => c.id === doc.connId)?.engine === 'mssql');
   return (
     <div className="toolbar">
       <button title={t('Nuova connessione (Ctrl+Maiusc+N)')} onClick={() => set({ connDialog: { def: {} } })}><Icon name="addConn" /></button>
@@ -183,8 +185,8 @@ function Toolbar() {
       <button title={obj ? t('Applica la definizione al server (F5)') : t('Esegui script o selezione (F5)')} disabled={!runnable || running} onClick={() => runDoc('all')}><Icon name="play" /><span>{obj ? t('Applica') : t('Esegui')}</span></button>
       <button title={t('Esegui istruzione corrente (Ctrl+Invio)')} disabled={!runnable || running || obj} onClick={() => runDoc('current')}><Icon name="playLine" /></button>
       <button title={t('Interrompi (Maiusc+F5)')} disabled={!running} onClick={() => cancelDoc()}><Icon name="stop" /></button>
-      <button title={t('Piano di esecuzione (Ctrl+E)')} disabled={!runnable || running || obj} onClick={() => runDoc('explain')}><Icon name="plan" /><span>{t('Piano')}</span></button>
-      <button title={t('Profila l\'istruzione corrente (Ctrl+Maiusc+P)')} disabled={!sql || running || obj} onClick={() => profileDoc()}><Icon name="profile" /><span>{t('Profila')}</span></button>
+      <button title={t('Piano di esecuzione (Ctrl+E)')} disabled={!runnable || running || obj || tds} onClick={() => runDoc('explain')}><Icon name="plan" /><span>{t('Piano')}</span></button>
+      <button title={t('Profila l\'istruzione corrente (Ctrl+Maiusc+P)')} disabled={!sql || running || obj || tds} onClick={() => profileDoc()}><Icon name="profile" /><span>{t('Profila')}</span></button>
       <div className="split-btn">
         <button title={t('Formatta lo script o la selezione (Ctrl+Maiusc+F)')} disabled={!sql} onClick={() => formatDoc()}><Icon name="format" /><span>{t('Formatta')}</span></button>
         <button className="arrow" title={t('Opzioni di formattazione')} onClick={formatMenu}>▾</button>
@@ -357,6 +359,8 @@ export default function App() {
     setTimeout(() => checkUpdates(true), 4000);
     api.file.onOpenArg(openSql);
     api.onCloseRequest(requestQuit);
+    // Microsoft Entra sign-in (Fabric connections): browser open or device code to show
+    api.entra.onPrompt((p) => useStore.getState().set({ entraPrompt: p.kind === 'done' ? null : p }));
   }, []);
 
   useEffect(() => {
@@ -439,6 +443,7 @@ export default function App() {
       {viewer && <ValueViewer key={viewer.title + viewer.value.length} />}
       {exporting && <ExportDialog />}
       {pickTarget && <TargetDialog kind={pickTarget.kind} />}
+      <EntraPromptDialog />
       {snippetDialog && <SnippetsDialog body={snippetDialog.body} />}
       {callDialog && <CallDialog key={callDialog.name} {...callDialog} />}
       {task?.kind === 'backup' && task.db && <BackupDialog connId={task.connId} db={task.db} />}

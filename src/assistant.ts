@@ -8,6 +8,9 @@ Rispondi in italiano, in modo conciso. Quando proponi SQL mettilo in un blocco \
 
 Tu non esegui nulla: l'utente decide se inserire ed eseguire il codice. Per istruzioni che modificano dati o struttura (UPDATE, DELETE, ALTER, DROP, TRUNCATE) segnala gli effetti e, se utile, proponi prima una SELECT di verifica. Su tabelle grandi preferisci condizioni su colonne indicizzate e un LIMIT nelle query esplorative.`;
 
+/** Added to the system prompt for Microsoft Fabric Warehouse / SQL Server documents. */
+export const TSQL_PROMPT = `Questo database è Microsoft Fabric Warehouse o SQL Server: scrivi T-SQL, non MySQL. Nomi tra parentesi quadre ([schema].[tabella]), TOP (n) invece di LIMIT, OFFSET … FETCH per la paginazione, GETDATE()/SYSDATETIME(), CONVERT/FORMAT per le date, STRING_AGG per concatenare. Le tabelle sono indicate come schema.tabella. La connessione è di sola lettura salvo diversa indicazione: preferisci SELECT. In Fabric le chiavi primarie ed esterne non sono applicate e non ci sono indici.`;
+
 /** Compact schema description: one line per table with columns, keys and estimated rows; then relations. */
 export function schemaText(model: ErModel, db: string, server: string) {
   const lines = [tr('Server: {0}', server), tr('Database: {0}', db), ''];

@@ -3,7 +3,7 @@ import { api, type SqlFile } from './api';
 import { clearMarkers, disposeModel, formatText, markErrors, markSaved, modelOf, monaco } from './editor';
 import { editCount } from './edits';
 import { emptyQuery, toSql } from './qb';
-import { designByDoc, editsBySet, metaKey, SERVER_KINDS, setUntitled, useStore } from './store';
+import { designByDoc, editsBySet, isTds, metaKey, SERVER_KINDS, setUntitled, useStore } from './store';
 import { maskPasswords } from './users';
 import { setLang, t, locale } from './i18n';
 import type { Doc, EditableKind, ExecMode, Message, ObjectKind, StmtResult } from './types';
@@ -16,6 +16,27 @@ let editorOf: (docId: string) => monaco.editor.IStandaloneCodeEditor | null = ()
 export const bindEditor = (fn: typeof editorOf) => { editorOf = fn; };
 
 export const qi = (s: string) => '`' + s.replace(/`/g, '``') + '`';
+const qb = (s: string) => `[${s.replace(/]/g, ']]')}]`;
+
+/** Identifier quoted for the connection: `x` on MariaDB/MySQL, [x] on Microsoft Fabric / SQL Server. */
+export const qid = (connId: string | null, s: string) => (isTds(connId) ? qb(s) : qi(s));
+
+/**
+ * Table or view name to write in a query on the connection: db.table on MariaDB/MySQL; on Fabric the tree names
+ * objects schema.object and documents already run on the database, so [schema].[object].
+ */
+export function qtable(connId: string | null, db: string, name: string) {
+  if (!isTds(connId)) return `${qi(db)}.${qi(name)}`;
+  const at = name.indexOf('.');
+  return at < 0 ? `[dbo].${qb(name)}` : `${qb(name.slice(0, at))}.${qb(name.slice(at + 1))}`;
+}
+
+/** Tools written for MariaDB/MySQL refuse Fabric connections with a message instead of failing on its SQL. */
+export function mysqlOnly(connId: string | null | undefined) {
+  if (!isTds(connId)) return true;
+  api.confirm(t('Funzione non disponibile per Microsoft Fabric'), t('Con le connessioni Microsoft Fabric / SQL Server MiB-SQL offre Database Explorer, editor SQL, risultati, export, cronologia, snippet e assistente AI.'), ['OK']);
+  return false;
+}
 
 export function newDoc(opts: { connId?: string | null; db?: string | null; sql?: string; title?: string; file?: string | null; obj?: Doc['obj'] } = {}) {
   const s = st();
@@ -68,6 +89,7 @@ export function visualTarget(): { connId: string; db: string } | null {
 
 /** Opens a visual tool on the current database, or asks which database when none is selected. */
 export function openVisual(kind: import('./store').VisualKind, target: { connId: string; db: string | null } | null = visualTarget()) {
+  if (!mysqlOnly(target?.connId ?? activeDoc()?.connId ?? st().selectedConn)) return;
   if (SERVER_KINDS.has(kind)) {
     // server tools: the active document's or the explorer's connection when it is open, else ask
     const s = st();
@@ -345,7 +367,8 @@ function refreshAfterDdl(connId: string) {
 }
 
 export async function selectTop(connId: string, db: string, table: string, limit = 1000) {
-  const doc = newDoc({ connId, db, sql: `SELECT *\nFROM ${qi(db)}.${qi(table)}\nLIMIT ${limit};\n`, title: `${table}.sql` });
+  const sql = isTds(connId) ? `SELECT TOP (${limit}) *\nFROM ${qtable(connId, db, table)};\n` : `SELECT *\nFROM ${qtable(connId, db, table)}\nLIMIT ${limit};\n`;
+  const doc = newDoc({ connId, db, sql, title: `${table}.sql` });
   await runDoc('all', doc.id);
 }
 
@@ -524,7 +547,7 @@ export async function applyObject(id = st().activeDoc) {
 /** Performance center › query optimizer on the selection or the statement under the cursor. */
 export async function optimizeDoc(id = st().activeDoc) {
   const doc = id ? docById(id) : undefined;
-  if (!doc || doc.kind !== 'sql' || !doc.connId) return;
+  if (!doc || doc.kind !== 'sql' || !doc.connId || !mysqlOnly(doc.connId)) return;
   const ed = editorOf(doc.id);
   const model = modelOf(doc.id);
   const sel = ed?.getSelection();

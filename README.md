@@ -4,11 +4,24 @@
 
 **Italiano** · [English](README.en.md)
 
-IDE educativo per **MariaDB e MySQL** su Linux, ispirato a [dbForge Studio](https://www.devart.com/dbforge/) (che su Linux gira solo tramite CrossOver/Wine). Electron + React + Monaco, driver nativo `mariadb`.
+IDE educativo per **MariaDB e MySQL** (e, in sola lettura, **Microsoft Fabric Warehouse / SQL Server**) su Linux, ispirato a [dbForge Studio](https://www.devart.com/dbforge/) (che su Linux gira solo tramite CrossOver/Wine). Electron + React + Monaco, driver nativo `mariadb`.
 
 ![Pagina iniziale con gli editor visuali](docs/screenshot-16.png)
 
 ![Database Explorer ed editor SQL](docs/screenshot-1.png)
+
+## Novità della v1.5
+
+- **Microsoft Fabric Warehouse** (e SQL Server / Azure SQL) in **sola lettura**: nuova connessione › *Tipo di database* › *Microsoft Fabric Warehouse / SQL Server*, server = stringa di connessione SQL del warehouse
+  - accesso **Microsoft Entra ID** nel browser (con MFA) o con codice dispositivo; l'accesso resta salvato (cifrato nel portachiavi) finché il token non scade; «Esci dall'account» dal tasto destro sulla connessione
+  - Database Explorer con tutti i warehouse e lakehouse del workspace, tabelle e viste come `schema.nome`, colonne, definizioni; doppio clic = prime 1000 righe
+  - editor T-SQL: batch separati da `GO`, variabili, `PRINT` nei messaggi, Annulla, errori con la riga; completamento con `[nomi]`
+  - risultati, export (CSV, Excel, JSON, SQL), cronologia, snippet e assistente AI (che scrive T-SQL)
+  - la connessione blocca INSERT, UPDATE, DELETE, CREATE, DROP, EXEC… (si può togliere nelle proprietà)
+
+![Microsoft Fabric: explorer e risultati](docs/screenshot-39.png)
+
+![Connessione a Microsoft Fabric](docs/screenshot-40.png)
 
 ## Novità della v1.4.1
 
@@ -314,7 +327,7 @@ mysql -u root -p < scripts/demo.sql
 
 ## Roadmap
 
-Completata: le otto fasi previste (connessioni ed editor, griglia e modifica dati, designer, ER, confronto, backup/import, profiler/monitor/utenti) più Query Builder, tema scuro, partizioni, confronto dati a memoria costante, pacchetto .deb e assistente AI; in v1.2 formattatore, cronologia, snippet, editor di oggetti e manutenzione tabelle; in v1.3 prestazioni, processi, dati di test, documentazione e interfaccia in inglese; in v1.4 ricerca, log del server, copia database e aggiornamenti integrati.
+Completata: le otto fasi previste (connessioni ed editor, griglia e modifica dati, designer, ER, confronto, backup/import, profiler/monitor/utenti) più Query Builder, tema scuro, partizioni, confronto dati a memoria costante, pacchetto .deb e assistente AI; in v1.2 formattatore, cronologia, snippet, editor di oggetti e manutenzione tabelle; in v1.3 prestazioni, processi, dati di test, documentazione e interfaccia in inglese; in v1.4 ricerca, log del server, copia database e aggiornamenti integrati; in v1.5 Microsoft Fabric Warehouse in sola lettura.
 
 
 ## Limiti noti
@@ -334,6 +347,9 @@ Completata: le otto fasi previste (connessioni ed editor, griglia e modifica dat
 - Aggiornamenti: l'AppImage deve stare in una cartella scrivibile; il .deb richiede pkexec (polkit) per l'installazione automatica
 - Lingua: i messaggi del server MariaDB/MySQL restano nella lingua configurata sul server (lc_messages)
 - Assistente AI: richiede una chiave API Anthropic (a pagamento); la conversazione resta solo per la sessione
+- Microsoft Fabric / SQL Server: solo explorer, editor, risultati, export, cronologia, snippet e assistente; designer, ER, Query Builder, confronto, backup, prestazioni, processi e gli altri strumenti restano per MariaDB/MySQL; nessuna modifica dei dati in griglia, piano di esecuzione o profilo
+- Fabric: i DECIMAL oltre 15 cifre significative perdono precisione (il driver li legge come numeri); `datetimeoffset` è mostrato in UTC; il blocco di sola lettura è a parole chiave (rifiuta anche EXEC di procedure che leggono soltanto) e non sostituisce i permessi del workspace
+- Fabric: l'accesso Entra usa di default il client pubblico di Azure CLI; se l'azienda lo blocca serve un'app registrata (scheda Avanzate). Provato contro SQL Server 2022 in Docker e con l'avvio reale dell'accesso Microsoft, **non ancora su un warehouse Fabric vero**
 
 ## Licenza
 

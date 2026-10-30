@@ -17,6 +17,12 @@ export interface UpdateInfo { current: string; latest: string; newer: boolean; n
 
 export type LogStatus = Record<string, string | null> & { local: boolean; mariadb: boolean };
 
+/** Microsoft Entra sign-in in progress: browser opened, device code to type, or finished. */
+export type EntraPrompt =
+  | { kind: 'browser'; connId: string; name: string }
+  | { kind: 'device'; connId: string; name: string; url: string; code: string; message: string }
+  | { kind: 'done'; connId: string };
+
 export interface SqlFile {
   path: string;
   content: string;
@@ -30,6 +36,12 @@ interface Api {
     test(def: Partial<ConnDef>, secrets: Secrets): Promise<ServerInfo>;
     open(id: string, secrets?: Secrets): Promise<ServerInfo>;
     close(id: string): Promise<void>;
+  };
+  entra: {
+    account(id: string): Promise<{ username: string; name: string } | null>;
+    signOut(id: string): Promise<boolean>;
+    openUrl(url: string): Promise<void>;
+    onPrompt(fn: (p: EntraPrompt) => void): () => void;
   };
   meta: {
     databases(id: string): Promise<string[]>;

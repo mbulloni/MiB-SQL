@@ -100,6 +100,14 @@ export function tokenize(text: string): Tok[] {
     }
     if (text.startsWith(delim, i)) { i += delim.length; push('delim', a); blank = true; continue; }
     blank = false;
+    // [name] is T-SQL's quoted identifier (Microsoft Fabric / SQL Server); MariaDB has no [ outside strings
+    if (ch === '[') {
+      i++;
+      while (i < n && !(text[i] === ']' && text[i + 1] !== ']')) i += text[i] === ']' ? 2 : 1;
+      i = Math.min(i + 1, n);
+      push('qid', a);
+      continue;
+    }
     if (ch === "'" || ch === '"' || ch === '`') {
       i++;
       while (i < n) {

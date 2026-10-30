@@ -4,7 +4,7 @@ import { logMessage, newDoc } from '../actions';
 import {
   addRow, editCount, editTarget, emptyEdits, inline, isEdited, isHex, keyAfter, setCell, statements, toggleDelete, toHex, valueAt, type Edits,
 } from '../edits';
-import { editsBySet, metaKey, useStore, type MetaEntry } from '../store';
+import { editsBySet, isTds, metaKey, useStore, type MetaEntry } from '../store';
 import type { Cell, Doc, IndexInfo, ResultSet } from '../types';
 import { openMenu, type MenuItem } from './ContextMenu';
 import ResultGrid, { type GridCell, type GridEditing, type GridSelection } from './ResultGrid';
@@ -38,7 +38,7 @@ export default function ResultView({ doc, set, sql, at }: { doc: Doc; set: Resul
   useEffect(() => {
     if (indexKey && connOpen) useStore.getState().loadMeta(indexKey, () => api.meta.indexes(connId!, first.db, first.orgTable));
   }, [indexKey, connOpen]);
-  const target = editTarget(columns, indexes?.error ? [] : indexes?.data);
+  const target = isTds(connId) ? t('Sola lettura: connessione Microsoft Fabric / SQL Server.') : editTarget(columns, indexes?.error ? [] : indexes?.data);
   const canEdit = typeof target !== 'string' && connOpen;
   const pending = editCount(edits);
 
