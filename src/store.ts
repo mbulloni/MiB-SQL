@@ -28,7 +28,7 @@ export interface ExportRequest {
   filtered?: boolean;
 }
 
-export type VisualKind = 'er' | 'query' | 'table' | 'compare' | 'maint' | 'datagen' | 'docgen' | 'perf' | 'procs' | 'monitor' | 'users' | 'search' | 'logs' | 'copy';
+export type VisualKind = 'er' | 'query' | 'table' | 'compare' | 'maint' | 'datagen' | 'docgen' | 'perf' | 'procs' | 'monitor' | 'users' | 'search' | 'logs' | 'copy' | 'deps';
 /** Tools that work on a whole server: the target dialog asks only for the connection. */
 export const SERVER_KINDS = new Set<VisualKind>(['perf', 'procs', 'monitor', 'users', 'search', 'logs']);
 
@@ -59,6 +59,7 @@ interface State {
   viewer: { title: string; value: string; isNull?: boolean; binary?: boolean; onSave?: (v: string | null) => void } | null;
   snippetDialog: { body?: string } | null;
   callDialog: { connId: string; db: string; kind: 'procedure' | 'function'; name: string } | null;
+  depsDialog: DepsTarget | null;
   historyTick: number; // bumped when statements are added to the history
   update: import('./api').UpdateInfo | null; // newer release found by the update check
   updateDialog: boolean;
@@ -105,6 +106,7 @@ export const useStore = create<State>((set, get) => ({
   viewer: null,
   snippetDialog: null,
   callDialog: null,
+  depsDialog: null,
   historyTick: 0,
   update: null,
   updateDialog: false,
@@ -217,6 +219,9 @@ export const useStore = create<State>((set, get) => ({
 }));
 
 const pending = new Map<string, Promise<unknown>>();
+
+/** Object of the Dependencies / Rename dialog (column: a column of the table). */
+export interface DepsTarget { connId: string; db: string; kind: 'table' | 'view' | 'procedure' | 'function'; name: string; column?: string; mode: 'deps' | 'rename' }
 
 export const metaKey = {
   databases: (c: string) => `${c}/databases`,

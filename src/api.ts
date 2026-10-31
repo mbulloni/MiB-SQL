@@ -132,6 +132,15 @@ interface Api {
     clear(connId: string, db: string, tables: string[], truncate: boolean): Promise<void>;
     counts(connId: string, db: string, tables: string[]): Promise<Record<string, number>>;
   };
+  deps: {
+    find(connId: string, target: { db: string; name: string; kind: 'table' | 'view' | 'procedure' | 'function'; column?: string }): Promise<{
+      fks: { db: string; table: string; name: string; columns: string[]; refColumns: string[] }[];
+      objects: { db: string; kind: 'view' | 'procedure' | 'function' | 'trigger' | 'event'; name: string; table?: string; onTarget?: boolean; readable: boolean }[];
+      extras: { kind: 'index' | 'generated' | 'check' | 'fk'; name: string; text?: string | null; auto: boolean }[];
+      version: string;
+      definition: string | null;
+    }>;
+  };
   search: {
     objects(connId: string, dbs: string[], text: string, opts: { names: boolean; code: boolean; comments: boolean }): Promise<ObjectHit[]>;
     data(id: string, connId: string, dbs: string[], text: string, opts: { caseSensitive: boolean; exact: boolean; maxRows: number; skipAbove: number }): Promise<{ results: DataHit[]; stopped: boolean; tables: number }>;

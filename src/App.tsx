@@ -31,6 +31,7 @@ import { checkUpdates, UpdateBanner, UpdateDialog } from './components/Updates';
 import ObjectBar from './components/ObjectBar';
 import SnippetsDialog from './components/SnippetsDialog';
 import CallDialog from './components/CallDialog';
+import DepsDialog from './components/DepsDialog';
 import logo from '../build/icons/128x128.png';
 import { getLang, LANGS, t } from './i18n';
 import { onThemeChange, resolvedTheme, setThemePref, themePref, type ThemePref } from './theme';
@@ -149,6 +150,7 @@ function toolsMenu(e: React.MouseEvent) {
     { label: `${t('Documentazione del database')}${tg ? ` (${tg.db})` : '…'}`, action: () => openVisual('docgen') },
     { label: `${t('Copia database')}${tg ? ` (${tg.db})` : ''}…`, action: () => openVisual('copy') },
     { label: t('Cerca nel database…'), action: () => openVisual('search') },
+    { label: `${t('Dipendenze e rinomina')}${tg ? ` (${tg.db})` : ''}…`, action: () => openVisual('deps') },
     'sep',
     { label: t('Prestazioni e ottimizzazione'), action: () => openVisual('perf') },
     { label: t('Processi e transazioni'), action: () => openVisual('procs') },
@@ -277,6 +279,7 @@ function StartPage() {
         <button onClick={() => openVisual('datagen')}><Icon name="datagen" size={28} /><b>{t('Dati di test')}</b><span>{t('Riempie le tabelle con dati verosimili (nomi, email, date, importi) rispettando tipi, chiavi esterne e valori unici')}</span></button>
         <button onClick={() => openVisual('docgen')}><Icon name="docgen" size={28} /><b>{t('Documentazione')}</b><span>{t('Documento HTML o Markdown del database: tabelle, colonne, indici, relazioni, viste e routine, con diagramma')}</span></button>
         <button onClick={() => openVisual('search')}><Icon name="search" size={28} /><b>{t('Cerca nel database')}</b><span>{t('Un testo in nomi di tabelle e colonne, nel codice di viste, routine e trigger, nei commenti e nei dati')}</span></button>
+        <button onClick={() => openVisual('deps')}><Icon name="fk" size={28} /><b>{t('Dipendenze e rinomina')}</b><span>{t('Chi usa una tabella, una colonna o una routine; rinomina che aggiorna anche viste, routine, trigger ed eventi')}</span></button>
         <button onClick={() => openVisual('copy')}><Icon name="copy" size={28} /><b>{t('Copia database')}</b><span>{t('Struttura, dati e routine in un altro database, sullo stesso server o su un\'altra connessione')}</span></button>
         <button onClick={() => newDoc()}><Icon name="format" size={28} /><b>{t('Formattatore SQL')}</b><span>{t('Nell\'editor: Ctrl+Maiusc+F o «Formatta» riordina parole chiave, rientri e clausole')}</span></button>
       </div>
@@ -342,6 +345,7 @@ export default function App() {
   const pickTarget = useStore((s) => s.pickTarget);
   const snippetDialog = useStore((s) => s.snippetDialog);
   const callDialog = useStore((s) => s.callDialog);
+  const depsDialog = useStore((s) => s.depsDialog);
   const updateDialog = useStore((s) => s.updateDialog);
   const [cursor, setCursor] = useState<[number, number]>([1, 1]);
   const [side, startSide] = useDrag(300, 'x', 180, 'mibsql.side');
@@ -371,7 +375,7 @@ export default function App() {
   useEffect(() => {
     const onKey = (e: KeyboardEvent) => {
       const s = useStore.getState();
-      if (s.connDialog || s.passwordPrompt || s.exportDialog || s.viewer || s.task || s.pickTarget || s.snippetDialog || s.callDialog || s.updateDialog) return;
+      if (s.connDialog || s.passwordPrompt || s.exportDialog || s.viewer || s.task || s.pickTarget || s.snippetDialog || s.callDialog || s.depsDialog || s.updateDialog) return;
       // the grid has its own Ctrl+Maiusc+N (NULL) and text inputs keep their keys
       const t = e.target as HTMLElement;
       if (t.closest?.('.grid, .result-bar') && (t.tagName === 'INPUT' || ((e.ctrlKey || e.metaKey) && e.shiftKey && e.key.toLowerCase() === 'n'))) return;
@@ -446,6 +450,7 @@ export default function App() {
       <EntraPromptDialog />
       {snippetDialog && <SnippetsDialog body={snippetDialog.body} />}
       {callDialog && <CallDialog key={callDialog.name} {...callDialog} />}
+      {depsDialog && <DepsDialog key={`${depsDialog.mode}/${depsDialog.db}/${depsDialog.name}/${depsDialog.column ?? ''}`} {...depsDialog} />}
       {task?.kind === 'backup' && task.db && <BackupDialog connId={task.connId} db={task.db} />}
       {task?.kind === 'restore' && <RestoreDialog connId={task.connId} db={task.db} />}
       {task?.kind === 'copy' && task.db && <CopyDialog connId={task.connId} db={task.db} />}

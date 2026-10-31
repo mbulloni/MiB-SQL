@@ -2,7 +2,7 @@ import { createContext, useContext, useState, type ReactNode } from 'react';
 import { api } from '../api';
 import { t as tr, locale } from '../i18n';
 import { openDbTool, closeDoc, dropObject, insertText, newDoc, openCompare, openMaint, openNewObject, openObject, openServerTool, openDesigner, openEr, openQueryBuilder, qi, qid, qtable, refreshExplorer, runDoc, selectTop, showDdl } from '../actions';
-import { isTds, loadDatabases, metaKey, useStore, type MetaEntry } from '../store';
+import { isTds, loadDatabases, metaKey, useStore, type DepsTarget, type MetaEntry } from '../store';
 import type { ColumnInfo, ConnDef, DbObjects, EditableKind, ForeignKeyInfo, IndexInfo, ObjectKind } from '../types';
 import { openMenu, type MenuItem } from './ContextMenu';
 import Icon from './Icon';
@@ -26,6 +26,8 @@ interface NodeProps {
   dim?: boolean;
   children?: () => ReactNode;
 }
+
+const deps = (d: DepsTarget) => useStore.getState().set({ depsDialog: d });
 
 function Node({ id, label, icon, depth, hint, title, leaf, onExpand, onDouble, menu, drag, dim, children }: NodeProps) {
   const { open, toggle } = useContext(Tree);
@@ -100,7 +102,10 @@ function TableChildren({ c, db, t, depth, view }: { c: string; db: string; t: st
             label={col.name} hint={`${col.type}${col.nullable ? '' : ' NOT NULL'}`}
             title={[col.extra, col.def !== null ? `DEFAULT ${col.def}` : '', col.comment].filter(Boolean).join('\n') || undefined}
             drag={qid(c, col.name)} onDouble={() => insertText(qid(c, col.name))}
-            menu={[{ label: 'Copia nome', action: () => copy(col.name) }, { label: 'Inserisci nell\'editor', action: () => insertText(qid(c, col.name)) }]} />
+            menu={[{ label: 'Copia nome', action: () => copy(col.name) }, { label: 'Inserisci nell\'editor', action: () => insertText(qid(c, col.name)) },
+              ...(isTds(c) ? [] : ['sep' as const,
+                { label: tr('Dipendenze…'), action: () => deps({ connId: c, db, kind: view ? 'view' : 'table', name: t, column: col.name, mode: 'deps' }) },
+                ...(view ? [] : [{ label: tr('Rinomina colonna…'), action: () => deps({ connId: c, db, kind: 'table', name: t, column: col.name, mode: 'rename' }) }])])]} />
         )) : <Status entry={cols} depth={depth + 1} />}
       </Node>
       {!view && !isTds(c) && <>
@@ -208,10 +213,15 @@ function DbChildren({ c, db, depth }: { c: string; db: string; depth: number }) 
                         { label: 'Manutenzione…', action: () => openMaint(c, db, [o.name]) },
                         { label: 'Nuovo trigger…', action: () => openNewObject(c, db, 'trigger', o.name) },
                         'sep' as const,
+                        { label: tr('Dipendenze…'), action: () => deps({ connId: c, db, kind: 'table', name: o.name, mode: 'deps' }) },
+                        { label: tr('Rinomina…'), action: () => deps({ connId: c, db, kind: 'table', name: o.name, mode: 'rename' }) },
+                        'sep' as const,
                         { label: 'Svuota tabella…', danger: true, action: () => destroy(c, db, o.name, 'truncate') },
                         { label: 'Elimina tabella…', danger: true, action: () => destroy(c, db, o.name, 'drop') },
                       ] : [
                         { label: 'Modifica vista…', action: () => openObject(c, db, 'view', o.name) },
+                        { label: tr('Dipendenze…'), action: () => deps({ connId: c, db, kind: 'view', name: o.name, mode: 'deps' }) },
+                        { label: tr('Rinomina…'), action: () => deps({ connId: c, db, kind: 'view', name: o.name, mode: 'rename' }) },
                         { label: 'Elimina vista…', danger: true, action: () => dropObject(c, db, 'view', o.name) },
                       ]),
                       'sep', ...common,
@@ -226,6 +236,7 @@ function DbChildren({ c, db, depth }: { c: string; db: string; depth: number }) 
                 { label: tr('Modifica…'), action: () => openObject(c, db, kind, o.name) },
                 ...(routine ? [{ label: tr('Esegui con parametri…'), action: () => useStore.getState().set({ callDialog: { connId: c, db, kind, name: o.name } }) }] : []),
                 ...(kind === 'procedure' ? [{ label: tr('Genera CALL'), action: () => newDoc({ connId: c, db, sql: `CALL ${qn}();\n` }) }] : []),
+                ...(routine ? [{ label: tr('Dipendenze…'), action: () => deps({ connId: c, db, kind: kind as 'procedure' | 'function', name: o.name, mode: 'deps' }) }] : []),
                 { label: tr('Elimina…'), danger: true, action: () => dropObject(c, db, kind, o.name) },
                 'sep',
               ];

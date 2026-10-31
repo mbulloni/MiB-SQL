@@ -106,6 +106,7 @@ export function openVisual(kind: import('./store').VisualKind, target: { connId:
   else if (kind === 'maint') openMaint(connId, db);
   else if (kind === 'datagen' || kind === 'docgen') openDbTool(connId, db, kind);
   else if (kind === 'copy') st().set({ task: { kind: 'copy', connId, db } });
+  else if (kind === 'deps') st().set({ depsDialog: { connId, db, kind: 'table', name: '', mode: 'deps' } });
   else openCompare(connId, db);
 }
 

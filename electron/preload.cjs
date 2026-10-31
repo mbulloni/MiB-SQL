@@ -119,6 +119,9 @@ contextBridge.exposeInMainWorld('api', {
     clear: (connId, db, tables, truncate) => call('datagen:clear', connId, db, tables, truncate),
     counts: (connId, db, tables) => call('datagen:counts', connId, db, tables),
   },
+  deps: {
+    find: (connId, target) => call('deps:find', connId, target),
+  },
   search: {
     objects: (connId, dbs, text, opts) => call('search:objects', connId, dbs, text, opts),
     data: (id, connId, dbs, text, opts) => call('search:data', id, connId, dbs, text, opts),

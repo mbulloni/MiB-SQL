@@ -10,6 +10,18 @@ Educational IDE for **MariaDB and MySQL** (and, read only, **Microsoft Fabric Wa
 
 ![Performance advice in English](docs/screenshot-33.png)
 
+## What's new in 1.6
+
+- **Dependencies and safe rename** (*Dependencies and rename* tile on the home page, *Tools* menu, or right click on a table, view, column, procedure or function in the Database Explorer)
+  - **Used by**: foreign keys pointing to the table or column, views, procedures, functions, triggers and events using it, in every visible database; for a column also indexes, generated columns and CHECK constraints
+  - **Uses**: tables and views read or written by a view or routine; for a routine also who calls it
+  - **Rename** a table, view or column: RENAME TABLE / RENAME COLUMN plus automatic update of the views, routines, triggers and events using it (OR REPLACE, or DROP + CREATE restoring privileges on MySQL)
+  - only certain references are rewritten (qualified names such as `alias.column` or `db.table`, names in FROM/JOIN/UPDATE/INTO, NEW./OLD. in the table's triggers); strings and comments stay untouched; ambiguous names are listed with their line to check by hand
+  - views keep their output column name (`AS qty`), so their users are not affected
+  - script preview, "Open as script" to run it by hand, step-by-step execution with the outcome of each object
+
+![Dependencies of a procedure](docs/screenshot-41.png)
+
 ## What's new in 1.5
 
 - **Microsoft Fabric Warehouse** (and SQL Server / Azure SQL), **read only**: new connection › *Database type* › *Microsoft Fabric Warehouse / SQL Server*, server = the warehouse's SQL connection string
@@ -130,7 +142,7 @@ Test database: `scripts/demo.sql` creates `mibsql_demo` and the `mibsql`/`mibsql
 
 ## Known limits
 
-See the Italian [README](README.md#limiti-noti). In short: log files of remote servers are readable only through log tables or the FILE privilege; searching data reads every table; grid edits use their own connection; DDL is not transactional; performance_schema (or the slow log / userstat) is needed for heavy queries and unused indexes; index suggestions are heuristic; without the PROCESS privilege only your own connections are visible; the AppImage must live in a writable folder for self-update; server error messages follow the server's lc_messages. Microsoft Fabric / SQL Server connections offer explorer, editor, results, export, history, snippets and the assistant only (no grid editing, plan, profile or the MariaDB tools); DECIMAL values past 15 significant digits lose precision; tested against SQL Server 2022 in Docker and with the real Microsoft sign-in start, not yet on a real Fabric warehouse.
+See the Italian [README](README.md#limiti-noti). In short: log files of remote servers are readable only through log tables or the FILE privilege; searching data reads every table; grid edits use their own connection; DDL is not transactional; performance_schema (or the slow log / userstat) is needed for heavy queries and unused indexes; index suggestions are heuristic; without the PROCESS privilege only your own connections are visible; the AppImage must live in a writable folder for self-update; server error messages follow the server's lc_messages. Dependencies are found in the code text (dynamic SQL is not seen) and routines of other definers without privileges are not updated by a rename. Microsoft Fabric / SQL Server connections offer explorer, editor, results, export, history, snippets and the assistant only (no grid editing, plan, profile or the MariaDB tools); DECIMAL values past 15 significant digits lose precision; tested against SQL Server 2022 in Docker and with the real Microsoft sign-in start, not yet on a real Fabric warehouse.
 
 ## License
 

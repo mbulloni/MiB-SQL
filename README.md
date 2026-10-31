@@ -10,6 +10,20 @@ IDE educativo per **MariaDB e MySQL** (e, in sola lettura, **Microsoft Fabric Wa
 
 ![Database Explorer ed editor SQL](docs/screenshot-1.png)
 
+## Novità della v1.6
+
+- **Dipendenze e rinomina sicura** (riquadro *Dipendenze e rinomina* nella pagina iniziale, menu *Strumenti*, oppure tasto destro su tabella, vista, colonna, procedura o funzione nel Database Explorer)
+  - **Usato da**: chiavi esterne che puntano alla tabella o alla colonna, viste, procedure, funzioni, trigger ed eventi che la usano, in tutti i database visibili; per una colonna anche indici, colonne generate e vincoli CHECK
+  - **Usa**: tabelle e viste lette o scritte da una vista o da una routine; per una routine anche chi la chiama (CALL, funzioni)
+  - **Rinomina** tabella, vista o colonna: RENAME TABLE / RENAME COLUMN e aggiornamento automatico di viste, routine, trigger ed eventi che la usano (OR REPLACE, oppure DROP + CREATE con ripristino dei privilegi su MySQL)
+  - vengono riscritti solo i riferimenti certi (nomi qualificati come `alias.colonna` o `db.tabella`, nomi in FROM/JOIN/UPDATE/INTO, NEW./OLD. nei trigger della tabella); stringhe e commenti restano intatti; i nomi ambigui (es. una colonna senza tabella davanti in un'istruzione con più tabelle) sono elencati con la riga da verificare a mano
+  - nelle viste il nome della colonna in uscita (`AS qty`) resta invariato, così chi usa la vista non si accorge della rinomina
+  - anteprima dello script, «Apri come script» per eseguirlo a mano, esecuzione passo per passo con l'esito di ogni oggetto
+
+![Dipendenze di una procedura](docs/screenshot-41.png)
+
+![Rinomina di una colonna con anteprima](docs/screenshot-42.png)
+
 ## Novità della v1.5
 
 - **Microsoft Fabric Warehouse** (e SQL Server / Azure SQL) in **sola lettura**: nuova connessione › *Tipo di database* › *Microsoft Fabric Warehouse / SQL Server*, server = stringa di connessione SQL del warehouse
@@ -327,7 +341,7 @@ mysql -u root -p < scripts/demo.sql
 
 ## Roadmap
 
-Completata: le otto fasi previste (connessioni ed editor, griglia e modifica dati, designer, ER, confronto, backup/import, profiler/monitor/utenti) più Query Builder, tema scuro, partizioni, confronto dati a memoria costante, pacchetto .deb e assistente AI; in v1.2 formattatore, cronologia, snippet, editor di oggetti e manutenzione tabelle; in v1.3 prestazioni, processi, dati di test, documentazione e interfaccia in inglese; in v1.4 ricerca, log del server, copia database e aggiornamenti integrati; in v1.5 Microsoft Fabric Warehouse in sola lettura.
+Completata: le otto fasi previste (connessioni ed editor, griglia e modifica dati, designer, ER, confronto, backup/import, profiler/monitor/utenti) più Query Builder, tema scuro, partizioni, confronto dati a memoria costante, pacchetto .deb e assistente AI; in v1.2 formattatore, cronologia, snippet, editor di oggetti e manutenzione tabelle; in v1.3 prestazioni, processi, dati di test, documentazione e interfaccia in inglese; in v1.4 ricerca, log del server, copia database e aggiornamenti integrati; in v1.5 Microsoft Fabric Warehouse in sola lettura; in v1.6 dipendenze e rinomina sicura.
 
 
 ## Limiti noti
@@ -341,6 +355,7 @@ Completata: le otto fasi previste (connessioni ed editor, griglia e modifica dat
 - Editor oggetti su MySQL: senza CREATE OR REPLACE la modifica è DROP + CREATE (ripristinata in caso di errore); i privilegi dati alla singola routine vengono riassegnati se l'account può leggere mysql.procs_priv, altrimenti vanno riassegnati a mano; con un DEFINER diverso dal proprio servono i privilegi SET USER/SET_USER_ID
 - Prestazioni: Query pesanti e Indici › mai usati richiedono performance_schema (MySQL lo ha attivo, MariaDB no: serve il riavvio) oppure il log delle query lente / userstat; i contatori sono cumulativi dall'avvio del server; i suggerimenti di indice sono euristici, basati su EXPLAIN (stime) e sulla forma della query: vanno provati
 - Processi: senza il privilegio PROCESS si vedono solo le proprie connessioni e non le transazioni; su MariaDB i lock di metadati sono esatti solo con il plugin METADATA_LOCK_INFO (installabile dalla scheda Blocchi)
+- Dipendenze e rinomina: la ricerca dei candidati usa il testo del codice (LIKE) e la conferma è a token: riferimenti costruiti con SQL dinamico (PREPARE/EXECUTE, stringhe) non vengono trovati; le routine di altri definer senza privilegi sono elencate come non leggibili e non aggiornate; colonne generate e vincoli CHECK che usano la colonna vanno verificati dopo la rinomina; rinomina di procedure e funzioni non disponibile (solo dipendenze)
 - Dati di test: nello script (non inserito) le chiavi esterne usano solo i valori già presenti nel database
 - Log: su server remoti senza tabelle di log né privilegio FILE i file non sono leggibili (l'app propone l'uscita su tabella); il journal di systemd è letto solo per server su questo computer
 - Ricerca nei dati: legge ogni tabella per intero (LIKE '%…%'): su database molto grandi usare «salta tabelle oltre»
