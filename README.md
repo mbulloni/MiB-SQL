@@ -10,6 +10,17 @@ IDE educativo per **MariaDB e MySQL** (e, in sola lettura, **Microsoft Fabric Wa
 
 ![Database Explorer ed editor SQL](docs/screenshot-1.png)
 
+## Novità della v1.6.1
+
+- **Righe e colonne ridimensionabili nei risultati**, con la formattazione del testo mantenuta
+  - pulsante **↕ Righe intere** nella barra sopra la griglia: ogni riga è alta quanto il suo contenuto, testo a capo, ritorni a capo, tabulazioni e rientri come nel valore (JSON, testi su più righe)
+  - colonne: trascinare il bordo dell'intestazione, **doppio clic** sul bordo per adattarla al testo più lungo (tutte le colonne selezionate insieme)
+  - righe: trascinare il **bordo inferiore del numero di riga**, doppio clic per adattarla al contenuto (tutte le righe selezionate insieme)
+  - tasto destro: *Adatta larghezza colonne*, *Adatta altezza righe*, *Ripristina dimensioni*
+  - modifica in griglia su più righe: **Alt+Invio** va a capo, Invio conferma
+
+![Righe intere nella griglia dei risultati](docs/screenshot-43.png)
+
 ## Novità della v1.6
 
 - **Dipendenze e rinomina sicura** (riquadro *Dipendenze e rinomina* nella pagina iniziale, menu *Strumenti*, oppure tasto destro su tabella, vista, colonna, procedura o funzione nel Database Explorer)
@@ -341,7 +352,7 @@ mysql -u root -p < scripts/demo.sql
 
 ## Roadmap
 
-Completata: le otto fasi previste (connessioni ed editor, griglia e modifica dati, designer, ER, confronto, backup/import, profiler/monitor/utenti) più Query Builder, tema scuro, partizioni, confronto dati a memoria costante, pacchetto .deb e assistente AI; in v1.2 formattatore, cronologia, snippet, editor di oggetti e manutenzione tabelle; in v1.3 prestazioni, processi, dati di test, documentazione e interfaccia in inglese; in v1.4 ricerca, log del server, copia database e aggiornamenti integrati; in v1.5 Microsoft Fabric Warehouse in sola lettura; in v1.6 dipendenze e rinomina sicura.
+Completata: le otto fasi previste (connessioni ed editor, griglia e modifica dati, designer, ER, confronto, backup/import, profiler/monitor/utenti) più Query Builder, tema scuro, partizioni, confronto dati a memoria costante, pacchetto .deb e assistente AI; in v1.2 formattatore, cronologia, snippet, editor di oggetti e manutenzione tabelle; in v1.3 prestazioni, processi, dati di test, documentazione e interfaccia in inglese; in v1.4 ricerca, log del server, copia database e aggiornamenti integrati; in v1.5 Microsoft Fabric Warehouse in sola lettura; in v1.6 dipendenze e rinomina sicura; in v1.6.1 righe e colonne ridimensionabili nei risultati.
 
 
 ## Limiti noti

@@ -7,7 +7,7 @@ import {
 import { editsBySet, isTds, metaKey, useStore, type MetaEntry } from '../store';
 import type { Cell, Doc, IndexInfo, ResultSet } from '../types';
 import { openMenu, type MenuItem } from './ContextMenu';
-import ResultGrid, { type GridCell, type GridEditing, type GridSelection } from './ResultGrid';
+import ResultGrid, { type GridCell, type GridEditing, type GridLayout, type GridSelection } from './ResultGrid';
 import { t, locale } from '../i18n';
 
 interface Filter { col: number; op: 'eq' | 'ne'; value: Cell }
@@ -15,6 +15,7 @@ interface Filter { col: number; op: 'eq' | 'ne'; value: Cell }
 const shown = (v: Cell) => (v === null ? 'NULL' : String(v).length > 30 ? String(v).slice(0, 30) + '…' : String(v));
 const INTEGER = new Set(['TINY', 'SHORT', 'LONG', 'INT', 'INT24', 'YEAR']);
 const plural = (n: number, one: string, many: string) => `${n} ${n === 1 ? one : many}`;
+const EXPAND_KEY = 'mibsql.gridExpand';
 const READ_ONLY_SQL = /^\s*(\(\s*)?(select|with|show|table|values|desc|describe|explain)\b/i;
 
 /** Grid of one result set with filtering, editing (single table with key) and export. */
@@ -24,6 +25,8 @@ export default function ResultView({ doc, set, sql, at }: { doc: Doc; set: Resul
   const [search, setSearch] = useState('');
   const [preview, setPreview] = useState<string | null>(null);
   const [busy, setBusy] = useState(false);
+  const [expand, setExpandState] = useState(() => { try { return localStorage.getItem(EXPAND_KEY) === '1'; } catch { return false; } });
+  const setExpand = (v: boolean) => { setExpandState(v); try { localStorage.setItem(EXPAND_KEY, v ? '1' : '0'); } catch { /* ignore */ } };
   const setEdits = (e: Edits) => { editsBySet.set(set, e); setEditsState(e); };
   // after an apply the set is replaced: start from its own (empty) edits, keep the filters
   useEffect(() => { setEditsState(editsBySet.get(set) ?? emptyEdits()); }, [set]);
@@ -134,7 +137,7 @@ export default function ResultView({ doc, set, sql, at }: { doc: Doc; set: Resul
     navigator.clipboard.writeText(lines.join('\n'));
   };
 
-  const menu = (e: React.MouseEvent, sel: GridSelection) => {
+  const menu = (e: React.MouseEvent, sel: GridSelection, layout: GridLayout) => {
     const f = sel.focus;
     const v = f ? gridRows[f.row][f.col] ?? null : null;
     const items: MenuItem[] = [
@@ -147,6 +150,10 @@ export default function ResultView({ doc, set, sql, at }: { doc: Doc; set: Resul
         { label: t('Escludi «{0}»', shown(v)), action: () => setFilters((fs) => [...fs, { col: f.col, op: 'ne', value: v }]) });
     }
     if (filters.length) items.push({ label: t('Rimuovi filtri'), action: () => setFilters([]) });
+    items.push('sep',
+      { label: t('Adatta larghezza colonne'), action: () => layout.fitColumns(sel.cols.length ? sel.cols : columns.map((_, i) => i)) },
+      { label: t('Adatta altezza righe'), action: () => layout.fitRows(sel.rows.length ? sel.rows : gridRows.map((_, i) => i)) },
+      { label: t('Ripristina dimensioni'), action: () => layout.reset() });
     if (editing) {
       const deleted = sel.rows.length > 0 && sel.rows.every((i) => editing.state(i) === 'deleted');
       items.push('sep',
@@ -198,9 +205,11 @@ export default function ResultView({ doc, set, sql, at }: { doc: Doc; set: Resul
             <button className="primary" onClick={apply} disabled={busy}>{busy ? t('Applico…') : t('Applica')}</button>
           </>}
         </> : <span className="muted" title={typeof target === 'string' ? target : t('Connessione non aperta')}>🔒 {connOpen ? target as string : t('Sola lettura')}</span>}
+        <button className={expand ? 'active' : undefined} onClick={() => setExpand(!expand)}
+          title={t('Righe alte quanto il contenuto: testo a capo, ritorni a capo e tabulazioni mantenuti')}>↕ {t('Righe intere')}</button>
         <button onClick={exportData} title={t('Esporta')}>{t('Esporta…')}</button>
       </div>
-      <ResultGrid columns={columns} rows={gridRows} editing={editing} onMenu={menu} />
+      <ResultGrid columns={columns} rows={gridRows} editing={editing} expand={expand} onMenu={menu} />
       {preview !== null && (
         <div className="modal-back" onMouseDown={() => setPreview(null)}>
           <div className="modal viewer" onMouseDown={(e) => e.stopPropagation()} onKeyDown={(e) => { if (e.key === 'Escape') setPreview(null); }}>

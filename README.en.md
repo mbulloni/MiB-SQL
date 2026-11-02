@@ -10,6 +10,17 @@ Educational IDE for **MariaDB and MySQL** (and, read only, **Microsoft Fabric Wa
 
 ![Performance advice in English](docs/screenshot-33.png)
 
+## What's new in 1.6.1
+
+- **Resizable rows and columns in results**, text formatting kept
+  - **↕ Full rows** button above the grid: every row as tall as its content, wrapped text, line breaks, tabs and indentation as in the value (JSON, multi-line text)
+  - columns: drag the header edge, **double-click** it to fit the longest text (all selected columns at once)
+  - rows: drag the **bottom edge of the row number**, double-click to fit the content (all selected rows at once)
+  - right click: *Fit column width*, *Fit row height*, *Reset sizes*
+  - multi-line editing in the grid: **Alt+Enter** adds a new line, Enter confirms
+
+![Full rows in the result grid](docs/screenshot-43.png)
+
 ## What's new in 1.6
 
 - **Dependencies and safe rename** (*Dependencies and rename* tile on the home page, *Tools* menu, or right click on a table, view, column, procedure or function in the Database Explorer)

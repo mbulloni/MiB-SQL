@@ -45,7 +45,7 @@ npm run dist        # AppImage + .deb
 - `src/theme.ts` — tema: `<html data-theme>` + variabili in `styles.css` (`:root` chiaro, `:root[data-theme="dark"]` scuro), temi Monaco `mibsql`/`mibsql-dark`, preferenza light/dark/system in localStorage; nei componenti usare sempre le variabili (`--panel`, `--input`, `--subtle`, `--line`…), mai colori fissi.
 - `src/components/ResultView.tsx` — barra filtri/modifiche/export sopra `ResultGrid`; modifiche in sospeso in `editsBySet` (WeakMap per ResultSet, store.ts). `runDoc`/`closeDoc` chiedono conferma se ci sono modifiche non applicate.
 - `src/actions.ts` — azioni documento (run, cancel, save, DDL, select top), persistenza schede in localStorage.
-- `src/components/` — `Explorer`, `SqlEditor` (un'unica istanza Monaco, swap modelli), `ResultsPanel`, `ResultGrid` (virtualizzata, righe 22px), `Dialogs`, `ContextMenu`, `Icon` (SVG inline).
+- `src/components/` — `Explorer`, `SqlEditor` (un'unica istanza Monaco, swap modelli), `ResultsPanel`, `ResultGrid` (virtualizzata, righe 22px o altezza variabile: `tops` + ricerca binaria, `heights` per riga a mano/adatta, `expand` = «Righe intere» con `wrappedLines` misurato su canvas; editor in textarea, Alt+Invio a capo), `Dialogs`, `ContextMenu`, `Icon` (SVG inline).
 
 ## Icona
 

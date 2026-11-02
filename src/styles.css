@@ -184,6 +184,9 @@ body.resizing-y, body.resizing-y * { cursor: row-resize !important; user-select:
 .grid-resize { position: absolute; right: -3px; top: 0; width: 7px; height: 100%; cursor: col-resize; z-index: 1; }
 .grid-cell.num { text-align: right; font-variant-numeric: tabular-nums; }
 .grid-cell.sel { background: var(--sel); }
+.grid-cell.tall { white-space: pre-wrap; overflow-wrap: anywhere; tab-size: 4; text-overflow: clip; overflow: auto; line-height: 17px; padding: 2px 6px; }
+.grid-cell.tall.num { white-space: pre-wrap; }
+.grid-rresize { position: absolute; left: 0; right: 0; bottom: 0; height: 5px; cursor: row-resize; }
 .grid-cell.focus { outline: 1px solid var(--accent); outline-offset: -1px; }
 .null { color: var(--null); font-style: italic; }
 
@@ -257,7 +260,8 @@ body.resizing-y, body.resizing-y * { cursor: row-resize !important; user-select:
 .grid-row.deleted .grid-cell { background: var(--err-bg); color: var(--err-text); text-decoration: line-through; }
 .grid-cell.edited { background: var(--edited); }
 .grid-cell.edited.sel, .grid-row.new .grid-cell.sel { background: var(--sel-edited); }
-.grid-editor { position: absolute; height: 22px; z-index: 4; border: 2px solid var(--accent); padding: 0 4px; font-size: 12.5px; outline: none; box-shadow: 0 2px 8px rgba(0,0,0,.2); }
+.grid-editor { position: absolute; height: 22px; z-index: 4; border: 2px solid var(--accent); padding: 0 4px; font: inherit; font-size: 12.5px; line-height: 18px; outline: none; box-shadow: 0 2px 8px rgba(0,0,0,.2); resize: none; overflow: hidden; white-space: pre; color: var(--text); background: var(--input); }
+.grid-editor.tall { white-space: pre-wrap; overflow: auto; tab-size: 4; line-height: 17px; padding: 2px 4px; }
 .seg { display: flex; border: 1px solid var(--border); border-radius: 4px; overflow: hidden; }
 .seg button { flex: 1; padding: 6px 8px; white-space: nowrap; border: none; border-right: 1px solid var(--border); background: var(--input); cursor: pointer; }
 .seg button:last-child { border-right: none; }
@@ -311,7 +315,7 @@ body.resizing-y, body.resizing-y * { cursor: row-resize !important; user-select:
 .er-bar { display: flex; align-items: center; gap: 6px; padding: 5px 8px; border-bottom: 1px solid var(--border); background: var(--toolbar); flex: none; }
 .er-bar button { height: 26px; padding: 0 10px; border: 1px solid var(--border); border-radius: 3px; background: var(--input); cursor: pointer; }
 .er-bar button.primary { background: var(--accent); border-color: var(--accent); color: #fff; }
-.er-bar button.active { background: var(--accent-soft); border-color: var(--accent); color: var(--accent); }
+.er-bar button.active, .result-bar button.active { background: var(--accent-soft); border-color: var(--accent); color: var(--accent); }
 .er-bar .search { width: 180px; padding: 4px 7px; border: 1px solid var(--border); border-radius: 3px; }
 .er-bar .zoom { min-width: 42px; text-align: center; color: var(--muted); }
 .er-bar .muted { color: var(--muted); }
