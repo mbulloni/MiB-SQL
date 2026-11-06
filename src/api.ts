@@ -46,6 +46,7 @@ interface Api {
   meta: {
     databases(id: string): Promise<string[]>;
     objects(id: string, db: string): Promise<DbObjects>;
+    properties(id: string, db: string, kind: ObjectKind, name: string): Promise<{ key: string; value: string | number | null }[]>;
     columns(id: string, db: string, table: string): Promise<ColumnInfo[]>;
     indexes(id: string, db: string, table: string): Promise<IndexInfo[]>;
     foreignKeys(id: string, db: string, table: string): Promise<ForeignKeyInfo[]>;

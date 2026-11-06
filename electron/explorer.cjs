@@ -311,4 +311,39 @@ async function grants(connId, user, host) {
   return rows.map((r) => String(Object.values(r)[0]));
 }
 
-module.exports = { users, grants, schemaSnapshot, normalizeDdl, tableDefinitions, erModel, tableDefinition, serverOptions, databases, objects, columns, indexes, foreignKeys, ddl, schema };
+// Columns shown by Properties, in order; missing ones (MySQL vs MariaDB) are skipped.
+const PROPERTY_COLUMNS = {
+  table: ['TABLE_TYPE', 'ENGINE', 'ROW_FORMAT', 'TABLE_ROWS', 'AVG_ROW_LENGTH', 'DATA_LENGTH', 'INDEX_LENGTH', 'DATA_FREE', 'AUTO_INCREMENT',
+    'CREATE_TIME', 'UPDATE_TIME', 'CHECK_TIME', 'TABLE_COLLATION', 'CREATE_OPTIONS', 'TABLE_COMMENT'],
+  view: ['DEFINER', 'SECURITY_TYPE', 'ALGORITHM', 'CHECK_OPTION', 'IS_UPDATABLE', 'CHARACTER_SET_CLIENT', 'COLLATION_CONNECTION'],
+  routine: ['CREATED', 'LAST_ALTERED', 'DEFINER', 'SECURITY_TYPE', 'SQL_DATA_ACCESS', 'IS_DETERMINISTIC', 'DTD_IDENTIFIER', 'ROUTINE_COMMENT',
+    'SQL_MODE', 'CHARACTER_SET_CLIENT', 'COLLATION_CONNECTION'],
+  trigger: ['CREATED', 'DEFINER', 'ACTION_TIMING', 'EVENT_MANIPULATION', 'EVENT_OBJECT_TABLE', 'ACTION_ORDER', 'SQL_MODE', 'CHARACTER_SET_CLIENT', 'COLLATION_CONNECTION'],
+  event: ['CREATED', 'LAST_ALTERED', 'LAST_EXECUTED', 'STATUS', 'EVENT_TYPE', 'EXECUTE_AT', 'INTERVAL_VALUE', 'INTERVAL_FIELD', 'STARTS', 'ENDS',
+    'ON_COMPLETION', 'DEFINER', 'EVENT_COMMENT', 'SQL_MODE'],
+};
+
+/** Properties of an object (dates, size, definer…) as [information_schema column, value] pairs. */
+async function properties(connId, db, kind, name) {
+  // sizes and counts arrive as BigInt, which IPC can't carry
+  const plain = (v) => (typeof v === 'bigint' ? v.toString() : v);
+  const pick = (row, cols) => (row ? cols.filter((c) => c in row && row[c] !== '').map((c) => ({ key: c, value: plain(row[c]) })) : []);
+  if (kind === 'table' || kind === 'view') {
+    const [row] = await server.meta(connId, 'SELECT * FROM information_schema.TABLES WHERE TABLE_SCHEMA = ? AND TABLE_NAME = ?', [db, name]);
+    if (!row) throw new Error(t('Oggetto non trovato: {0}.', `${db}.${name}`));
+    if (kind === 'table') return pick(row, PROPERTY_COLUMNS.table);
+    const [v] = await server.meta(connId, 'SELECT * FROM information_schema.VIEWS WHERE TABLE_SCHEMA = ? AND TABLE_NAME = ?', [db, name]);
+    return [...pick(row, ['TABLE_TYPE']), ...pick(v, PROPERTY_COLUMNS.view), ...pick(row, ['TABLE_COMMENT']).filter((x) => x.value !== 'VIEW')];
+  }
+  const [sql, cols] = {
+    procedure: ["SELECT * FROM information_schema.ROUTINES WHERE ROUTINE_SCHEMA = ? AND ROUTINE_NAME = ? AND ROUTINE_TYPE = 'PROCEDURE'", PROPERTY_COLUMNS.routine],
+    function: ["SELECT * FROM information_schema.ROUTINES WHERE ROUTINE_SCHEMA = ? AND ROUTINE_NAME = ? AND ROUTINE_TYPE = 'FUNCTION'", PROPERTY_COLUMNS.routine],
+    trigger: ['SELECT * FROM information_schema.TRIGGERS WHERE TRIGGER_SCHEMA = ? AND TRIGGER_NAME = ?', PROPERTY_COLUMNS.trigger],
+    event: ['SELECT * FROM information_schema.EVENTS WHERE EVENT_SCHEMA = ? AND EVENT_NAME = ?', PROPERTY_COLUMNS.event],
+  }[kind];
+  const [row] = await server.meta(connId, sql, [db, name]);
+  if (!row) throw new Error(t('Oggetto non trovato: {0}.', `${db}.${name}`));
+  return pick(row, cols);
+}
+
+module.exports = { properties, users, grants, schemaSnapshot, normalizeDdl, tableDefinitions, erModel, tableDefinition, serverOptions, databases, objects, columns, indexes, foreignKeys, ddl, schema };

@@ -96,13 +96,13 @@ body.resizing-y, body.resizing-y * { cursor: row-resize !important; user-select:
 .icon { flex: none; display: block; }
 
 /* toolbar */
-.toolbar { display: flex; align-items: center; gap: 2px; padding: 4px 6px; background: var(--toolbar); border-bottom: 1px solid var(--border); }
-.toolbar button { display: flex; align-items: center; gap: 5px; height: 28px; padding: 0 7px; border: 1px solid transparent; border-radius: 3px; background: none; cursor: pointer; }
+.toolbar { display: flex; flex-wrap: nowrap; align-items: center; gap: 2px; padding: 4px 6px; overflow: hidden; background: var(--toolbar); border-bottom: 1px solid var(--border); }
+.toolbar button { display: flex; flex: none; white-space: nowrap; align-items: center; gap: 5px; height: 28px; padding: 0 7px; border: 1px solid transparent; border-radius: 3px; background: none; cursor: pointer; }
 .toolbar button:hover:not(:disabled) { background: var(--input); border-color: var(--border); }
 .toolbar button:disabled { opacity: .4; cursor: default; }
 .toolbar .sep { width: 1px; height: 20px; background: var(--border); margin: 0 5px; }
-.target { display: flex; gap: 4px; border-left: 3px solid transparent; padding-left: 4px; }
-.target select { height: 26px; border: 1px solid var(--border); border-radius: 3px; background: var(--input); padding: 0 4px; min-width: 170px; max-width: 260px; }
+.target { display: flex; flex: none; gap: 4px; border-left: 3px solid transparent; padding-left: 4px; }
+.target select { height: 26px; border: 1px solid var(--border); border-radius: 3px; background: var(--input); padding: 0 4px; min-width: 150px; max-width: 260px; }
 
 /* layout */
 .main { flex: 1; display: flex; min-height: 0; }
@@ -510,9 +510,9 @@ details summary { cursor: pointer; color: var(--muted); font-size: 12px; }
 .start-tiles button span { color: var(--muted); font-size: 12px; line-height: 1.35; }
 .start-tiles button:hover { border-color: var(--accent); }
 .toolbar button span { white-space: nowrap; }
-/* narrow windows: icons with tooltips, but the visual tools and the assistant keep their names */
-@media (max-width: 1750px) { .toolbar button span:not(.keep) { display: none; } }
-@media (max-width: 1250px) { .toolbar button span.keep { display: none; } }
+/* little room (set by Toolbar from the space actually free): icons with tooltips, the visual
+   tools and the assistant keep their names until there is no room for them either */
+.toolbar[data-compact="1"] button span:not(.keep), .toolbar[data-compact="2"] button span { display: none; }
 .part-head { min-height: 0; padding: 0 0 10px; max-width: 900px; }
 
 /* AI assistant */
@@ -798,3 +798,28 @@ tr.lvl-row.Warning td:first-child { box-shadow: inset 3px 0 var(--warn); }
 .deps-warn li, .deps-steps li { margin: 2px 0; }
 .deps-steps li.ok { color: var(--ok-text, inherit); }
 .deps-steps li.error { color: var(--err-text, inherit); }
+
+/* Monaco's context menu lives in a shadow root attached outside the editor, where the theme's
+   --vscode-* variables (set on .monaco-editor) don't reach: without these it has no background. */
+.shadow-root-host {
+  --vscode-menu-background: var(--panel);
+  --vscode-menu-foreground: var(--text);
+  --vscode-menu-border: var(--border);
+  --vscode-menu-selectionBackground: var(--accent);
+  --vscode-menu-selectionForeground: #fff;
+  --vscode-menu-selectionBorder: transparent;
+  --vscode-menu-separatorBackground: var(--border);
+  --vscode-disabledForeground: var(--muted);
+  --vscode-widget-shadow: rgba(0, 0, 0, .3);
+  --vscode-scrollbarSlider-background: rgba(128, 128, 128, .35);
+  --vscode-scrollbarSlider-hoverBackground: rgba(128, 128, 128, .5);
+  --vscode-scrollbarSlider-activeBackground: rgba(128, 128, 128, .6);
+}
+
+/* object properties */
+.modal.props .form { min-height: 0; }
+.props-table { border-collapse: collapse; width: 100%; font-size: 12.5px; }
+.props-table th { text-align: left; font-weight: normal; color: var(--muted); padding: 4px 12px 4px 0; white-space: nowrap; vertical-align: top; width: 1%; }
+.props-table td { padding: 4px 0; border-bottom: 1px solid var(--line); word-break: break-word; }
+.props-table th { border-bottom: 1px solid var(--line); }
+.props-table tr.date td { font-weight: 600; }

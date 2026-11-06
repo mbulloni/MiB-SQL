@@ -2,7 +2,7 @@ import { create } from 'zustand';
 import { api } from './api';
 import type { TableDef } from './design';
 import type { Edits } from './edits';
-import type { Cell, Column, ConnDef, ConnState, Doc, ResultSet, Secrets, ServerInfo } from './types';
+import type { Cell, Column, ConnDef, ConnState, Doc, ObjectKind, ResultSet, Secrets, ServerInfo } from './types';
 
 export interface MetaEntry<T = unknown> {
   data?: T;
@@ -59,6 +59,7 @@ interface State {
   viewer: { title: string; value: string; isNull?: boolean; binary?: boolean; onSave?: (v: string | null) => void } | null;
   snippetDialog: { body?: string } | null;
   callDialog: { connId: string; db: string; kind: 'procedure' | 'function'; name: string } | null;
+  propsDialog: { connId: string; db: string; kind: ObjectKind; name: string } | null;
   depsDialog: DepsTarget | null;
   historyTick: number; // bumped when statements are added to the history
   update: import('./api').UpdateInfo | null; // newer release found by the update check
@@ -106,6 +107,7 @@ export const useStore = create<State>((set, get) => ({
   viewer: null,
   snippetDialog: null,
   callDialog: null,
+  propsDialog: null,
   depsDialog: null,
   historyTick: 0,
   update: null,

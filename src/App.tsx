@@ -1,10 +1,11 @@
-import { useEffect, useRef, useState, useSyncExternalStore } from 'react';
+import { useEffect, useLayoutEffect, useRef, useState, useSyncExternalStore } from 'react';
 import { api } from './api';
 import { cancelDoc, closeDoc, formatDoc, mysqlOnly, openAssistant, openHistory, openServerTool, openVisual, profileDoc, requestQuit, switchLanguage, newDoc, openFiles, openSql, restore, runDoc, saveDoc, setDocTarget, visualTarget } from './actions';
 import { formatOptions, loadSnippets, setFormatOptions } from './editor';
 import { isTds, loadDatabases, metaKey, useStore, type MetaEntry } from './store';
 import ContextMenu, { openMenu } from './components/ContextMenu';
 import { ConnectionDialog, EntraPromptDialog, PasswordPrompt, ValueViewer } from './components/Dialogs';
+import PropsDialog from './components/PropsDialog';
 import ExportDialog from './components/ExportDialog';
 import { BackupDialog, CopyDialog, ImportWizard, RestoreDialog } from './components/TaskDialogs';
 import Explorer from './components/Explorer';
@@ -176,8 +177,29 @@ function Toolbar() {
   const runnable = sql || doc?.kind === 'query';
   // Fabric / SQL Server documents: no execution plan or profile (MariaDB/MySQL tools)
   const tds = useStore((s) => !!doc?.connId && s.conns.find((c) => c.id === doc.connId)?.engine === 'mssql');
+  const bar = useRef<HTMLDivElement>(null);
+  // Labels give way to the space actually free (the Explorer width and the connection pickers
+  // count, not only the window): all labels, then only the visual tools', then icons only.
+  const fit = () => {
+    const el = bar.current;
+    if (!el) return;
+    for (const level of ['0', '1', '2']) {
+      el.dataset.compact = level;
+      if (el.scrollWidth <= el.clientWidth) break;
+    }
+  };
+  useLayoutEffect(fit);
+  useEffect(() => {
+    const el = bar.current!;
+    const ro = new ResizeObserver(fit);
+    ro.observe(el);
+    // the pickers change width with the names they show
+    const mo = new MutationObserver(fit);
+    mo.observe(el, { childList: true, subtree: true, characterData: true });
+    return () => { ro.disconnect(); mo.disconnect(); };
+  }, []);
   return (
-    <div className="toolbar">
+    <div className="toolbar" ref={bar}>
       <button title={t('Nuova connessione (Ctrl+Maiusc+N)')} onClick={() => set({ connDialog: { def: {} } })}><Icon name="addConn" /></button>
       <div className="sep" />
       <button title={t('Nuovo SQL (Ctrl+N)')} onClick={() => newDoc()}><Icon name="newSql" /><span>{t('Nuovo SQL')}</span></button>
@@ -345,6 +367,7 @@ export default function App() {
   const pickTarget = useStore((s) => s.pickTarget);
   const snippetDialog = useStore((s) => s.snippetDialog);
   const callDialog = useStore((s) => s.callDialog);
+  const propsDialog = useStore((s) => s.propsDialog);
   const depsDialog = useStore((s) => s.depsDialog);
   const updateDialog = useStore((s) => s.updateDialog);
   const [cursor, setCursor] = useState<[number, number]>([1, 1]);
@@ -375,7 +398,7 @@ export default function App() {
   useEffect(() => {
     const onKey = (e: KeyboardEvent) => {
       const s = useStore.getState();
-      if (s.connDialog || s.passwordPrompt || s.exportDialog || s.viewer || s.task || s.pickTarget || s.snippetDialog || s.callDialog || s.depsDialog || s.updateDialog) return;
+      if (s.connDialog || s.passwordPrompt || s.exportDialog || s.viewer || s.task || s.pickTarget || s.snippetDialog || s.callDialog || s.propsDialog || s.depsDialog || s.updateDialog) return;
       // the grid has its own Ctrl+Maiusc+N (NULL) and text inputs keep their keys
       const t = e.target as HTMLElement;
       if (t.closest?.('.grid, .result-bar') && (t.tagName === 'INPUT' || ((e.ctrlKey || e.metaKey) && e.shiftKey && e.key.toLowerCase() === 'n'))) return;
@@ -450,6 +473,7 @@ export default function App() {
       <EntraPromptDialog />
       {snippetDialog && <SnippetsDialog body={snippetDialog.body} />}
       {callDialog && <CallDialog key={callDialog.name} {...callDialog} />}
+      {propsDialog && <PropsDialog key={`${propsDialog.db}/${propsDialog.kind}/${propsDialog.name}`} {...propsDialog} />}
       {depsDialog && <DepsDialog key={`${depsDialog.mode}/${depsDialog.db}/${depsDialog.name}/${depsDialog.column ?? ''}`} {...depsDialog} />}
       {task?.kind === 'backup' && task.db && <BackupDialog connId={task.connId} db={task.db} />}
       {task?.kind === 'restore' && <RestoreDialog connId={task.connId} db={task.db} />}

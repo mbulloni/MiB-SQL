@@ -68,6 +68,14 @@ function Status({ entry, depth, empty }: { entry?: MetaEntry; depth: number; emp
 }
 
 const copy = (s: string) => navigator.clipboard.writeText(s);
+const props = (connId: string, db: string, kind: ObjectKind, name: string) => useStore.getState().set({ propsDialog: { connId, db, kind, name } });
+
+/** The object an Explorer node id names (`conn/db/folder/name`), for the Properties button. */
+function objectOf(id: string | null) {
+  const m = id ? /^([^/]+)\/([^/]+)\/(tables|views|procedures|functions|triggers|events)\/(.+)$/.exec(id) : null;
+  const F = m && FOLDERS.find((x) => x.key === m[3]);
+  return m && F ? { connId: m[1], db: m[2], kind: F.kind, name: m[4] } : null;
+}
 
 /** DROP / TRUNCATE after confirmation; designer tabs on a dropped table are closed. */
 async function destroy(c: string, db: string, table: string, how: 'drop' | 'truncate') {
@@ -148,6 +156,7 @@ function TdsFolder({ c, db, depth, F, items, entry }: { c: string; db: string; d
         const qn = qtable(c, db, o.name);
         const id = `${c}/${db}/${F.key}/${o.name}`;
         const common: MenuItem[] = [
+          { label: tr('Proprietà…'), action: () => props(c, db, F.kind, o.name) },
           { label: F.kind === 'table' ? tr('Mostra struttura (CREATE TABLE)') : tr('Mostra definizione'), action: () => showDdl(c, db, F.kind, o.name) },
           { label: tr('Copia nome'), action: () => copy(o.name) },
           { label: tr('Inserisci nell\'editor'), action: () => insertText(qn) },
@@ -191,6 +200,7 @@ function DbChildren({ c, db, depth }: { c: string; db: string; depth: number }) 
             {() => items.length ? items.map((o) => {
               const qn = `${qi(db)}.${qi(o.name)}`;
               const common: MenuItem[] = [
+                { label: tr('Proprietà…'), action: () => props(c, db, F.kind, o.name) },
                 { label: tr('Mostra DDL'), action: () => showDdl(c, db, F.kind, o.name) },
                 { label: tr('Copia nome'), action: () => copy(o.name) },
                 { label: tr('Inserisci nell\'editor'), action: () => insertText(qn) },
@@ -352,6 +362,7 @@ export default function Explorer() {
   const conns = useStore((s) => s.conns);
   const setStore = useStore((s) => s.set);
   const selected = useStore((s) => s.selectedConn);
+  const selectedObj = objectOf(useStore((s) => s.selectedNode));
   const [open, setOpen] = useState<Set<string>>(new Set());
   const [filter, setFilter] = useState('');
   const toggle = (k: string, v?: boolean) => setOpen((o) => {
@@ -367,6 +378,8 @@ export default function Explorer() {
           {tr('Database Explorer')}
           <div className="spacer" />
           <button className="icon-btn" title={tr('Nuova connessione')} onClick={() => setStore({ connDialog: { def: {} } })}><Icon name="addConn" /></button>
+          <button className="icon-btn" title={tr('Proprietà dell\'oggetto selezionato: date di creazione e modifica, dimensioni, definer')} disabled={!selectedObj}
+            onClick={() => { if (selectedObj) props(selectedObj.connId, selectedObj.db, selectedObj.kind, selectedObj.name); }}><Icon name="info" /></button>
           <button className="icon-btn" title={tr('Aggiorna')} disabled={!selected} onClick={() => { if (selected) { refreshExplorer(selected); loadDatabases(selected, true); } }}><Icon name="refresh" /></button>
         </div>
         <input className="filter" placeholder={tr('Filtra oggetti…')} value={filter} onChange={(e) => setFilter(e.target.value)} />

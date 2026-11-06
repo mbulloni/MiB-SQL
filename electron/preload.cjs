@@ -28,6 +28,7 @@ contextBridge.exposeInMainWorld('api', {
   meta: {
     databases: (id) => call('meta:databases', id),
     objects: (id, db) => call('meta:objects', id, db),
+    properties: (id, db, kind, name) => call('meta:properties', id, db, kind, name),
     columns: (id, db, t) => call('meta:columns', id, db, t),
     indexes: (id, db, t) => call('meta:indexes', id, db, t),
     foreignKeys: (id, db, t) => call('meta:foreignKeys', id, db, t),

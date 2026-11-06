@@ -167,12 +167,24 @@ function pool(connId) {
   return p;
 }
 
+// information_schema opens every table it describes and waits for its metadata lock: a long
+// CREATE TABLE … SELECT or ALTER in another session would hold the Explorer for minutes (and,
+// three such waits, every other metadata query). With a short wait the locked table is listed
+// without engine and rows, plus warning 1205.
+const META_LOCK_WAIT = 2;
+
 /** Metadata query on the pool, rows as objects keyed by column name. */
 async function meta(connId, sql, params = []) {
+  let c;
   try {
-    const res = await pool(connId).query({ sql, rowsAsArray: false }, params);
+    c = await pool(connId).getConnection();
+    await c.query(`SET SESSION lock_wait_timeout = ${META_LOCK_WAIT}`);
+    const res = await c.query({ sql, rowsAsArray: false }, params);
     return Array.from(res);
-  } catch (err) { throw new DbError(err); }
+  } catch (err) { throw new DbError(err); } finally {
+    // pool connections serve DDL and grid edits too: they get the server's wait back
+    if (c) await c.query('SET SESSION lock_wait_timeout = DEFAULT').then(() => c.release(), () => c.destroy());
+  }
 }
 
 // ---- SQL documents ----

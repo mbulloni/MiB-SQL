@@ -476,4 +476,14 @@ async function shutdown() {
 const hasSession = (sid) => sessions.has(sid);
 const isOpen = (connId) => conns.has(connId);
 
-module.exports = { isTds, erModel, test, open, close, info, databases, objects, columns, indexes, ddl, schema, openSession, closeSession, useDb, exec, cancel, streamQuery, shutdown, hasSession, isOpen, cell, typeText };
+/** Properties of an object: sys.objects dates and type, and for tables rows and size. */
+async function properties(connId, db, kind, name) {
+  const [row] = await meta(connId, db, `SELECT o.type_desc AS TYPE_DESC, CONVERT(varchar(23), o.create_date, 121) AS CREATED, CONVERT(varchar(23), o.modify_date, 121) AS LAST_ALTERED,
+      (SELECT SUM(p.rows) FROM sys.partitions p WHERE p.object_id = o.object_id AND p.index_id IN (0, 1)) AS TABLE_ROWS
+    FROM sys.objects o WHERE o.object_id = OBJECT_ID(@p0)`, [qualified(name)]);
+  if (!row) throw new Error(t('Oggetto non trovato: {0}.', `${db}.${name}`));
+  return ['TYPE_DESC', 'CREATED', 'LAST_ALTERED', ...(kind === 'table' ? ['TABLE_ROWS'] : [])]
+    .filter((k) => row[k] !== null && row[k] !== undefined).map((k) => ({ key: k, value: k === 'TABLE_ROWS' ? String(row[k]) : row[k] }));
+}
+
+module.exports = { properties, isTds, erModel, test, open, close, info, databases, objects, columns, indexes, ddl, schema, openSession, closeSession, useDb, exec, cancel, streamQuery, shutdown, hasSession, isOpen, cell, typeText };

@@ -46,6 +46,7 @@ const P: Record<string, ReactElement> = {
   copy: <><rect x="1.5" y="4.5" width="8" height="10" rx="1.2" fill="#e8b04a" /><rect x="6.5" y="1.5" width="8" height="10" rx="1.2" fill="#d99b2b" stroke="#fff" /><path d="M9 6.5h3.5M9 9h3.5" stroke="#fff" strokeWidth="1" /></>,
   update: <><circle cx="8" cy="8" r="6.2" fill="#2e9e44" /><path d="M8 4.5v6M5.3 8l2.7 2.7L10.7 8" stroke="#fff" strokeWidth="1.6" fill="none" strokeLinecap="round" strokeLinejoin="round" /></>,
   lang: <><circle cx="8" cy="8" r="6" fill="none" stroke="currentColor" strokeWidth="1.2" /><path d="M2 8h12M8 2c-2.2 2.5-2.2 9.5 0 12M8 2c2.2 2.5 2.2 9.5 0 12" fill="none" stroke="currentColor" strokeWidth="1.1" /></>,
+  info: <><circle cx="8" cy="8" r="6.3" fill="#3a7bd5" /><circle cx="8" cy="4.9" r="1" fill="#fff" /><path d="M8 7.2v4.6" stroke="#fff" strokeWidth="1.6" strokeLinecap="round" /></>,
   close: <path d="M4 4l8 8M12 4l-8 8" stroke="currentColor" strokeWidth="1.5" />,
 };
 

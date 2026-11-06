@@ -10,6 +10,16 @@ Educational IDE for **MariaDB and MySQL** (and, read only, **Microsoft Fabric Wa
 
 ![Performance advice in English](docs/screenshot-33.png)
 
+## What's new in 1.6.2
+
+- **Properties of tables, views and routines**: right-click the object in the Database Explorer › *Properties…*, or the **ⓘ** button at the top of the Explorer with the object selected. Creation date, last data and definition change, engine, rows, data and index size, AUTO_INCREMENT, collation, definer, comment; *Copy* and *Show DDL*
+- the Explorer no longer stays on "Loading…" while another session runs a long `CREATE TABLE … SELECT` or `ALTER`: the locked table is listed without engine and rows
+- the SQL editor's right-click menu has its background again (it was transparent)
+- toolbar: labels give way to the space actually free, connection and database stay visible
+- AppImage: the first start adds the menu entry and installs the icon (GNOME used to show a generic one)
+
+![Table properties](docs/screenshot-44.png)
+
 ## What's new in 1.6.1
 
 - **Resizable rows and columns in results**, text formatting kept

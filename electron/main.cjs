@@ -35,6 +35,7 @@ if (!process.argv.includes('--enable-gpu') && !process.env.MIBSQL_ENABLE_GPU) ap
 let win;
 
 function createWindow() {
+  require('./desktop.cjs').integrate();
   win = new BrowserWindow({
     width: 1500,
     height: 920,
@@ -125,6 +126,7 @@ handle('meta:schema', (id, db) => (isTds(id) ? tds : explorer).schema(id, db));
 handle('meta:tableDefinition', (id, db, t) => explorer.tableDefinition(id, db, t));
 handle('meta:serverOptions', (id, db) => explorer.serverOptions(id, db));
 handle('meta:erModel', (id, db) => (isTds(id) ? tds : explorer).erModel(id, db));
+handle('meta:properties', (id, db, kind, name) => (isTds(id) ? tds : explorer).properties(id, db, kind, name));
 handle('meta:schemaSnapshot', (id, db) => explorer.schemaSnapshot(id, db));
 handle('meta:users', (id) => explorer.users(id));
 handle('meta:grants', (id, user, host) => explorer.grants(id, user, host));
