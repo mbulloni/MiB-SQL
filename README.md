@@ -10,6 +10,16 @@ IDE educativo per **MariaDB e MySQL** (e, in sola lettura, **Microsoft Fabric Wa
 
 ![Database Explorer ed editor SQL](docs/screenshot-1.png)
 
+## Novità della v1.7
+
+- **Grafici sui risultati**: pulsante **Grafico** nella barra sopra la griglia (oppure tasto destro su una colonna › *Grafico per «colonna»*). Colonne, barre, linee, aree e dispersione; asse X, valore con aggregazione (somma, conteggio, media, minimo, massimo, valori distinti), serie da una colonna, colonne impilate, ordinamento per valore. Date riconosciute anche quando il server le restituisce come testo, asse temporale vero per linee e aree. Legenda cliccabile, tooltip con tutte le serie, colori validati per daltonismo in tema chiaro e scuro; oltre 8 serie o 50 categorie il resto confluisce in «Altro». *Immagine ▾*: copia negli appunti, salva PNG o SVG
+- **Tabella pivot**: pulsante **Pivot**. Righe e colonne su una o più colonne, valore e aggregazione, totali calcolati dalle righe (le medie restano corrette), scala di colore. **Doppio clic su una cella**: torna alla griglia filtrata sulle righe che la compongono. *Grafico* apre lo stesso raggruppamento come grafico; *Copia* ed *Esporta…* (CSV, JSON, SQL, Excel)
+- grafico e pivot usano le righe visibili: filtri, ricerca e modifiche non ancora applicate compresi; rieseguendo la stessa query restano impostati
+
+![Grafico a linee con una serie per regione](docs/screenshot-45.png)
+
+![Tabella pivot con scala di colore](docs/screenshot-46.png)
+
 ## Novità della v1.6.2
 
 - **Proprietà di tabelle, viste e routine**: tasto destro sull'oggetto nel Database Explorer › *Proprietà…*, oppure pulsante **ⓘ** in alto nell'Explorer con l'oggetto selezionato. Data di creazione, ultima modifica dei dati e della definizione, motore, righe, dimensioni di dati e indici, AUTO_INCREMENT, collation, definer, commento; *Copia* e *Mostra DDL*

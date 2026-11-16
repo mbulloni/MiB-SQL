@@ -8,6 +8,10 @@ import { editsBySet, isTds, metaKey, useStore, type MetaEntry } from '../store';
 import type { Cell, Doc, IndexInfo, ResultSet } from '../types';
 import { openMenu, type MenuItem } from './ContextMenu';
 import ResultGrid, { type GridCell, type GridEditing, type GridLayout, type GridSelection } from './ResultGrid';
+import ChartView from './ChartView';
+import PivotView from './PivotView';
+import Icon from './Icon';
+import { guessChart, guessPivot, kindOf, type ChartSpec, type PivotSpec } from '../pivot';
 import { t, locale } from '../i18n';
 
 interface Filter { col: number; op: 'eq' | 'ne'; value: Cell }
@@ -17,6 +21,12 @@ const INTEGER = new Set(['TINY', 'SHORT', 'LONG', 'INT', 'INT24', 'YEAR']);
 const plural = (n: number, one: string, many: string) => `${n} ${n === 1 ? one : many}`;
 const EXPAND_KEY = 'mibsql.gridExpand';
 const READ_ONLY_SQL = /^\s*(\(\s*)?(select|with|show|table|values|desc|describe|explain)\b/i;
+
+type Mode = 'grid' | 'chart' | 'pivot';
+interface Viz { sig: string; mode: Mode; chart: ChartSpec; pivot: PivotSpec; heat: boolean }
+/** Grid/chart/pivot choice per result tab, kept while the same columns come back (re-running a query keeps the chart). */
+const vizByView = new Map<string, Viz>();
+const signature = (columns: ResultSet['columns']) => columns.map((c) => `${c.name}:${c.type}`).join('|');
 
 /** Grid of one result set with filtering, editing (single table with key) and export. */
 export default function ResultView({ doc, set, sql, at }: { doc: Doc; set: ResultSet; sql: string; at: [number, number] }) {
@@ -30,6 +40,13 @@ export default function ResultView({ doc, set, sql, at }: { doc: Doc; set: Resul
   const setEdits = (e: Edits) => { editsBySet.set(set, e); setEditsState(e); };
   // after an apply the set is replaced: start from its own (empty) edits, keep the filters
   useEffect(() => { setEditsState(editsBySet.get(set) ?? emptyEdits()); }, [set]);
+  const vizKey = `${doc.id}/${at[0]}/${at[1]}`;
+  const sig = signature(set.columns);
+  const [viz, setVizState] = useState<Viz>(() => {
+    const old = vizByView.get(vizKey);
+    return old?.sig === sig ? old : { sig, mode: old?.mode ?? 'grid', chart: guessChart(set.columns, set.rows), pivot: guessPivot(set.columns, set.rows), heat: old?.heat ?? true };
+  });
+  const setViz = (p: Partial<Viz>) => setVizState((v) => { const n = { ...v, ...p }; vizByView.set(vizKey, n); return n; });
 
   const columns = set.columns;
   const rows = set.rows;
@@ -61,6 +78,17 @@ export default function ResultView({ doc, set, sql, at }: { doc: Doc; set: Resul
   }, [rows, edits, filters, search, columns]);
 
   const gridRows = useMemo<GridCell[][]>(() => ids.map((r) => columns.map((_, c) => valueAt(rows, edits, r, c))), [ids, rows, edits, columns]);
+  // rows a chart or pivot reads: the visible ones, pending edits included, deleted ones out
+  const vizRows = useMemo<Cell[][]>(() => (viz.mode === 'grid' ? [] : ids.filter((r) => !edits.deleted.includes(r)).map((r) => columns.map((_, c) => valueAt(rows, edits, r, c) ?? null))),
+    [viz.mode, ids, rows, edits, columns]);
+  const vizNote = [
+    set.truncated && t('calcolato sulle {0} righe caricate di {1}', rows.length.toLocaleString(locale()), set.total.toLocaleString(locale())),
+    (search.trim() || filters.length > 0) && t('solo le righe filtrate'),
+  ].filter(Boolean).join(' · ') || undefined;
+  const chartFromPivot = (p: PivotSpec) => setViz({
+    mode: 'chart',
+    chart: { ...viz.chart, type: kindOf(columns[p.rows[0]], rows, p.rows[0]) === 'date' ? 'line' : 'column', x: p.rows[0], y: p.value, series: p.cols[0] ?? null, agg: p.value === null ? 'count' : p.agg },
+  });
 
   const editing: GridEditing | undefined = canEdit ? {
     // binary values past 1 MB arrive truncated (…): those cells stay read-only
@@ -152,6 +180,12 @@ export default function ResultView({ doc, set, sql, at }: { doc: Doc; set: Resul
         { label: t('Escludi «{0}»', shown(v)), action: () => setFilters((fs) => [...fs, { col: f.col, op: 'ne', value: v }]) });
     }
     if (filters.length) items.push({ label: t('Rimuovi filtri'), action: () => setFilters([]) });
+    if (f) {
+      const other = sel.cols.find((c) => c !== f.col && kindOf(columns[c]) === 'number');
+      items.push('sep',
+        { label: t('Grafico per «{0}»', columns[f.col].name), action: () => setViz({ mode: 'chart', chart: { ...viz.chart, x: f.col, y: other ?? (viz.chart.y === f.col ? null : viz.chart.y), series: viz.chart.series === f.col ? null : viz.chart.series, type: viz.chart.type === 'scatter' ? 'column' : viz.chart.type } }) },
+        { label: t('Pivot per «{0}»', columns[f.col].name), action: () => setViz({ mode: 'pivot', pivot: { ...viz.pivot, rows: [f.col], cols: viz.pivot.cols.filter((c) => c !== f.col), value: other ?? (viz.pivot.value === f.col ? null : viz.pivot.value) } }) });
+    }
     items.push('sep',
       { label: t('Adatta larghezza colonne'), action: () => layout.fitColumns(sel.cols.length ? sel.cols : columns.map((_, i) => i)) },
       { label: t('Adatta altezza righe'), action: () => layout.fitRows(sel.rows.length ? sel.rows : gridRows.map((_, i) => i)) },
@@ -190,6 +224,11 @@ export default function ResultView({ doc, set, sql, at }: { doc: Doc; set: Resul
   return (
     <div className="result-view">
       <div className="result-bar">
+        <div className="seg" role="tablist">
+          <button className={viz.mode === 'grid' ? 'active' : ''} onClick={() => setViz({ mode: 'grid' })} title={t('Griglia dei risultati')}><Icon name="grid" size={14} />{' '}{t('Griglia')}</button>
+          <button className={viz.mode === 'chart' ? 'active' : ''} onClick={() => setViz({ mode: 'chart' })} title={t('Grafico delle righe visibili')}><Icon name="chart" size={14} />{' '}{t('Grafico')}</button>
+          <button className={viz.mode === 'pivot' ? 'active' : ''} onClick={() => setViz({ mode: 'pivot' })} title={t('Tabella pivot delle righe visibili')}><Icon name="pivot" size={14} />{' '}{t('Pivot')}</button>
+        </div>
         <input className="search" placeholder={t('Filtra righe…')} value={search} onChange={(e) => setSearch(e.target.value)} />
         {filters.map((f, i) => (
           <span key={i} className="chip">
@@ -200,7 +239,7 @@ export default function ResultView({ doc, set, sql, at }: { doc: Doc; set: Resul
         {(search || filters.length > 0) && <span className="muted">{ids.length.toLocaleString(locale())}{' '}{t('di')}{' '}{(rows.length + edits.inserted.length).toLocaleString(locale())}</span>}
         <div className="spacer" />
         {canEdit ? <>
-          <button onClick={() => setEdits(addRow(edits))} title={t('Aggiungi riga')}>{t('+ Riga')}</button>
+          {viz.mode === 'grid' && <button onClick={() => setEdits(addRow(edits))} title={t('Aggiungi riga')}>{t('+ Riga')}</button>}
           {insertOnly && <span className="muted" title={t('Senza chiave primaria le righe esistenti non si possono modificare né eliminare: solo inserimento.')}>{t('Solo inserimento')}</span>}
           {pending > 0 && <>
             <span className="pending">{pending} {pending === 1 ? t('modifica') : t('modifiche')}</span>
@@ -209,11 +248,21 @@ export default function ResultView({ doc, set, sql, at }: { doc: Doc; set: Resul
             <button className="primary" onClick={apply} disabled={busy}>{busy ? t('Applico…') : t('Applica')}</button>
           </>}
         </> : <span className="muted" title={typeof target === 'string' ? target : t('Connessione non aperta')}>🔒 {connOpen ? target as string : t('Sola lettura')}</span>}
-        <button className={expand ? 'active' : undefined} onClick={() => setExpand(!expand)}
-          title={t('Righe alte quanto il contenuto: testo a capo, ritorni a capo e tabulazioni mantenuti')}>↕ {t('Righe intere')}</button>
-        <button onClick={exportData} title={t('Esporta')}>{t('Esporta…')}</button>
+        {viz.mode === 'grid' && <button className={expand ? 'active' : undefined} onClick={() => setExpand(!expand)}
+          title={t('Righe alte quanto il contenuto: testo a capo, ritorni a capo e tabulazioni mantenuti')}>↕ {t('Righe intere')}</button>}
+        {viz.mode !== 'pivot' && <button onClick={exportData} title={t('Esporta')}>{t('Esporta…')}</button>}
       </div>
-      <ResultGrid columns={columns} rows={gridRows} editing={editing} expand={expand} onMenu={menu} />
+      {viz.mode === 'chart' ? (
+        <ChartView columns={columns} rows={vizRows} spec={viz.chart} onSpec={(chart) => setViz({ chart })} note={vizNote}
+          name={(typeof target === 'string' ? first?.orgTable : target.table) || t('grafico')} />
+      ) : viz.mode === 'pivot' ? (
+        <PivotView columns={columns} rows={vizRows} spec={viz.pivot} onSpec={(pivot) => setViz({ pivot })} note={vizNote}
+          heat={viz.heat} onHeat={(heat) => setViz({ heat })} onChart={() => chartFromPivot(viz.pivot)}
+          onDrill={(fs) => { setSearch(''); setFilters(fs.map((f) => ({ ...f, op: 'eq' }))); setViz({ mode: 'grid' }); }}
+          onExport={(tab) => useStore.getState().set({
+            exportDialog: { columns: tab.columns, rows: tab.rows, name: 'pivot', table: 'pivot', db: null, total: tab.rows.length, truncated: false, filtered: false },
+          })} />
+      ) : <ResultGrid columns={columns} rows={gridRows} editing={editing} expand={expand} onMenu={menu} />}
       {preview !== null && (
         <div className="modal-back" onMouseDown={() => setPreview(null)}>
           <div className="modal viewer" onMouseDown={(e) => e.stopPropagation()} onKeyDown={(e) => { if (e.key === 'Escape') setPreview(null); }}>

@@ -48,6 +48,9 @@ const P: Record<string, ReactElement> = {
   lang: <><circle cx="8" cy="8" r="6" fill="none" stroke="currentColor" strokeWidth="1.2" /><path d="M2 8h12M8 2c-2.2 2.5-2.2 9.5 0 12M8 2c2.2 2.5 2.2 9.5 0 12" fill="none" stroke="currentColor" strokeWidth="1.1" /></>,
   info: <><circle cx="8" cy="8" r="6.3" fill="#3a7bd5" /><circle cx="8" cy="4.9" r="1" fill="#fff" /><path d="M8 7.2v4.6" stroke="#fff" strokeWidth="1.6" strokeLinecap="round" /></>,
   close: <path d="M4 4l8 8M12 4l-8 8" stroke="currentColor" strokeWidth="1.5" />,
+  grid: <><rect x="1.5" y="2.5" width="13" height="11" rx="1" fill="none" stroke="currentColor" strokeWidth="1.2" /><path d="M1.5 6h13M1.5 9.5h13M6 2.5v11" stroke="currentColor" strokeWidth="1.1" /></>,
+  chart: <><path d="M2 14h12" stroke="currentColor" strokeWidth="1.2" /><rect x="3" y="8" width="2.6" height="5" rx=".6" fill="#2a78d6" /><rect x="6.7" y="4" width="2.6" height="9" rx=".6" fill="#2a78d6" /><rect x="10.4" y="6" width="2.6" height="7" rx=".6" fill="#eb6834" /></>,
+  pivot: <><rect x="1.5" y="1.5" width="13" height="13" rx="1" fill="none" stroke="currentColor" strokeWidth="1.2" /><rect x="1.5" y="1.5" width="13" height="3.5" fill="#2a78d6" opacity=".35" /><rect x="1.5" y="1.5" width="4" height="13" fill="#2a78d6" opacity=".35" /><path d="M8 8.5h4.5M10.2 6.4v4.4" stroke="currentColor" strokeWidth="1.1" /></>,
 };
 
 export default function Icon({ name, size = 16 }: { name: string; size?: number }) {
