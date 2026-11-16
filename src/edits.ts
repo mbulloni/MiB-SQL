@@ -13,6 +13,7 @@ export interface EditTarget {
   db: string;
   table: string;
   key: number[]; // result columns of the primary (or NOT NULL unique) key
+  insertOnly?: boolean; // no usable key: new rows can be inserted, existing ones cannot be told apart (no UPDATE/DELETE)
 }
 
 export const emptyEdits = (): Edits => ({ updates: {}, deleted: [], inserted: [] });
@@ -45,7 +46,9 @@ export function editTarget(columns: Column[], indexes: IndexInfo[] | undefined):
     if (key.every((k) => k >= 0) && (ix.primary || key.every((k) => columns[k].notNull))) return { ...base, key };
   }
   const pk = indexes.find((i) => i.primary);
-  return pk ? t('Sola lettura: aggiungere al risultato la chiave primaria ({0}).', pk.columns.join(', ')) : t('Sola lettura: la tabella non ha una chiave primaria.');
+  if (pk) return t('Sola lettura: aggiungere al risultato la chiave primaria ({0}).', pk.columns.join(', '));
+  // no primary key and no NOT NULL unique key: rows cannot be addressed, but INSERT needs no key
+  return { ...base, key: [], insertOnly: true };
 }
 
 /** Value shown at a row/column with pending edits applied; undefined = DEFAULT of a new row. */
@@ -76,6 +79,24 @@ export function setCell(e: Edits, rows: Cell[][], r: number, c: number, v: Cell)
 
 export const addRow = (e: Edits): Edits => ({ ...e, inserted: [...e.inserted, {}] });
 
+/** New rows that copy the given positions (pending edits included). AUTO_INCREMENT and geometry columns, and binary values
+ *  truncated for display, are left out: the server fills them in. Rows marked deleted are skipped. */
+export function duplicateRows(e: Edits, rows: Cell[][], columns: Column[], positions: number[]): Edits {
+  const copies: Record<number, Cell>[] = [];
+  for (const r of [...positions].sort((a, b) => a - b)) {
+    if (e.deleted.includes(r)) continue;
+    const copy: Record<number, Cell> = {};
+    columns.forEach((col, c) => {
+      const v = valueAt(rows, e, r, c);
+      if (v === undefined || col.autoIncrement || col.type === 'GEOMETRY') return;
+      if (col.binary && typeof v === 'string' && v.endsWith('…')) return;
+      copy[c] = v;
+    });
+    copies.push(copy);
+  }
+  return { ...e, inserted: [...e.inserted, ...copies] };
+}
+
 /** Marks result rows deleted (again: restored); new rows are dropped. */
 export function toggleDelete(e: Edits, rows: Cell[][], positions: number[]): Edits {
   const own = positions.filter((r) => r < rows.length);
@@ -97,13 +118,13 @@ export function statements(t: EditTarget, columns: Column[], rows: Cell[][], e: 
   const val = (c: number, v: Cell) => (columns[c].binary && typeof v === 'string' ? v.replace(/^0x/i, '') : v);
   const where = (r: number) => ({ sql: t.key.map((k) => `${col(k)} = ${ph(k)}`).join(' AND '), params: t.key.map((k) => val(k, rows[r][k])) });
   const out: ApplyStmt[] = [];
-  for (const r of [...e.deleted].sort((a, b) => a - b)) {
+  for (const r of t.insertOnly ? [] : [...e.deleted].sort((a, b) => a - b)) {
     const w = where(r);
     out.push({ sql: `DELETE FROM ${table} WHERE ${w.sql} LIMIT 1`, params: w.params, expectOne: true });
   }
   for (const [rs, vals] of Object.entries(e.updates)) {
     const r = Number(rs);
-    if (e.deleted.includes(r)) continue;
+    if (e.deleted.includes(r) || t.insertOnly) continue;
     const cs = Object.keys(vals).map(Number).sort((a, b) => a - b);
     const w = where(r);
     out.push({ sql: `UPDATE ${table} SET ${cs.map((c) => `${col(c)} = ${ph(c)}`).join(', ')} WHERE ${w.sql} LIMIT 1`, params: [...cs.map((c) => val(c, vals[c])), ...w.params], expectOne: true });
@@ -137,6 +158,7 @@ export function inline(st: ApplyStmt): string {
 
 /** Key values that identify a row after the apply (insertId fills a single AUTO_INCREMENT key). */
 export function keyAfter(t: EditTarget, columns: Column[], rows: Cell[][], e: Edits, r: number, insertId: string | null): Cell[] | null {
+  if (!t.key.length) return null; // insert-only target: the new row cannot be re-read
   const vals = t.key.map((k) => {
     const v = valueAt(rows, e, r, k);
     if (v !== undefined && v !== null) return v;

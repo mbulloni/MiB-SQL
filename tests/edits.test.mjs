@@ -1,6 +1,6 @@
 import test from 'node:test';
 import assert from 'node:assert/strict';
-import { addRow, editCount, editTarget, emptyEdits, inline, keyAfter, setCell, statements, toggleDelete, valueAt } from '../src/edits.ts';
+import { addRow, duplicateRows, editCount, editTarget, emptyEdits, inline, keyAfter, setCell, statements, toggleDelete, valueAt } from '../src/edits.ts';
 
 const col = (name, extra = {}) => ({ name, table: 't', orgTable: 'items', orgName: name, db: 'shop', type: 'VAR_STRING', length: 0, scale: 0, binary: false, notNull: false, autoIncrement: false, ...extra });
 const columns = [col('id', { type: 'INT', notNull: true, autoIncrement: true }), col('name'), col('price', { type: 'NEWDECIMAL' })];
@@ -12,9 +12,9 @@ test('edit target needs one table and its key', () => {
   assert.match(editTarget(columns.slice(1), pk), /chiave primaria \(id\)/);
   assert.match(editTarget([...columns, col('x', { orgTable: 'other' })], pk), /più tabelle/);
   assert.match(editTarget([col('n', { orgTable: '', orgName: '' })], pk), /non proviene/);
-  assert.match(editTarget(columns, []), /non ha una chiave/);
+  assert.deepEqual(editTarget(columns, []), { db: 'shop', table: 'items', key: [], insertOnly: true }); // no key: insert only
   const uq = [{ name: 'uq', unique: true, primary: false, type: 'BTREE', columns: ['name'] }];
-  assert.match(editTarget(columns, uq), /non ha una chiave/); // nullable unique column is not a key
+  assert.equal(editTarget(columns, uq).insertOnly, true); // nullable unique column is not a key
   assert.deepEqual(editTarget([col('id'), col('name', { notNull: true })], uq), { db: 'shop', table: 'items', key: [1] });
 });
 
@@ -80,4 +80,25 @@ test('binary columns go through UNHEX, also in the key', () => {
     "UPDATE `shop`.`items` SET `data` = UNHEX('BEEF') WHERE `uid` = UNHEX('0102') LIMIT 1",
     "INSERT INTO `shop`.`items` (`uid`) VALUES (UNHEX('FF00'))",
   ]);
+});
+
+test('without a key only inserts are generated and the new row is not re-read', () => {
+  const target = editTarget(columns, []);
+  let e = setCell(emptyEdits(), rows, 0, 1, 'z'); // ignored: existing rows cannot be addressed
+  e = toggleDelete(e, rows, [1]);
+  e = addRow(e);
+  e = setCell(e, rows, 2, 1, 'new');
+  assert.deepEqual(statements(target, columns, rows, e).map(inline), ["INSERT INTO `shop`.`items` (`name`) VALUES ('new')"]);
+  assert.equal(keyAfter(target, columns, rows, e, 2, '7'), null);
+});
+
+test('duplicate rows copy the values (edits included) but not the AUTO_INCREMENT key', () => {
+  let e = setCell(emptyEdits(), rows, 0, 1, 'z');
+  e = duplicateRows(e, rows, columns, [0, 1]);
+  assert.deepEqual(e.inserted, [{ 1: 'z', 2: '1.50' }, { 1: 'b', 2: null }]);
+  assert.deepEqual(statements(editTarget(columns, []), columns, rows, e).map(inline), [
+    "INSERT INTO `shop`.`items` (`name`, `price`) VALUES ('z', '1.50')",
+    "INSERT INTO `shop`.`items` (`name`, `price`) VALUES ('b', NULL)",
+  ]);
+  assert.deepEqual(duplicateRows(toggleDelete(emptyEdits(), rows, [1]), rows, columns, [1]).inserted, []);
 });

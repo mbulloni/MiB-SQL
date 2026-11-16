@@ -2,7 +2,7 @@ import { useEffect, useMemo, useState } from 'react';
 import { api } from '../api';
 import { logMessage, newDoc } from '../actions';
 import {
-  addRow, editCount, editTarget, emptyEdits, inline, isEdited, isHex, keyAfter, setCell, statements, toggleDelete, toHex, valueAt, type Edits,
+  addRow, duplicateRows, editCount, editTarget, emptyEdits, inline, isEdited, isHex, keyAfter, setCell, statements, toggleDelete, toHex, valueAt, type Edits,
 } from '../edits';
 import { editsBySet, isTds, metaKey, useStore, type MetaEntry } from '../store';
 import type { Cell, Doc, IndexInfo, ResultSet } from '../types';
@@ -43,6 +43,7 @@ export default function ResultView({ doc, set, sql, at }: { doc: Doc; set: Resul
   }, [indexKey, connOpen]);
   const target = isTds(connId) ? t('Sola lettura: connessione Microsoft Fabric / SQL Server.') : editTarget(columns, indexes?.error ? [] : indexes?.data);
   const canEdit = typeof target !== 'string' && connOpen;
+  const insertOnly = typeof target !== 'string' && !!target.insertOnly;
   const pending = editCount(edits);
 
   // positions shown: result rows (not filtered out) then new rows, always visible
@@ -63,7 +64,8 @@ export default function ResultView({ doc, set, sql, at }: { doc: Doc; set: Resul
 
   const editing: GridEditing | undefined = canEdit ? {
     // binary values past 1 MB arrive truncated (…): those cells stay read-only
-    canEdit: (c, i) => columns[c].type !== 'GEOMETRY' && (!columns[c].binary || !String(valueAt(rows, edits, ids[i], c) ?? '').endsWith('…')),
+    // without a key (insert-only) only the new rows are editable
+    canEdit: (c, i) => !(insertOnly && ids[i] < rows.length) && columns[c].type !== 'GEOMETRY' && (!columns[c].binary || !String(valueAt(rows, edits, ids[i], c) ?? '').endsWith('…')),
     edited: (i, c) => isEdited(rows, edits, ids[i], c),
     state: (i) => (ids[i] >= rows.length ? 'new' : edits.deleted.includes(ids[i]) ? 'deleted' : undefined),
     onEdit: (i, c, v) => {
@@ -73,7 +75,7 @@ export default function ResultView({ doc, set, sql, at }: { doc: Doc; set: Resul
       }
       setEdits(setCell(editsBySet.get(set) ?? edits, rows, ids[i], c, columns[c].binary ? toHex(v) : typed(c, v)));
     },
-    onDeleteRows: (is) => setEdits(toggleDelete(edits, rows, is.map((i) => ids[i]))),
+    onDeleteRows: (is) => setEdits(toggleDelete(edits, rows, is.map((i) => ids[i]).filter((p) => !insertOnly || p >= rows.length))),
   } : undefined;
 
   // integers typed in the grid go as numbers (previews without quotes); DECIMAL/BIGINT stay strings for precision
@@ -159,6 +161,7 @@ export default function ResultView({ doc, set, sql, at }: { doc: Doc; set: Resul
       items.push('sep',
         { label: t('Imposta NULL'), action: () => { let x = editsBySet.get(set) ?? edits; for (const i of sel.rows) for (const c of sel.cols) if (editing.state(i) !== 'deleted') x = setCell(x, rows, ids[i], c, null); setEdits(x); }, disabled: !sel.rows.length },
         { label: t('Aggiungi riga'), action: () => setEdits(addRow(edits)) },
+        { label: t('Duplica righe'), action: () => setEdits(duplicateRows(edits, rows, columns, sel.rows.map((i) => ids[i]))), disabled: !sel.rows.length },
         { label: deleted ? t('Ripristina righe') : t('Elimina righe'), danger: !deleted, action: () => editing.onDeleteRows(sel.rows), disabled: !sel.rows.length });
     }
     openMenu(e, items);
@@ -198,6 +201,7 @@ export default function ResultView({ doc, set, sql, at }: { doc: Doc; set: Resul
         <div className="spacer" />
         {canEdit ? <>
           <button onClick={() => setEdits(addRow(edits))} title={t('Aggiungi riga')}>{t('+ Riga')}</button>
+          {insertOnly && <span className="muted" title={t('Senza chiave primaria le righe esistenti non si possono modificare né eliminare: solo inserimento.')}>{t('Solo inserimento')}</span>}
           {pending > 0 && <>
             <span className="pending">{pending} {pending === 1 ? t('modifica') : t('modifiche')}</span>
             <button onClick={() => setPreview(stmts().map(inline).join(';\n') + ';')}>{t('Anteprima SQL')}</button>
