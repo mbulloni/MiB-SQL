@@ -6,7 +6,7 @@ import type { Profile } from './profile';
 import type { ProcSnapshot } from './procs';
 import type { Overview } from './advisor';
 import type { IndexData } from './indexes';
-import type { PlanRow, SlowRow, TopRow } from './queryadvisor';
+import type { IndexTrial, PlanRow, SlowRow, TopRow } from './queryadvisor';
 import type { DataHit, ObjectHit } from './search';
 import type { ErrorEntry } from './logs';
 import type {
@@ -124,6 +124,7 @@ interface Api {
     indexData(connId: string, db: string): Promise<IndexData>;
     setVariable(connId: string, name: string, value: string, persist: boolean): Promise<string | null>;
     explain(connId: string, db: string, sql: string): Promise<PlanRow[]>;
+    tryIndex(connId: string, db: string, sql: string, table: string, name: string, columns: string[]): Promise<IndexTrial>;
   };
   datagen: {
     tables(connId: string, db: string): Promise<(ServerTable & { rows: number | null })[]>;

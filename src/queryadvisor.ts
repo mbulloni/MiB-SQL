@@ -9,6 +9,21 @@ import type { Index } from './indexes.ts';
 export interface TableInfo { name: string; columns: { name: string; type: string }[]; indexes: Index[]; rows: number | null }
 export interface PlanRow { id?: unknown; select_type?: unknown; table?: unknown; type?: unknown; possible_keys?: unknown; key?: unknown; ref?: unknown; rows?: unknown; filtered?: unknown; extra?: unknown }
 export interface Issue { level: 'warning' | 'info' | 'ok'; text: string }
+/** Timings and plans of a query before/after a trial index (electron/perf.cjs tryIndex). */
+export interface IndexTrial {
+  before: { ms: number; times: number[]; rows: number; plan: PlanRow[] };
+  after: { ms: number; times: number[]; rows: number; plan: PlanRow[] };
+  buildMs: number;
+}
+
+/** Speed-up of a trial and a verdict: 'better' (>= 1.3x), 'same' or 'worse' (< 0.8x); differences under 5 ms are noise. */
+export function trialVerdict(tr: IndexTrial): { factor: number; verdict: 'better' | 'same' | 'worse' } {
+  const b = tr.before.ms, a = tr.after.ms;
+  const factor = a > 0 ? b / a : 1;
+  if (Math.abs(b - a) < 5) return { factor, verdict: 'same' };
+  return { factor, verdict: factor >= 1.3 ? 'better' : factor < 0.8 ? 'worse' : 'same' };
+}
+
 export interface Suggestion { table: string; columns: string[]; name: string; sql: string; reason: string }
 export interface TableRef { table: string; alias: string }
 export interface Predicate { table: string; column: string; kind: 'eq' | 'range' | 'join'; clause: 'where' | 'on' }

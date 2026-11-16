@@ -213,4 +213,54 @@ async function explain(connId, db, sql) {
   });
 }
 
-module.exports = { overview, topQueries, resetTop, enableSlowLog, indexData, setVariable, explain };
+const median = (a) => [...a].sort((x, y) => x - y)[Math.floor(a.length / 2)];
+
+/** Runs a read once and discards the rows; returns the elapsed ms and the number of rows. */
+async function timeRun(c, sql) {
+  const t0 = process.hrtime.bigint();
+  let n = 0;
+  for await (const _ of c.queryStream({ sql, rowsAsArray: true })) n++;
+  return { ms: Number(process.hrtime.bigint() - t0) / 1e6, rows: n };
+}
+
+async function measure(c, sql, runs) {
+  await timeRun(c, sql); // warm-up: loads the pages both measurements will need
+  const times = [];
+  let rows = 0;
+  for (let i = 0; i < runs; i++) { const r = await timeRun(c, sql); times.push(r.ms); rows = r.rows; }
+  const plan = Array.from(await c.query({ sql: `EXPLAIN ${sql}`, rowsAsArray: false }))
+    .map((r) => Object.fromEntries(Object.entries(r).map(([k, v]) => [k.toLowerCase(), typeof v === 'bigint' ? Number(v) : v])));
+  return { ms: median(times), times, rows, plan };
+}
+
+/**
+ * "Try the index": times a SELECT, creates the suggested index, times it again and always drops the index
+ * afterwards, so the schema is left as it was. Only reads are run (each 4 times, 30 s cap per run).
+ */
+async function tryIndex(connId, db, sql, table, indexName, columns) {
+  if (!/^\s*(select|with)\b/i.test(sql)) throw new Error(t('La prova dell\'indice esegue la query: è ammessa solo per SELECT.'));
+  const qi = (n) => `\`${String(n).replace(/`/g, '``')}\``;
+  return server.withDedicated(connId, db ? { database: db } : {}, async (c) => {
+    try {
+      await soft(c, 'SET SESSION max_statement_time = 30');
+      await soft(c, 'SET SESSION max_execution_time = 30000');
+      const before = await measure(c, sql, 3);
+      const target = `${qi(db)}.${qi(table)}`;
+      const t0 = Date.now();
+      let created = false;
+      try {
+        try { await c.query(`ALTER TABLE ${target} ADD INDEX ${qi(indexName)} (${columns.map(qi).join(', ')}), ALGORITHM=INPLACE, LOCK=NONE`); }
+        catch { await c.query(`ALTER TABLE ${target} ADD INDEX ${qi(indexName)} (${columns.map(qi).join(', ')})`); }
+        created = true;
+        const buildMs = Date.now() - t0;
+        await c.query(`ANALYZE TABLE ${target}`).catch(() => {});
+        const after = await measure(c, sql, 3);
+        return { before, after, buildMs };
+      } finally {
+        if (created) await c.query(`ALTER TABLE ${target} DROP INDEX ${qi(indexName)}`);
+      }
+    } catch (err) { throw new server.DbError(err); }
+  });
+}
+
+module.exports = { overview, topQueries, resetTop, enableSlowLog, indexData, setVariable, explain, tryIndex };

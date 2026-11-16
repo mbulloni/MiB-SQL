@@ -241,6 +241,7 @@ handle('perf:enableSlowLog', (connId, seconds) => perf.enableSlowLog(connId, sec
 handle('perf:indexData', (connId, db) => perf.indexData(connId, db));
 handle('perf:setVariable', (connId, name, value, persist) => perf.setVariable(connId, name, value, persist));
 handle('perf:explain', (connId, db, sql) => perf.explain(connId, db, sql));
+handle('perf:tryIndex', (connId, db, sql, table, name, cols) => perf.tryIndex(connId, db, sql, table, name, cols));
 handle('datagen:tables', (connId, db) => datagen.tables(connId, db));
 handle('datagen:values', (connId, db, table, column, limit) => datagen.values(connId, db, table, column, limit));
 handle('datagen:tuples', (connId, db, table, columns) => datagen.tuples(connId, db, table, columns));

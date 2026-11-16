@@ -76,3 +76,12 @@ test('slow log grouping by statement shape', () => {
   assert.equal(g.length, 2);
   assert.deepEqual([g[0].count, g[0].totalMs, g[0].maxMs, g[0].sample, g[0].firstSeen, g[0].lastSeen], [2, 4200, 3000, 'SELECT * FROM t WHERE id = 2', '2026-01-01T10:00:00Z', '2026-01-01T11:00:00Z']);
 });
+
+import { trialVerdict } from '../src/queryadvisor.ts';
+test('trialVerdict: better, worse, same, noise', () => {
+  const mk = (b, a) => ({ before: { ms: b, times: [b], rows: 1, plan: [] }, after: { ms: a, times: [a], rows: 1, plan: [] }, buildMs: 0 });
+  assert.equal(trialVerdict(mk(1000, 10)).verdict, 'better');
+  assert.equal(trialVerdict(mk(100, 200)).verdict, 'worse');
+  assert.equal(trialVerdict(mk(100, 95)).verdict, 'same');
+  assert.equal(trialVerdict(mk(2, 0.5)).verdict, 'same');
+});

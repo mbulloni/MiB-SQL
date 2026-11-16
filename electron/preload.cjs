@@ -111,6 +111,7 @@ contextBridge.exposeInMainWorld('api', {
     indexData: (connId, db) => call('perf:indexData', connId, db),
     setVariable: (connId, name, value, persist) => call('perf:setVariable', connId, name, value, persist),
     explain: (connId, db, sql) => call('perf:explain', connId, db, sql),
+    tryIndex: (connId, db, sql, table, name, cols) => call('perf:tryIndex', connId, db, sql, table, name, cols),
   },
   datagen: {
     tables: (connId, db) => call('datagen:tables', connId, db),

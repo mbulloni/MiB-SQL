@@ -1783,5 +1783,19 @@
  "{0} serie minori raggruppate in «Altro»": "{0} smaller series grouped into “Other”",
  "Salva come PNG…": "Save as PNG…",
  "Salva come SVG…": "Save as SVG…",
- "Immagine": "Image"
+ "Immagine": "Image",
+ "La prova dell'indice esegue la query: è ammessa solo per SELECT.": "Trying an index runs the query: only SELECT is allowed.",
+ "Provare l'indice su {0}?": "Try the index on {0}?",
+ "La query viene eseguita 4 volte prima e 4 volte dopo; l'indice viene creato davvero, misurato e poi eliminato (anche in caso di errore). Su tabelle grandi la creazione richiede tempo.": "The query runs 4 times before and 4 times after; the index is really created, measured and then dropped (even on error). On large tables creating it takes time.",
+ "Prova": "Try",
+ "Prova in corso…": "Trying…",
+ "Prova l'indice…": "Try the index…",
+ "nessun indice": "no index",
+ "Più veloce di {0}×": "{0}× faster",
+ "Più lenta: {0}× il tempo di prima": "Slower: {0}× the previous time",
+ "Nessuna differenza sensibile": "No noticeable difference",
+ "prima {0}, dopo {1} (mediana di 3; creazione indice {2})": "before {0}, after {1} (median of 3; index build {2})",
+ "Piano prima: {0}": "Plan before: {0}",
+ "Piano dopo: {0}": "Plan after: {0}",
+ "Indice eliminato dopo la prova: usa «Crea indice…» per tenerlo.": "Index dropped after the trial: use “Create index…” to keep it."
 }

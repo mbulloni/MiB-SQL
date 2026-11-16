@@ -6,7 +6,7 @@ import { DEFAULT_FORMAT, formatSql } from '../format';
 import { locale, t, tn } from '../i18n';
 import { lowSelectivity, redundantIndexes, scannedTables, tablesWithoutPk, unusedIndexes, usageHint, type IndexData } from '../indexes';
 import { duration } from '../monitor';
-import { analyzeQuery, explainable, groupSlowLog, normalizeSql, topFlags, type PlanRow, type SlowRow, type TableInfo, type TopRow } from '../queryadvisor';
+import { analyzeQuery, explainable, groupSlowLog, normalizeSql, topFlags, trialVerdict, type IndexTrial, type PlanRow, type SlowRow, type TableInfo, type TopRow } from '../queryadvisor';
 import { IMPORTANT_VARS } from '../variables';
 import { loadDatabases, metaKey, useStore, type MetaEntry } from '../store';
 import type { Doc } from '../types';
@@ -351,12 +351,29 @@ function Indexes({ connId, db }: { connId: string; db: string }) {
 
 // ---------------------------------------------------------------- query optimizer
 
+function TrialResult({ tr }: { tr: IndexTrial | 'running' | undefined }) {
+  if (!tr || tr === 'running') return null;
+  const { factor, verdict } = trialVerdict(tr);
+  const ms = (n: number) => `${n < 10 ? n.toFixed(1) : Math.round(n).toLocaleString()} ms`;
+  const key = (p: PlanRow[]) => p.map((r) => `${String(r.table ?? '')}: ${String(r.key ?? t('nessun indice'))} (${String(r.rows ?? '?')})`).join(' · ');
+  return (
+    <div className={`status ${verdict === 'better' ? 'ok' : verdict === 'worse' ? 'error' : ''}`}>
+      <b>{verdict === 'better' ? t('Più veloce di {0}×', factor.toFixed(1)) : verdict === 'worse' ? t('Più lenta: {0}× il tempo di prima', (1 / factor).toFixed(1)) : t('Nessuna differenza sensibile')}</b>
+      {' — '}{t('prima {0}, dopo {1} (mediana di 3; creazione indice {2})', ms(tr.before.ms), ms(tr.after.ms), ms(tr.buildMs))}
+      <div className="muted">{t('Piano prima: {0}', key(tr.before.plan))}</div>
+      <div className="muted">{t('Piano dopo: {0}', key(tr.after.plan))}</div>
+      <div className="muted">{t('Indice eliminato dopo la prova: usa «Crea indice…» per tenerlo.')}</div>
+    </div>
+  );
+}
+
 function Optimize({ connId, db, doc }: { connId: string; db: string; doc: Doc }) {
   const [sql, setSql] = useState(doc.perf?.sql ?? '');
   const [result, setResult] = useState<{ plan: PlanRow[] | null; planError: string | null; analysis: ReturnType<typeof analyzeQuery> } | null>(null);
   const [error, setError] = useState<string | null>(null);
   const [busy, setBusy] = useState(false);
   const [msg, setMsg] = useState<string | null>(null);
+  const [trials, setTrials] = useState<Record<string, IndexTrial | 'running'>>({});
   // a query sent from the editor or from Query pesanti: show it and analyze it at once
   useEffect(() => { if (doc.perf?.sql) { setSql(doc.perf.sql); run(doc.perf.sql); } }, [doc.perf?.sql]);
 
@@ -378,6 +395,21 @@ function Optimize({ connId, db, doc }: { connId: string; db: string; doc: Doc })
       setResult({ plan, planError, analysis: analyzeQuery(stmt, plan, tables) });
     } catch (err) { setError((err as Error).message); }
     setBusy(false);
+  };
+
+  const tryIdx = async (s: { sql: string; table: string; name: string; columns: string[] }) => {
+    const stmt = sql.trim().replace(/;\s*$/, '');
+    if (!/^(select|with)\b/i.test(stmt)) { setError(t('La prova dell\'indice esegue la query: è ammessa solo per SELECT.')); return; }
+    if ((await api.confirm(t('Provare l\'indice su {0}?', s.table), `${s.sql}\n\n${t('La query viene eseguita 4 volte prima e 4 volte dopo; l\'indice viene creato davvero, misurato e poi eliminato (anche in caso di errore). Su tabelle grandi la creazione richiede tempo.')}`, [t('Prova'), t('Annulla')])) !== 0) return;
+    setError(null);
+    setTrials((p) => ({ ...p, [s.sql]: 'running' }));
+    try {
+      const tr = await api.perf.tryIndex(connId, db, stmt, s.table, s.name, s.columns);
+      setTrials((p) => ({ ...p, [s.sql]: tr }));
+    } catch (err) {
+      setTrials((p) => { const n = { ...p }; delete n[s.sql]; return n; });
+      setError((err as Error).message);
+    }
   };
 
   const create = async (s: { sql: string; table: string }) => {
@@ -414,10 +446,12 @@ function Optimize({ connId, db, doc }: { connId: string; db: string; doc: Doc })
             <div className="finding-head"><b>{s.table}</b><span className="muted">{s.reason}</span></div>
             <div className="fix"><pre>{s.sql}</pre>
               <div className="fix-actions">
+                <button disabled={trials[s.sql] === 'running'} onClick={() => tryIdx(s)}>{trials[s.sql] === 'running' ? t('Prova in corso…') : t("Prova l'indice…")}</button>
                 <button onClick={() => create(s)}>{t('Crea indice…')}</button>
                 <button onClick={() => newDoc({ connId, db, sql: `${s.sql}\n` })}>{t("Apri nell'editor")}</button>
                 <button onClick={() => copy(s.sql)}>{t('Copia')}</button>
-              </div></div>
+              </div>
+              <TrialResult tr={trials[s.sql]} /></div>
           </div>
         )) : <p className="ok-text">{t('Nessun indice da aggiungere.')}</p>}
         <h3>{t('Piano di esecuzione')}</h3>
