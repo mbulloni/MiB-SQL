@@ -1797,5 +1797,8 @@
  "prima {0}, dopo {1} (mediana di 3; creazione indice {2})": "before {0}, after {1} (median of 3; index build {2})",
  "Piano prima: {0}": "Plan before: {0}",
  "Piano dopo: {0}": "Plan after: {0}",
- "Indice eliminato dopo la prova: usa «Crea indice…» per tenerlo.": "Index dropped after the trial: use “Create index…” to keep it."
+ "Indice eliminato dopo la prova: usa «Crea indice…» per tenerlo.": "Index dropped after the trial: use “Create index…” to keep it.",
+ "Mostra elenco unico": "Show flat list",
+ "Raggruppa per schema": "Group by schema",
+ "(senza schema)": "(no schema)"
 }

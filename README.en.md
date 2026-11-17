@@ -10,6 +10,10 @@ Educational IDE for **MariaDB and MySQL** (and, read only, **Microsoft Fabric Wa
 
 ![Performance advice in English](docs/screenshot-33.png)
 
+## What's new in 1.8.1
+
+- **Explorer by schema** (Microsoft Fabric / SQL Server): tables, views, procedures and functions are grouped into per-schema subfolders (`dbo`, `DB_AC`, …) with a count; inside a folder the short name is shown, the full `schema.object` name stays in the tooltip and in everything inserted into the editor. Right-click the folder › *Show flat list* / *Group by schema*; the choice is remembered. With a single schema the list stays flat
+
 ## What's new in 1.6.2
 
 - **Properties of tables, views and routines**: right-click the object in the Database Explorer › *Properties…*, or the **ⓘ** button at the top of the Explorer with the object selected. Creation date, last data and definition change, engine, rows, data and index size, AUTO_INCREMENT, collation, definer, comment; *Copy* and *Show DDL*

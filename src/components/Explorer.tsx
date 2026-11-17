@@ -1,4 +1,4 @@
-import { createContext, useContext, useState, type ReactNode } from 'react';
+import { createContext, useContext, useState, useSyncExternalStore, type ReactNode } from 'react';
 import { api } from '../api';
 import { t as tr, locale } from '../i18n';
 import { openDbTool, closeDoc, dropObject, insertText, newDoc, openCompare, openMaint, openNewObject, openObject, openServerTool, openDesigner, openEr, openQueryBuilder, qi, qid, qtable, refreshExplorer, runDoc, selectTop, showDdl } from '../actions';
@@ -149,35 +149,64 @@ const FOLDERS: { key: keyof DbObjects; label: string; icon: string; kind: Object
  * Folder of a Microsoft Fabric / SQL Server database: objects named schema.object, read-only actions
  * (select, count, export, definition). Editing tools are MariaDB/MySQL only.
  */
+// "group by schema" preference of Fabric/SQL Server folders, shared by every folder
+const GROUP_KEY = 'mibsql.groupBySchema';
+const groupListeners = new Set<() => void>();
+const readGroup = () => { try { return localStorage.getItem(GROUP_KEY) !== '0'; } catch { return true; } };
+const setGroup = (v: boolean) => { try { localStorage.setItem(GROUP_KEY, v ? '1' : '0'); } catch { /* storage unavailable */ } groupListeners.forEach((l) => l()); };
+const useGroup = () => useSyncExternalStore((l) => { groupListeners.add(l); return () => { groupListeners.delete(l); }; }, readGroup);
+
+const schemaOf = (name: string) => { const i = name.indexOf('.'); return i > 0 ? name.slice(0, i) : ''; };
+
 function TdsFolder({ c, db, depth, F, items, entry }: { c: string; db: string; depth: number; F: (typeof FOLDERS)[number]; items: { name: string }[]; entry: MetaEntry<DbObjects> }) {
+  const grouped = useGroup();
+  const schemas = new Map<string, { name: string }[]>();
+  for (const o of items) {
+    const k = schemaOf(o.name);
+    if (!schemas.has(k)) schemas.set(k, []);
+    schemas.get(k)!.push(o);
+  }
+  const groups = [...schemas.entries()].sort((a, b) => a[0].localeCompare(b[0]));
+  const useGroups = grouped && groups.length > 1;
+
+  const renderItem = (o: { name: string }, d: number) => {
+    const qn = qtable(c, db, o.name);
+    const id = `${c}/${db}/${F.key}/${o.name}`;
+    const label = useGroups && schemaOf(o.name) ? o.name.slice(o.name.indexOf('.') + 1) : o.name;
+    const common: MenuItem[] = [
+      { label: tr('Proprietà…'), action: () => props(c, db, F.kind, o.name) },
+      { label: F.kind === 'table' ? tr('Mostra struttura (CREATE TABLE)') : tr('Mostra definizione'), action: () => showDdl(c, db, F.kind, o.name) },
+      { label: tr('Copia nome'), action: () => copy(o.name) },
+      { label: tr('Inserisci nell\'editor'), action: () => insertText(qn) },
+    ];
+    if (F.kind === 'table' || F.kind === 'view') {
+      return (
+        <Node key={o.name} id={id} label={label} icon={F.icon} depth={d} drag={qn} title={o.name} onDouble={() => selectTop(c, db, o.name)}
+          menu={[
+            { label: tr('Seleziona prime 1000 righe'), action: () => selectTop(c, db, o.name) },
+            { label: tr('Conta righe'), action: () => runDoc('all', newDoc({ connId: c, db, sql: `SELECT COUNT_BIG(*) AS righe FROM ${qn};\n` }).id) },
+            { label: tr('Esporta dati…'), action: () => useStore.getState().set({ exportDialog: { name: o.name, table: o.name, db, query: { connId: c, db, sql: `SELECT * FROM ${qn}` } } }) },
+            'sep', ...common,
+          ]}>
+          {() => <TableChildren c={c} db={db} t={o.name} depth={d + 1} view={F.kind === 'view'} />}
+        </Node>
+      );
+    }
+    return <Node key={o.name} id={id} leaf label={label} icon={F.icon} depth={d} drag={qn}
+      title={tr('Doppio clic: mostra la definizione')} onDouble={() => showDdl(c, db, F.kind, o.name)}
+      menu={[...(F.kind === 'procedure' ? [{ label: tr('Genera EXEC'), action: () => newDoc({ connId: c, db, sql: `EXEC ${qn};\n` }) }, 'sep' as const] : []), ...common]} />;
+  };
+
+  const folderMenu: MenuItem[] = [{ label: grouped ? tr('Mostra elenco unico') : tr('Raggruppa per schema'), action: () => setGroup(!grouped) }];
   return (
-    <Node id={`${c}/${db}/${F.key}`} label={F.label} icon="folder" depth={depth} hint={String(items.length)}>
-      {() => items.length ? items.map((o) => {
-        const qn = qtable(c, db, o.name);
-        const id = `${c}/${db}/${F.key}/${o.name}`;
-        const common: MenuItem[] = [
-          { label: tr('Proprietà…'), action: () => props(c, db, F.kind, o.name) },
-          { label: F.kind === 'table' ? tr('Mostra struttura (CREATE TABLE)') : tr('Mostra definizione'), action: () => showDdl(c, db, F.kind, o.name) },
-          { label: tr('Copia nome'), action: () => copy(o.name) },
-          { label: tr('Inserisci nell\'editor'), action: () => insertText(qn) },
-        ];
-        if (F.kind === 'table' || F.kind === 'view') {
-          return (
-            <Node key={o.name} id={id} label={o.name} icon={F.icon} depth={depth + 1} drag={qn} onDouble={() => selectTop(c, db, o.name)}
-              menu={[
-                { label: tr('Seleziona prime 1000 righe'), action: () => selectTop(c, db, o.name) },
-                { label: tr('Conta righe'), action: () => runDoc('all', newDoc({ connId: c, db, sql: `SELECT COUNT_BIG(*) AS righe FROM ${qn};\n` }).id) },
-                { label: tr('Esporta dati…'), action: () => useStore.getState().set({ exportDialog: { name: o.name, table: o.name, db, query: { connId: c, db, sql: `SELECT * FROM ${qn}` } } }) },
-                'sep', ...common,
-              ]}>
-              {() => <TableChildren c={c} db={db} t={o.name} depth={depth + 2} view={F.kind === 'view'} />}
-            </Node>
-          );
-        }
-        return <Node key={o.name} id={id} leaf label={o.name} icon={F.icon} depth={depth + 1} drag={qn}
-          title={tr('Doppio clic: mostra la definizione')} onDouble={() => showDdl(c, db, F.kind, o.name)}
-          menu={[...(F.kind === 'procedure' ? [{ label: tr('Genera EXEC'), action: () => newDoc({ connId: c, db, sql: `EXEC ${qn};\n` }) }, 'sep' as const] : []), ...common]} />;
-      }) : <Status entry={entry} depth={depth + 1} empty />}
+    <Node id={`${c}/${db}/${F.key}`} label={F.label} icon="folder" depth={depth} hint={String(items.length)} menu={folderMenu}>
+      {() => !items.length ? <Status entry={entry} depth={depth + 1} empty />
+        : useGroups ? groups.map(([schema, list]) => (
+          <Node key={schema} id={`${c}/${db}/${F.key}//${schema}`} label={schema || tr('(senza schema)')} icon="folder" depth={depth + 1} hint={String(list.length)} menu={folderMenu}>
+            {() => list.map((o) => renderItem(o, depth + 2))}
+          </Node>
+        ))
+        : items.map((o) => renderItem(o, depth + 1))}
     </Node>
   );
 }

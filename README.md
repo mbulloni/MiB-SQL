@@ -10,6 +10,10 @@ IDE educativo per **MariaDB e MySQL** (e, in sola lettura, **Microsoft Fabric Wa
 
 ![Database Explorer ed editor SQL](docs/screenshot-1.png)
 
+## Novità della v1.8.1
+
+- **Explorer per schema** (Microsoft Fabric / SQL Server): tabelle, viste, procedure e funzioni sono raggruppate in sottocartelle per schema (`dbo`, `DB_AC`, …) con il conteggio; dentro la cartella il nome è quello corto, il nome completo `schema.oggetto` resta nel tooltip e in tutto ciò che si inserisce nell'editor. Tasto destro sulla cartella › *Mostra elenco unico* / *Raggruppa per schema*; la scelta viene ricordata. Con un solo schema l'elenco resta piatto
+
 ## Novità della v1.7
 
 - **Grafici sui risultati**: pulsante **Grafico** nella barra sopra la griglia (oppure tasto destro su una colonna › *Grafico per «colonna»*). Colonne, barre, linee, aree e dispersione; asse X, valore con aggregazione (somma, conteggio, media, minimo, massimo, valori distinti), serie da una colonna, colonne impilate, ordinamento per valore. Date riconosciute anche quando il server le restituisce come testo, asse temporale vero per linee e aree. Legenda cliccabile, tooltip con tutte le serie, colori validati per daltonismo in tema chiaro e scuro; oltre 8 serie o 50 categorie il resto confluisce in «Altro». *Immagine ▾*: copia negli appunti, salva PNG o SVG
