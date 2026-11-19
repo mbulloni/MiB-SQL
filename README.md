@@ -10,6 +10,10 @@ IDE educativo per **MariaDB e MySQL** (e, in sola lettura, **Microsoft Fabric Wa
 
 ![Database Explorer ed editor SQL](docs/screenshot-1.png)
 
+## Novità della v1.8.2
+
+- **Copia database con righe limitate**: nella finestra *Copia database* l'opzione **Solo le prime righe di ogni tabella** (100 di partenza) copia struttura, viste e routine complete ma solo i primi N record per tabella. Utile per avere in locale una copia leggera di un database di produzione su cui sviluppare; le chiavi esterne possono puntare a righe non copiate
+
 ## Novità della v1.8.1
 
 - **Explorer per schema** (Microsoft Fabric / SQL Server): tabelle, viste, procedure e funzioni sono raggruppate in sottocartelle per schema (`dbo`, `DB_AC`, …) con il conteggio; dentro la cartella il nome è quello corto, il nome completo `schema.oggetto` resta nel tooltip e in tutto ciò che si inserisce nell'editor. Tasto destro sulla cartella › *Mostra elenco unico* / *Raggruppa per schema*; la scelta viene ricordata. Con un solo schema l'elenco resta piatto
@@ -214,7 +218,7 @@ IDE educativo per **MariaDB e MySQL** (e, in sola lettura, **Microsoft Fabric Wa
 - **Query lente** e **Log generale**: dalla tabella (mysql.slow_log, mysql.general_log) o dal file; attiva/disattiva, uscita anche su tabella con un clic, svuota, filtro, aggiornamento ogni 5 s, doppio clic apre l'istruzione nell'editor; quando un file non è leggibile viene spiegato perché
 
 **Copia database**
-- Strumenti › Copia database, pagina iniziale o tasto destro sul database: destinazione su qualsiasi connessione, nome del nuovo database, struttura/dati/routine, scelta delle tabelle, DEFINER rimovibile; se la destinazione esiste: annulla, sostituisci o copia dentro
+- Strumenti › Copia database, pagina iniziale o tasto destro sul database: destinazione su qualsiasi connessione, nome del nuovo database, struttura/dati/routine, scelta delle tabelle, solo le prime N righe per tabella, DEFINER rimovibile; se la destinazione esiste: annulla, sostituisci o copia dentro
 - Usa il dump e il ripristino dell'app tramite un file temporaneo compresso: provata MariaDB 10.11 → MariaDB 11.4, → MySQL 8.4 e sullo stesso server
 
 **Aggiornamenti**

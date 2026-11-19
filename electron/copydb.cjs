@@ -19,7 +19,8 @@ async function targetInfo(connId, db) {
 }
 
 /**
- * opts: { structure, data, routines, stripDefiner, tables?, ifExists: 'fail' | 'replace' | 'merge' }.
+ * opts: { structure, data, routines, stripDefiner, tables?, limit?, ifExists: 'fail' | 'replace' | 'merge' }.
+ * limit > 0 copies only the first rows of each table.
  * 'replace' drops the target database first; 'merge' writes into it (DROP TABLE IF EXISTS per copied table).
  */
 async function copy(src, tgt, opts, onProgress = () => {}) {
@@ -35,7 +36,7 @@ async function copy(src, tgt, opts, onProgress = () => {}) {
   const t0 = Date.now();
   try {
     onProgress({ phase: 'dump', done: 0, total: 1 });
-    await backup.dump(src.connId, src.db, file, { structure: o.structure, data: o.data, routines: o.routines, stripDefiner: o.stripDefiner, dropTables: true, tables: o.tables },
+    await backup.dump(src.connId, src.db, file, { structure: o.structure, data: o.data, routines: o.routines, stripDefiner: o.stripDefiner, dropTables: true, tables: o.tables, limit: o.limit },
       (p) => onProgress({ phase: 'dump', ...p }));
     const ddl = [];
     if (info.exists && o.ifExists === 'replace') ddl.push(`DROP DATABASE ${qi(tgt.db)}`);

@@ -289,6 +289,7 @@ export function CopyDialog({ connId, db }: { connId: string; db: string }) {
   const [tgtConn, setTgtConn] = useState(connId);
   const [tgtDb, setTgtDb] = useState(`${db}_${t('copia')}`);
   const [o, setO] = useState({ structure: true, data: true, routines: true, stripDefiner: true, ifExists: 'fail' as 'fail' | 'replace' | 'merge' });
+  const [limit, setLimit] = useState<number | null>(null);
   const [skip, setSkip] = useState<Set<string>>(new Set());
   const [info, setInfo] = useState<{ exists: boolean; tables: number } | null>(null);
   const [state, setState] = useState<{ busy?: boolean; done?: { statements: number; ms: number }; error?: string }>({});
@@ -307,7 +308,7 @@ export function CopyDialog({ connId, db }: { connId: string; db: string }) {
     if (info?.exists && o.ifExists === 'replace' && (await api.confirm(t('Sostituire il database {0}?', target), t('Il database di destinazione ({0} tabelle) verrà eliminato e ricreato: i suoi dati andranno persi.', info.tables), [t('Sostituisci'), t('Annulla')])) !== 0) return;
     setState({ busy: true });
     try {
-      const r = await api.copy.run(id, { connId, db }, { connId: tgtConn, db: tgtDb.trim() }, { ...o, tables: skip.size ? tables.filter((x) => !skip.has(x)) : undefined });
+      const r = await api.copy.run(id, { connId, db }, { connId: tgtConn, db: tgtDb.trim() }, { ...o, limit: o.data && limit ? limit : undefined, tables: skip.size ? tables.filter((x) => !skip.has(x)) : undefined });
       setState({ done: r });
       useStore.getState().dropMeta(`${tgtConn}/`);
       loadDatabases(tgtConn, true);
@@ -340,6 +341,10 @@ export function CopyDialog({ connId, db }: { connId: string; db: string }) {
         <label className="check"><input type="checkbox" checked={o.data} onChange={(e) => setO({ ...o, data: e.target.checked })} />{' '}{t('Dati (INSERT)')}</label>
         <label className="check"><input type="checkbox" checked={o.routines} disabled={!o.structure} onChange={(e) => setO({ ...o, routines: e.target.checked })} />{' '}{t('Viste, routine, trigger, eventi')}</label>
         <label className="check" title={t('Necessario se l\'utente che ha creato gli oggetti non esiste sulla destinazione')}><input type="checkbox" checked={o.stripDefiner} onChange={(e) => setO({ ...o, stripDefiner: e.target.checked })} />{' '}{t('Rimuovi DEFINER (portabile)')}</label>
+      </div>
+      <div className="row">
+        <label className="check" title={t('Copia di sviluppo: le chiavi esterne possono puntare a righe non copiate')}><input type="checkbox" checked={limit !== null} disabled={!o.data || state.busy} onChange={(e) => setLimit(e.target.checked ? 100 : null)} />{' '}{t('Solo le prime righe di ogni tabella:')}</label>
+        <input type="number" min={1} style={{ width: '7em' }} value={limit ?? 100} disabled={limit === null || !o.data || state.busy} onChange={(e) => setLimit(Math.max(1, Math.floor(Number(e.target.value)) || 1))} />
       </div>
       {tables.length > 0 && (
         <details>

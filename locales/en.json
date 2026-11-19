@@ -1800,5 +1800,7 @@
  "Indice eliminato dopo la prova: usa «Crea indice…» per tenerlo.": "Index dropped after the trial: use “Create index…” to keep it.",
  "Mostra elenco unico": "Show flat list",
  "Raggruppa per schema": "Group by schema",
- "(senza schema)": "(no schema)"
+ "(senza schema)": "(no schema)",
+ "Solo le prime righe di ogni tabella:": "Only the first rows of each table:",
+ "Copia di sviluppo: le chiavi esterne possono puntare a righe non copiate": "Development copy: foreign keys may point to rows that were not copied"
 }

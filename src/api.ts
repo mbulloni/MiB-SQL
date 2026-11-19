@@ -157,7 +157,7 @@ interface Api {
   };
   copy: {
     target(connId: string, db: string): Promise<{ exists: boolean; tables: number }>;
-    run(id: string, src: { connId: string; db: string }, tgt: { connId: string; db: string }, opts: { structure: boolean; data: boolean; routines: boolean; stripDefiner: boolean; tables?: string[]; ifExists: 'fail' | 'replace' | 'merge' }): Promise<{ statements: number; ms: number; created: boolean }>;
+    run(id: string, src: { connId: string; db: string }, tgt: { connId: string; db: string }, opts: { structure: boolean; data: boolean; routines: boolean; stripDefiner: boolean; tables?: string[]; limit?: number; ifExists: 'fail' | 'replace' | 'merge' }): Promise<{ statements: number; ms: number; created: boolean }>;
   };
   openRelease(url: string): Promise<void>;
   update: {

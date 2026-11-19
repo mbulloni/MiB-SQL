@@ -47,13 +47,15 @@ function orderViews(views) {
 }
 
 /**
- * Dumps a database. opts: { structure, data, routines, dropTables, createDatabase, stripDefiner, batch, tables? }
+ * Dumps a database. opts: { structure, data, routines, dropTables, createDatabase, stripDefiner, batch, tables?, limit? }
+ * limit > 0 keeps only the first rows of each table (development copies).
  * onProgress({ table, rows, done, total }).
  */
 async function dump(connId, db, file, opts, onProgress = () => {}) {
   const o = { structure: true, data: true, routines: true, dropTables: true, createDatabase: false, stripDefiner: true, batch: 100, ...opts };
   const out = output(file);
   const fix = (sql) => (o.stripDefiner ? stripDefiner(sql) : sql);
+  const limit = Math.max(0, Math.floor(Number(o.limit) || 0));
   try {
     await server.withConnection(connId, async (c) => {
       await c.query("SET SESSION time_zone = '+00:00'");
@@ -95,7 +97,7 @@ async function dump(connId, db, file, opts, onProgress = () => {}) {
             const spatial = info.map((r) => SPATIAL.test(r.type));
             const select = info.map((r, i) => (spatial[i] ? `ST_AsBinary(${qi(r.name)}), ST_SRID(${qi(r.name)})` : qi(r.name))).join(', ');
             const head = `INSERT INTO ${qi(t.name)} (${cols.map(qi).join(', ')}) VALUES\n`;
-            const stream = c.queryStream({ sql: `SELECT ${select} FROM ${qi(db)}.${qi(t.name)}`, rowsAsArray: true });
+            const stream = c.queryStream({ sql: `SELECT ${select} FROM ${qi(db)}.${qi(t.name)}${limit ? ` LIMIT ${limit}` : ''}`, rowsAsArray: true });
             let meta = null;
             stream.on('fields', (m) => { meta = m.map(server.column); });
             let batch = [];

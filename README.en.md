@@ -10,6 +10,10 @@ Educational IDE for **MariaDB and MySQL** (and, read only, **Microsoft Fabric Wa
 
 ![Performance advice in English](docs/screenshot-33.png)
 
+## What's new in 1.8.2
+
+- **Copy database with limited rows**: in the *Copy database* dialog, **Only the first rows of each table** (100 by default) copies the full structure, views and routines but only the first N rows of each table. Handy for a lightweight local development copy of a production database; foreign keys may point to rows that were not copied
+
 ## What's new in 1.8.1
 
 - **Explorer by schema** (Microsoft Fabric / SQL Server): tables, views, procedures and functions are grouped into per-schema subfolders (`dbo`, `DB_AC`, …) with a count; inside a folder the short name is shown, the full `schema.object` name stays in the tooltip and in everything inserted into the editor. Right-click the folder › *Show flat list* / *Group by schema*; the choice is remembered. With a single schema the list stays flat
