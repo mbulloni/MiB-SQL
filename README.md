@@ -10,6 +10,10 @@ IDE educativo per **MariaDB e MySQL** (e, in sola lettura, **Microsoft Fabric Wa
 
 ![Database Explorer ed editor SQL](docs/screenshot-1.png)
 
+## Novità della v1.10.1
+
+- **Copia database** dalla pagina iniziale o da Strumenti chiede solo la connessione e apre la finestra con l'elenco dei database da spuntare (prima chiedeva un solo database); l'elenco è sempre aperto
+
 ## Novità della v1.10.0
 
 - **Copia di più database in una volta**: nella finestra *Copia database* (anche dal tasto destro sulla connessione) si spuntano i database da copiare, *Tutti*/*Nessuno*; verso un altro server o in locale mantengono il nome, sullo stesso server prendono un suffisso modificabile (`_copia`). Copiati uno dopo l'altro con l'esito di ciascuno; *Solo le prime N righe* vale per tutti

@@ -102,6 +102,13 @@ export function openVisual(kind: import('./store').VisualKind, target: { connId:
     s.set({ pickTarget: { kind } });
     return;
   }
+  if (kind === 'copy') {
+    // the databases to copy are ticked in the dialog itself: only the connection is needed
+    const connId = target?.connId ?? activeDoc()?.connId ?? st().selectedConn;
+    if (connId && (target || st().connState[connId]?.status === 'open')) st().set({ task: { kind: 'copy', connId, db: target?.db ?? null } });
+    else st().set({ pickTarget: { kind } });
+    return;
+  }
   if (!target?.db) { st().set({ pickTarget: { kind } }); return; }
   const { connId, db } = target as { connId: string; db: string };
   if (kind === 'er') openEr(connId, db);
@@ -109,7 +116,6 @@ export function openVisual(kind: import('./store').VisualKind, target: { connId:
   else if (kind === 'table') openDesigner(connId, db, null);
   else if (kind === 'maint') openMaint(connId, db);
   else if (kind === 'datagen' || kind === 'docgen') openDbTool(connId, db, kind);
-  else if (kind === 'copy') st().set({ task: { kind: 'copy', connId, db } });
   else if (kind === 'deps') st().set({ depsDialog: { connId, db, kind: 'table', name: '', mode: 'deps' } });
   else openCompare(connId, db);
 }

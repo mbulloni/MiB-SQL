@@ -295,7 +295,8 @@ export function CopyDialog({ connId, db, tables: only }: { connId: string; db: s
   const [srcs, setSrcs] = useState<string[]>(db ? [db] : []);
   const one = srcs.length === 1 ? srcs[0] : null;
   const objects = useStore((s) => (one ? s.meta[metaKey.objects(connId, one)] : undefined)) as MetaEntry<DbObjects> | undefined;
-  useEffect(() => { loadDatabases(connId); }, []);
+  const srcOpen = useStore((s) => s.connState[connId]?.status === 'open');
+  useEffect(() => { if (srcOpen) loadDatabases(connId); else useStore.getState().openConn(connId); }, [srcOpen]);
   useEffect(() => { if (one) useStore.getState().loadMeta(metaKey.objects(connId, one), () => api.meta.objects(connId, one)); }, [one]);
   const [tgtConn, setTgtConn] = useState(connId);
   const sameConn = tgtConn === connId;
@@ -365,7 +366,7 @@ export function CopyDialog({ connId, db, tables: only }: { connId: string; db: s
       <button onClick={close} disabled={state.busy}>{state.done ? t('Chiudi') : t('Annulla')}</button>
       {!state.done && <button className="primary" disabled={state.busy || blocked} onClick={run}>{t('Copia')}</button>}
     </>}>
-      <details open={!db || srcs.length > 1}>
+      <details open>
         <summary>{t('Database da copiare: {0} di {1}', srcs.length, dbs.length)}</summary>
         <div className="row pick-all">
           <button disabled={state.busy} onClick={() => pickDbs(new Set(dbs))}>{t('Tutti')}</button>

@@ -25,7 +25,7 @@ export default function TargetDialog({ kind }: { kind: VisualKind }) {
   }, [connId, status]);
   const conn = conns.find((c) => c.id === connId);
   useEffect(() => { if (!db && conn?.database) setDb(conn.database); }, [connId]);
-  const server = SERVER_KINDS.has(kind);
+  const server = SERVER_KINDS.has(kind) || kind === 'copy'; // copy: databases are chosen in its own dialog
   const go = () => { close(); openVisual(kind, { connId, db: server ? null : db }); };
   return (
     <div className="modal-back" onMouseDown={close}>

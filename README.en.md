@@ -10,6 +10,10 @@ Educational IDE for **MariaDB and MySQL** (and, read only, **Microsoft Fabric Wa
 
 ![Performance advice in English](docs/screenshot-33.png)
 
+## What's new in 1.10.1
+
+- **Copy database** from the home page or Tools asks only for the connection and opens the dialog with the list of databases to tick (it used to ask for a single database); the list is always open
+
 ## What's new in 1.10.0
 
 - **Copy several databases at once**: in the *Copy database* dialog (also from the connection's context menu) tick the databases to copy, *All*/*None*; to another server or locally they keep their names, on the same server they get an editable suffix (`_copia`). Copied one after the other with the outcome of each; *Only the first N rows* applies to all
