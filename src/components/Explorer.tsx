@@ -288,7 +288,8 @@ function DbChildren({ c, db, depth }: { c: string; db: string; depth: number }) 
         return (
           <Node key={F.key} id={`${c}/${db}/${F.key}`} label={F.label} icon="folder" depth={depth} hint={String(items.length)}
             menu={[{ label: F.add, action: () => (F.kind === 'table' ? openDesigner(c, db, null) : openNewObject(c, db, F.kind as EditableKind)) },
-              ...(F.kind === 'table' ? [{ label: 'Manutenzione tabelle…', action: () => openMaint(c, db) }] : [])]}>
+              ...(F.kind === 'table' ? [{ label: 'Manutenzione tabelle…', action: () => openMaint(c, db) },
+                { label: tr('Copia tabelle…'), action: () => useStore.getState().set({ task: { kind: 'copy', connId: c, db, tables: items.map((x) => x.name) } }) }] : [])]}>
             {() => items.length ? items.map((o) => {
               const qn = `${qi(db)}.${qi(o.name)}`;
               const common: MenuItem[] = [
@@ -312,6 +313,7 @@ function DbChildren({ c, db, depth }: { c: string; db: string; depth: number }) 
                       ...(F.kind === 'table' ? [
                         { label: 'Modifica tabella…', action: () => openDesigner(c, db, o.name) },
                         { label: 'Importa dati…', action: () => useStore.getState().set({ task: { kind: 'import', connId: c, db, table: o.name } }) },
+                        { label: tr('Copia tabelle…'), action: () => useStore.getState().set({ task: { kind: 'copy', connId: c, db, tables: [o.name] } }) },
                         { label: 'Manutenzione…', action: () => openMaint(c, db, [o.name]) },
                         { label: 'Nuovo trigger…', action: () => openNewObject(c, db, 'trigger', o.name) },
                         'sep' as const,
@@ -390,6 +392,7 @@ function ConnNode({ conn }: { conn: ConnDef }) {
   ] : [
     state === 'open' ? { label: tr('Disconnetti'), action: disconnect } : { label: tr('Connetti'), action: () => { connect().then((ok) => ok && toggle(conn.id, true)); } },
     { label: tr('Nuovo SQL'), action: () => newDoc({ connId: conn.id, db: conn.database || null }) },
+    { label: tr('Copia database…'), action: () => { connect().then((ok) => ok && s.set({ task: { kind: 'copy', connId: conn.id, db: null } })); } },
     { label: tr('Prestazioni e ottimizzazione'), action: () => openServerTool(conn.id, 'perf') },
     { label: tr('Processi e transazioni'), action: () => openServerTool(conn.id, 'procs') },
     { label: tr('Log del server'), action: () => openServerTool(conn.id, 'logs') },

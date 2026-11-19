@@ -477,7 +477,7 @@ export default function App() {
       {depsDialog && <DepsDialog key={`${depsDialog.mode}/${depsDialog.db}/${depsDialog.name}/${depsDialog.column ?? ''}`} {...depsDialog} />}
       {task?.kind === 'backup' && task.db && <BackupDialog connId={task.connId} db={task.db} />}
       {task?.kind === 'restore' && <RestoreDialog connId={task.connId} db={task.db} />}
-      {task?.kind === 'copy' && task.db && <CopyDialog connId={task.connId} db={task.db} />}
+      {task?.kind === 'copy' && <CopyDialog connId={task.connId} db={task.db} tables={task.tables} />}
       {updateDialog && <UpdateDialog />}
       {task?.kind === 'import' && task.db && <ImportWizard connId={task.connId} db={task.db} table={task.table} />}
     </div>

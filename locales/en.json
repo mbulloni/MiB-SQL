@@ -1824,5 +1824,19 @@
  "Accesso negato (HTTP {0}): authentication failed.": "Access denied (HTTP {0}): authentication failed.",
  "Risposta HTTP {0} dal server XMLA.": "HTTP {0} response from the XMLA server.",
  "utente Windows": "Windows user",
- "Non disponibile per Analysis Services.": "Not available for Analysis Services."
+ "Non disponibile per Analysis Services.": "Not available for Analysis Services.",
+ "Copia tabelle…": "Copy tables…",
+ "Sostituire {0} database su {1}?": "Replace {0} databases on {1}?",
+ "Questi database verranno eliminati e ricreati, i loro dati andranno persi: {0}": "These databases will be dropped and recreated, their data will be lost: {0}",
+ "Database da copiare: {0} di {1}": "Databases to copy: {0} of {1}",
+ "Tutti": "All",
+ "Vuoto = stesso nome dell'origine": "Empty = same name as the source",
+ "Suffisso dei nomi di destinazione": "Suffix of the target names",
+ "(stesso nome)": "(same name)",
+ "Destinazione: {0}": "Target: {0}",
+ "{0} database esistono già sulla destinazione: {1}": "{0} databases already exist on the target: {1}",
+ "Database {0} di {1}": "Database {0} of {1}",
+ "Copiati {0} database su {1}.": "Copied {0} of {1} databases.",
+ "{0} istruzioni in {1} s": "{0} statements in {1} s",
+ "Copia tabelle da {0}": "Copy tables from {0}"
 }

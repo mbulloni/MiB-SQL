@@ -10,6 +10,11 @@ IDE educativo per **MariaDB e MySQL** (e, in sola lettura, **Microsoft Fabric Wa
 
 ![Database Explorer ed editor SQL](docs/screenshot-1.png)
 
+## Novità della v1.10.0
+
+- **Copia di più database in una volta**: nella finestra *Copia database* (anche dal tasto destro sulla connessione) si spuntano i database da copiare, *Tutti*/*Nessuno*; verso un altro server o in locale mantengono il nome, sullo stesso server prendono un suffisso modificabile (`_copia`). Copiati uno dopo l'altro con l'esito di ciascuno; *Solo le prime N righe* vale per tutti
+- **Copia tabelle…**: tasto destro su una tabella o sulla cartella Tabelle, scelta delle tabelle con *Tutte*/*Nessuna*, destinazione su qualsiasi connessione; se il database di destinazione esiste viene proposto *copia dentro*
+
 ## Novità della v1.9.1
 
 - **Analysis Services**: con un nome di server al posto dell'indirizzo XMLA (`https://…/msmdpump.dll`) la connessione ora fallisce subito con il messaggio d'errore, invece di risultare aperta senza aver contattato il server
@@ -226,7 +231,7 @@ IDE educativo per **MariaDB e MySQL** (e, in sola lettura, **Microsoft Fabric Wa
 - **Query lente** e **Log generale**: dalla tabella (mysql.slow_log, mysql.general_log) o dal file; attiva/disattiva, uscita anche su tabella con un clic, svuota, filtro, aggiornamento ogni 5 s, doppio clic apre l'istruzione nell'editor; quando un file non è leggibile viene spiegato perché
 
 **Copia database**
-- Strumenti › Copia database, pagina iniziale o tasto destro sul database: destinazione su qualsiasi connessione, nome del nuovo database, struttura/dati/routine, scelta delle tabelle, solo le prime N righe per tabella, DEFINER rimovibile; se la destinazione esiste: annulla, sostituisci o copia dentro
+- Strumenti › Copia database, pagina iniziale o tasto destro sul database o sulla connessione: **più database in una volta** (stesso nome o con suffisso), destinazione su qualsiasi connessione, nome del nuovo database, struttura/dati/routine, scelta delle tabelle, solo le prime N righe per tabella, DEFINER rimovibile; se la destinazione esiste: annulla, sostituisci o copia dentro
 - Usa il dump e il ripristino dell'app tramite un file temporaneo compresso: provata MariaDB 10.11 → MariaDB 11.4, → MySQL 8.4 e sullo stesso server
 
 **Aggiornamenti**

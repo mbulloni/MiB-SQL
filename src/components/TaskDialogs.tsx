@@ -279,57 +279,117 @@ export function ImportWizard({ connId, db, table }: { connId: string; db: string
   );
 }
 
-/** Copy of a database to another database, on this server or another connection (dump + restore). */
-export function CopyDialog({ connId, db }: { connId: string; db: string }) {
+const SYSTEM_DBS = new Set(['information_schema', 'mysql', 'performance_schema', 'sys']);
+type CopyOutcome = { src: string; tgt: string; statements?: number; ms?: number; error?: string };
+
+/**
+ * Copy of one or more databases to other databases, on this server or another connection (dump + restore, one
+ * database after the other). With a single database the tables can be chosen: `tables` preselects them (Copy tables…).
+ */
+export function CopyDialog({ connId, db, tables: only }: { connId: string; db: string | null; tables?: string[] }) {
   const [id] = useState(() => newId('task'));
   const p = useProgress(id);
   const conns = useStore((s) => s.conns);
-  const objects = useStore((s) => s.meta[metaKey.objects(connId, db)]) as MetaEntry<DbObjects> | undefined;
-  useEffect(() => { useStore.getState().loadMeta(metaKey.objects(connId, db), () => api.meta.objects(connId, db)); }, []);
+  const dbEntry = useStore((s) => s.meta[metaKey.databases(connId)]) as MetaEntry<string[]> | undefined;
+  const dbs = (dbEntry?.data ?? []).filter((x) => !SYSTEM_DBS.has(x.toLowerCase()));
+  const [srcs, setSrcs] = useState<string[]>(db ? [db] : []);
+  const one = srcs.length === 1 ? srcs[0] : null;
+  const objects = useStore((s) => (one ? s.meta[metaKey.objects(connId, one)] : undefined)) as MetaEntry<DbObjects> | undefined;
+  useEffect(() => { loadDatabases(connId); }, []);
+  useEffect(() => { if (one) useStore.getState().loadMeta(metaKey.objects(connId, one), () => api.meta.objects(connId, one)); }, [one]);
   const [tgtConn, setTgtConn] = useState(connId);
-  const [tgtDb, setTgtDb] = useState(`${db}_${t('copia')}`);
-  const [o, setO] = useState({ structure: true, data: true, routines: true, stripDefiner: true, ifExists: 'fail' as 'fail' | 'replace' | 'merge' });
+  const sameConn = tgtConn === connId;
+  const [tgtDb, setTgtDb] = useState(db ? `${db}_${t('copia')}` : '');
+  const [suffix, setSuffix] = useState(`_${t('copia')}`);
+  // another server: the same names; this server: a copy beside the original
+  useEffect(() => {
+    setSuffix(sameConn ? `_${t('copia')}` : '');
+    if (one) setTgtDb(sameConn ? `${one}_${t('copia')}` : one);
+  }, [tgtConn, one]);
+  const [o, setO] = useState({ structure: true, data: true, routines: true, stripDefiner: true, ifExists: (only ? 'merge' : 'fail') as 'fail' | 'replace' | 'merge' });
   const [limit, setLimit] = useState<number | null>(null);
   const [skip, setSkip] = useState<Set<string>>(new Set());
-  const [info, setInfo] = useState<{ exists: boolean; tables: number } | null>(null);
-  const [state, setState] = useState<{ busy?: boolean; done?: { statements: number; ms: number }; error?: string }>({});
+  const tables = one ? objects?.data?.tables.map((x) => x.name) ?? [] : [];
+  const [preselected, setPreselected] = useState(false);
+  useEffect(() => {
+    if (!only || preselected || !objects?.data) return;
+    setSkip(new Set(tables.filter((x) => !only.includes(x))));
+    setPreselected(true);
+  }, [objects?.data]);
+  const targets = one ? [{ src: one, tgt: tgtDb.trim() }] : srcs.map((x) => ({ src: x, tgt: `${x}${suffix.trim()}` }));
+  const targetKey = targets.map((x) => x.tgt).join('\n');
+  const [infos, setInfos] = useState<Record<string, { exists: boolean; tables: number }>>({});
+  const [state, setState] = useState<{ busy?: boolean; step?: { i: number; n: number; db: string; tgt: string }; done?: CopyOutcome[] }>({});
   const tgtOpen = useStore((s) => s.connState[tgtConn]?.status === 'open');
-  const tables = objects?.data?.tables.map((x) => x.name) ?? [];
   useEffect(() => { if (!tgtOpen) useStore.getState().openConn(tgtConn); }, [tgtConn]);
   useEffect(() => {
-    if (!tgtOpen || !tgtDb.trim()) { setInfo(null); return; }
-    const h = setTimeout(() => api.copy.target(tgtConn, tgtDb.trim()).then(setInfo).catch(() => setInfo(null)), 250);
+    if (!tgtOpen || targets.some((x) => !x.tgt)) { setInfos({}); return; }
+    const h = setTimeout(() => Promise.all(targets.map((x) => api.copy.target(tgtConn, x.tgt).then((r) => [x.tgt, r] as const).catch(() => null)))
+      .then((list) => setInfos(Object.fromEntries(list.filter((x) => x !== null)))), 250);
     return () => clearTimeout(h);
-  }, [tgtConn, tgtDb, tgtOpen]);
-  const same = tgtConn === connId && tgtDb.trim() === db;
-  const blocked = same || !tgtDb.trim() || (info?.exists && o.ifExists === 'fail') || (!o.structure && !o.data);
+  }, [tgtConn, targetKey, tgtOpen]);
+  const existing = targets.filter((x) => infos[x.tgt]?.exists);
+  const same = sameConn && targets.some((x) => x.src === x.tgt);
+  const blocked = !targets.length || targets.some((x) => !x.tgt) || same || (existing.length > 0 && o.ifExists === 'fail') || (!o.structure && !o.data) || (!!one && tables.length > 0 && skip.size === tables.length);
+  const pickDbs = (next: Set<string>) => { setSrcs(dbs.filter((x) => next.has(x))); setSkip(new Set()); };
+
   const run = async () => {
-    const target = `${conns.find((c) => c.id === tgtConn)?.name ?? ''} › ${tgtDb.trim()}`;
-    if (info?.exists && o.ifExists === 'replace' && (await api.confirm(t('Sostituire il database {0}?', target), t('Il database di destinazione ({0} tabelle) verrà eliminato e ricreato: i suoi dati andranno persi.', info.tables), [t('Sostituisci'), t('Annulla')])) !== 0) return;
-    setState({ busy: true });
-    try {
-      const r = await api.copy.run(id, { connId, db }, { connId: tgtConn, db: tgtDb.trim() }, { ...o, limit: o.data && limit ? limit : undefined, tables: skip.size ? tables.filter((x) => !skip.has(x)) : undefined });
-      setState({ done: r });
-      useStore.getState().dropMeta(`${tgtConn}/`);
-      loadDatabases(tgtConn, true);
-    } catch (err) { setState({ error: (err as Error).message }); }
+    const connName = conns.find((c) => c.id === tgtConn)?.name ?? '';
+    if (existing.length && o.ifExists === 'replace') {
+      const ask = existing.length === 1
+        ? api.confirm(t('Sostituire il database {0}?', `${connName} › ${existing[0].tgt}`), t('Il database di destinazione ({0} tabelle) verrà eliminato e ricreato: i suoi dati andranno persi.', infos[existing[0].tgt].tables), [t('Sostituisci'), t('Annulla')])
+        : api.confirm(t('Sostituire {0} database su {1}?', existing.length, connName), t('Questi database verranno eliminati e ricreati, i loro dati andranno persi: {0}', existing.map((x) => x.tgt).join(', ')), [t('Sostituisci'), t('Annulla')]);
+      if ((await ask) !== 0) return;
+    }
+    const done: CopyOutcome[] = [];
+    for (const [i, x] of targets.entries()) {
+      setState({ busy: true, step: { i: i + 1, n: targets.length, db: x.src, tgt: x.tgt } });
+      try {
+        const r = await api.copy.run(id, { connId, db: x.src }, { connId: tgtConn, db: x.tgt }, {
+          ...o, limit: o.data && limit ? limit : undefined, tables: one && skip.size ? tables.filter((k) => !skip.has(k)) : undefined,
+        });
+        done.push({ ...x, statements: r.statements, ms: r.ms });
+      } catch (err) { done.push({ ...x, error: (err as Error).message }); }
+    }
+    setState({ done });
+    useStore.getState().dropMeta(`${tgtConn}/`);
+    loadDatabases(tgtConn, true);
   };
-  const phase = p.phase === 'dump' ? t('Lettura di {0}: tabella {1}/{2}{3}', db, p.done ?? 0, p.total ?? '?', p.table ? ` (${p.table})` : '')
-    : p.phase === 'restore' ? t('Scrittura in {0}: {1}%', tgtDb, p.total ? Math.round((Number(p.bytes) / Number(p.total)) * 100) : 0) : '';
+  const phase = p.phase === 'dump' ? t('Lettura di {0}: tabella {1}/{2}{3}', state.step?.db ?? '', p.done ?? 0, p.total ?? '?', p.table ? ` (${p.table})` : '')
+    : p.phase === 'restore' ? t('Scrittura in {0}: {1}%', state.step?.tgt ?? '', p.total ? Math.round((Number(p.bytes) / Number(p.total)) * 100) : 0) : '';
+  const failed = state.done?.filter((x) => x.error) ?? [];
+  const secs = (ms = 0) => (ms / 1000).toLocaleString(locale(), { maximumFractionDigits: 1 });
   return (
-    <Modal title={t('Copia il database {0}', db)} busy={state.busy} medium buttons={<>
+    <Modal title={only && one ? t('Copia tabelle da {0}', one) : one ? t('Copia il database {0}', one) : t('Copia database')} busy={state.busy} medium buttons={<>
       <div className="spacer" />
       <button onClick={close} disabled={state.busy}>{state.done ? t('Chiudi') : t('Annulla')}</button>
-      {!state.done && <button className="primary" disabled={state.busy || !!blocked} onClick={run}>{t('Copia')}</button>}
+      {!state.done && <button className="primary" disabled={state.busy || blocked} onClick={run}>{t('Copia')}</button>}
     </>}>
+      <details open={!db || srcs.length > 1}>
+        <summary>{t('Database da copiare: {0} di {1}', srcs.length, dbs.length)}</summary>
+        <div className="row pick-all">
+          <button disabled={state.busy} onClick={() => pickDbs(new Set(dbs))}>{t('Tutti')}</button>
+          <button disabled={state.busy} onClick={() => pickDbs(new Set())}>{t('Nessuno')}</button>
+        </div>
+        <div className="table-pick">
+          {dbs.map((x) => (
+            <label key={x} className="check"><input type="checkbox" disabled={state.busy} checked={srcs.includes(x)} onChange={(e) => { const s = new Set(srcs); if (e.target.checked) s.add(x); else s.delete(x); pickDbs(s); }} /> {x}</label>
+          ))}
+        </div>
+      </details>
       <div className="row">
         <label className="grow">{t('Connessione di destinazione')}
-          <select value={tgtConn} onChange={(e) => setTgtConn(e.target.value)} disabled={state.busy}>{conns.map((c) => <option key={c.id} value={c.id}>{c.name}</option>)}</select>
+          <select value={tgtConn} onChange={(e) => setTgtConn(e.target.value)} disabled={state.busy}>{conns.filter((c) => !c.engine || c.engine === 'mysql').map((c) => <option key={c.id} value={c.id}>{c.name}</option>)}</select>
         </label>
-        <label className="grow">{t('Database di destinazione')}<input value={tgtDb} onChange={(e) => setTgtDb(e.target.value)} disabled={state.busy} /></label>
+        {one
+          ? <label className="grow">{t('Database di destinazione')}<input value={tgtDb} onChange={(e) => setTgtDb(e.target.value)} disabled={state.busy} /></label>
+          : <label className="grow" title={t('Vuoto = stesso nome dell\'origine')}>{t('Suffisso dei nomi di destinazione')}<input value={suffix} placeholder={t('(stesso nome)')} onChange={(e) => setSuffix(e.target.value)} disabled={state.busy} /></label>}
       </div>
+      {!one && srcs.length > 1 && <p className="note">{t('Destinazione: {0}', targets.slice(0, 4).map((x) => x.tgt).join(', ') + (targets.length > 4 ? ', …' : ''))}</p>}
       {same && <div className="status error">{t('Origine e destinazione coincidono.')}</div>}
-      {info?.exists && <label><span className="warn-text">{t('{0} esiste già ({1} tabelle).', tgtDb, info.tables)}</span>
+      {existing.length > 0 && <label><span className="warn-text">{existing.length === 1
+        ? t('{0} esiste già ({1} tabelle).', existing[0].tgt, infos[existing[0].tgt].tables)
+        : t('{0} database esistono già sulla destinazione: {1}', existing.length, existing.map((x) => x.tgt).join(', '))}</span>
         <select value={o.ifExists} onChange={(e) => setO({ ...o, ifExists: e.target.value as typeof o.ifExists })}>
           <option value="fail">{t('scegli cosa fare…')}</option>
           <option value="replace">{t('eliminalo e ricrealo')}</option>
@@ -346,9 +406,13 @@ export function CopyDialog({ connId, db }: { connId: string; db: string }) {
         <label className="check" title={t('Copia di sviluppo: le chiavi esterne possono puntare a righe non copiate')}><input type="checkbox" checked={limit !== null} disabled={!o.data || state.busy} onChange={(e) => setLimit(e.target.checked ? 100 : null)} />{' '}{t('Solo le prime righe di ogni tabella:')}</label>
         <input type="number" min={1} style={{ width: '7em' }} value={limit ?? 100} disabled={limit === null || !o.data || state.busy} onChange={(e) => setLimit(Math.max(1, Math.floor(Number(e.target.value)) || 1))} />
       </div>
-      {tables.length > 0 && (
-        <details>
+      {one && tables.length > 0 && (
+        <details open={!!only}>
           <summary>{t('Tabelle (')}{tables.length - skip.size}{' '}{t('di')}{' '}{tables.length})</summary>
+          <div className="row pick-all">
+            <button disabled={state.busy} onClick={() => setSkip(new Set())}>{t('Tutte')}</button>
+            <button disabled={state.busy} onClick={() => setSkip(new Set(tables))}>{t('Nessuna')}</button>
+          </div>
           <div className="table-pick">
             {tables.map((x) => (
               <label key={x} className="check"><input type="checkbox" checked={!skip.has(x)} onChange={(e) => { const s = new Set(skip); if (e.target.checked) s.delete(x); else s.add(x); setSkip(s); }} /> {x}</label>
@@ -357,9 +421,16 @@ export function CopyDialog({ connId, db }: { connId: string; db: string }) {
         </details>
       )}
       <p className="note">{t('La copia passa da un file temporaneo compresso (eliminato alla fine): struttura e dati vengono letti dall\'origine e scritti sulla destinazione, anche su un altro server.')}</p>
-      {state.busy && <div className="status">{phase || t('Avvio…')}</div>}
-      {state.error && <div className="status error">{state.error}</div>}
-      {state.done && <div className="status ok">{t('Copia completata: {0} istruzioni in {1} s.', n(state.done.statements), (state.done.ms / 1000).toLocaleString(locale(), { maximumFractionDigits: 1 }))}</div>}
+      {state.busy && <div className="status">{state.step && state.step.n > 1 ? `${t('Database {0} di {1}', state.step.i, state.step.n)} · ` : ''}{phase || t('Avvio…')}</div>}
+      {state.done && state.done.length === 1 && (failed.length
+        ? <div className="status error">{failed[0].error}</div>
+        : <div className="status ok">{t('Copia completata: {0} istruzioni in {1} s.', n(state.done[0].statements ?? 0), secs(state.done[0].ms))}</div>)}
+      {state.done && state.done.length > 1 && <>
+        <div className={`status ${failed.length ? 'error' : 'ok'}`}>{t('Copiati {0} database su {1}.', state.done.length - failed.length, state.done.length)}</div>
+        <ul className="copy-report">
+          {state.done.map((x) => <li key={x.src} className={x.error ? 'error' : ''}>{x.src} → {x.tgt}: {x.error ?? t('{0} istruzioni in {1} s', n(x.statements ?? 0), secs(x.ms))}</li>)}
+        </ul>
+      </>}
     </Modal>
   );
 }

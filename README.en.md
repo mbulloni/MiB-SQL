@@ -10,6 +10,11 @@ Educational IDE for **MariaDB and MySQL** (and, read only, **Microsoft Fabric Wa
 
 ![Performance advice in English](docs/screenshot-33.png)
 
+## What's new in 1.10.0
+
+- **Copy several databases at once**: in the *Copy database* dialog (also from the connection's context menu) tick the databases to copy, *All*/*None*; to another server or locally they keep their names, on the same server they get an editable suffix (`_copia`). Copied one after the other with the outcome of each; *Only the first N rows* applies to all
+- **Copy tables…**: right-click a table or the Tables folder, pick the tables with *All*/*None*, target on any connection; when the target database exists *copy into it* is proposed
+
 ## What's new in 1.9.1
 
 - **Analysis Services**: a server name instead of the XMLA address (`https://…/msmdpump.dll`) now fails the connection right away with the error message, instead of showing it open without contacting the server

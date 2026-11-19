@@ -55,7 +55,7 @@ interface State {
   passwordPrompt: PasswordRequest | null;
   entraPrompt: import('./api').EntraPrompt | null;
   exportDialog: ExportRequest | null;
-  task: { kind: 'backup' | 'restore' | 'import' | 'copy'; connId: string; db: string | null; table?: string } | null;
+  task: { kind: 'backup' | 'restore' | 'import' | 'copy'; connId: string; db: string | null; table?: string; tables?: string[] } | null;
   viewer: { title: string; value: string; isNull?: boolean; binary?: boolean; onSave?: (v: string | null) => void } | null;
   snippetDialog: { body?: string } | null;
   callDialog: { connId: string; db: string; kind: 'procedure' | 'function'; name: string } | null;
