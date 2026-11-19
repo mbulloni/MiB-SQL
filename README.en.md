@@ -10,6 +10,10 @@ Educational IDE for **MariaDB and MySQL** (and, read only, **Microsoft Fabric Wa
 
 ![Performance advice in English](docs/screenshot-33.png)
 
+## What's new in 1.12.0
+
+- **Drop database…**: right-click a database (preselected) or the connection (to drop several, *All*/*None*); confirm by typing DROP, server name and host highlighted, outcome per database
+
 ## What's new in 1.11.0
 
 - **Copying several databases with cross-database views**: tables and data of every chosen database first, then views, routines, triggers and events of all of them, retried for views reading views of other databases; copied under another name, references point to the copies. Views reading databases that were not copied no longer stop the copy: they are listed in the outcome with the reason

@@ -457,3 +457,52 @@ export function CopyDialog({ connId, db, tables: only }: { connId: string; db: s
     </Modal>
   );
 }
+
+/** DROP DATABASE of one or more databases, after typing the confirmation word; one statement per database, outcome for each. */
+export function DropDbDialog({ connId, db }: { connId: string; db: string | null }) {
+  const conn = useStore((s) => s.conns.find((c) => c.id === connId));
+  const dbEntry = useStore((s) => s.meta[metaKey.databases(connId)]) as MetaEntry<string[]> | undefined;
+  const dbs = (dbEntry?.data ?? []).filter((x) => !SYSTEM_DBS.has(x.toLowerCase()));
+  const [picked, setPicked] = useState<string[]>(db ? [db] : []);
+  const [word, setWord] = useState('');
+  const [state, setState] = useState<{ busy?: boolean; done?: { db: string; error?: string }[] }>({});
+  useEffect(() => { loadDatabases(connId); }, []);
+  const confirmWord = t('ELIMINA');
+  const pick = (next: Set<string>) => setPicked(dbs.filter((x) => next.has(x)));
+  const run = async () => {
+    setState({ busy: true });
+    const done: { db: string; error?: string }[] = [];
+    for (const x of picked) {
+      try { await api.ddl.run(connId, [`DROP DATABASE \`${x.replace(/`/g, '``')}\``]); done.push({ db: x }); } catch (err) { done.push({ db: x, error: (err as Error).message }); }
+    }
+    const s = useStore.getState();
+    for (const x of picked) s.dropMeta(`${connId}/${x}/`);
+    if (s.selectedDb?.connId === connId && picked.includes(s.selectedDb.db)) s.set({ selectedDb: null });
+    loadDatabases(connId, true);
+    setState({ done });
+  };
+  const failed = state.done?.filter((x) => x.error) ?? [];
+  return (
+    <Modal title={t('Elimina database su {0}', conn?.name ?? '')} busy={state.busy} medium buttons={<>
+      <div className="spacer" />
+      <button onClick={close} disabled={state.busy}>{state.done ? t('Chiudi') : t('Annulla')}</button>
+      {!state.done && <button className="danger" disabled={state.busy || !picked.length || word.trim().toUpperCase() !== confirmWord} onClick={run}>{tn(picked.length, 'Elimina {0} database', 'Elimina {0} database')}</button>}
+    </>}>
+      <div className="row pick-all">
+        <button disabled={state.busy || !!state.done} onClick={() => pick(new Set(dbs))}>{t('Tutti')}</button>
+        <button disabled={state.busy || !!state.done} onClick={() => pick(new Set())}>{t('Nessuno')}</button>
+      </div>
+      <div className="table-pick">
+        {dbs.map((x) => (
+          <label key={x} className="check"><input type="checkbox" disabled={state.busy || !!state.done} checked={picked.includes(x)} onChange={(e) => { const s = new Set(picked); if (e.target.checked) s.add(x); else s.delete(x); pick(s); }} /> {x}</label>
+        ))}
+      </div>
+      {!state.done && <>
+        <div className="status error">{t('I database selezionati, con tutte le tabelle, i dati, le viste e le routine, verranno eliminati definitivamente da {0}. L\'operazione non si può annullare.', `${conn?.name ?? ''} (${conn?.host ?? ''})`)}</div>
+        <label>{t('Per confermare scrivi {0}', confirmWord)}<input value={word} autoFocus onChange={(e) => setWord(e.target.value)} disabled={state.busy} /></label>
+      </>}
+      {state.done && <div className={`status ${failed.length ? 'error' : 'ok'}`}>{t('Eliminati {0} database su {1}.', state.done.length - failed.length, state.done.length)}</div>}
+      {failed.length > 0 && <ul className="copy-report">{failed.map((x) => <li key={x.db} className="error">{x.db}: {x.error}</li>)}</ul>}
+    </Modal>
+  );
+}

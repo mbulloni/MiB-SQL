@@ -10,6 +10,10 @@ IDE educativo per **MariaDB e MySQL** (e, in sola lettura, **Microsoft Fabric Wa
 
 ![Database Explorer ed editor SQL](docs/screenshot-1.png)
 
+## Novità della v1.12.0
+
+- **Elimina database…**: tasto destro su un database (già selezionato) o sulla connessione (per eliminarne più di uno, *Tutti*/*Nessuno*); conferma scrivendo ELIMINA, nome e host del server in evidenza, esito per database
+
 ## Novità della v1.11.0
 
 - **Copia di più database con viste tra database**: prima tabelle e dati di tutti i database scelti, poi viste, routine, trigger ed eventi di tutti, con nuovi tentativi per le viste che leggono viste di altri database; copiando con un altro nome i riferimenti puntano alle copie. Le viste che leggono database non copiati non bloccano più la copia: sono elencate nell'esito con il motivo

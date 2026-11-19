@@ -235,6 +235,8 @@ body.resizing-y, body.resizing-y * { cursor: row-resize !important; user-select:
 .modal-buttons { display: flex; gap: 8px; padding: 14px 16px; }
 .modal-buttons button { padding: 6px 14px; border: 1px solid var(--border); border-radius: 3px; background: var(--input); cursor: pointer; }
 .modal-buttons button.primary { background: var(--accent); border-color: var(--accent); color: #fff; }
+.modal-buttons button.danger { background: var(--err); border-color: var(--err); color: #fff; }
+.modal-buttons button.danger:disabled { opacity: .5; }
 .modal-buttons button:disabled { opacity: .5; }
 
 /* start page */

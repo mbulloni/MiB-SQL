@@ -7,7 +7,7 @@ import ContextMenu, { openMenu } from './components/ContextMenu';
 import { ConnectionDialog, EntraPromptDialog, PasswordPrompt, ValueViewer } from './components/Dialogs';
 import PropsDialog from './components/PropsDialog';
 import ExportDialog from './components/ExportDialog';
-import { BackupDialog, CopyDialog, ImportWizard, RestoreDialog } from './components/TaskDialogs';
+import { BackupDialog, CopyDialog, DropDbDialog, ImportWizard, RestoreDialog } from './components/TaskDialogs';
 import Explorer from './components/Explorer';
 import Icon from './components/Icon';
 import ResultsPanel from './components/ResultsPanel';
@@ -475,6 +475,7 @@ export default function App() {
       {depsDialog && <DepsDialog key={`${depsDialog.mode}/${depsDialog.db}/${depsDialog.name}/${depsDialog.column ?? ''}`} {...depsDialog} />}
       {task?.kind === 'backup' && task.db && <BackupDialog connId={task.connId} db={task.db} />}
       {task?.kind === 'restore' && <RestoreDialog connId={task.connId} db={task.db} />}
+      {task?.kind === 'dropdb' && <DropDbDialog connId={task.connId} db={task.db} />}
       {task?.kind === 'copy' && <CopyDialog connId={task.connId} db={task.db} tables={task.tables} />}
       {updateDialog && <UpdateDialog />}
       {task?.kind === 'import' && task.db && <ImportWizard connId={task.connId} db={task.db} table={task.table} />}

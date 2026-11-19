@@ -1845,5 +1845,12 @@
  "{0} vista o routine non creata": "{0} view or routine not created",
  "{0} viste o routine non create": "{0} views or routines not created",
  "Le viste e le routine non create leggono di solito database non copiati o non presenti sulla destinazione: copiali insieme e riprova con «copia dentro».": "Views and routines not created usually read databases that were not copied or do not exist on the target: copy them together and retry with “copy into it”.",
- "una riga supera max_allowed_packet del server di destinazione: aumentalo (SET GLOBAL max_allowed_packet = 1073741824) e riprova.": "a row exceeds the target server's max_allowed_packet: raise it (SET GLOBAL max_allowed_packet = 1073741824) and retry."
+ "una riga supera max_allowed_packet del server di destinazione: aumentalo (SET GLOBAL max_allowed_packet = 1073741824) e riprova.": "a row exceeds the target server's max_allowed_packet: raise it (SET GLOBAL max_allowed_packet = 1073741824) and retry.",
+ "Elimina database…": "Drop database…",
+ "Elimina database su {0}": "Drop databases on {0}",
+ "ELIMINA": "DROP",
+ "Elimina {0} database": "Drop {0} databases",
+ "I database selezionati, con tutte le tabelle, i dati, le viste e le routine, verranno eliminati definitivamente da {0}. L'operazione non si può annullare.": "The selected databases, with all their tables, data, views and routines, will be permanently dropped from {0}. This cannot be undone.",
+ "Per confermare scrivi {0}": "Type {0} to confirm",
+ "Eliminati {0} database su {1}.": "Dropped {0} of {1} databases."
 }
