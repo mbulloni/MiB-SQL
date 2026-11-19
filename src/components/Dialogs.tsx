@@ -30,11 +30,14 @@ export function ConnectionDialog() {
   const set = (patch: Partial<ConnDef>) => setDef((d) => ({ ...d, ...patch }));
   const setSsh = (patch: Partial<NonNullable<ConnDef['ssh']>>) => setDef((d) => ({ ...d, ssh: { ...d.ssh!, ...patch } }));
   const tds = def.engine === 'mssql';
+  const ssas = def.engine === 'ssas';
   const entra = tds && def.auth !== 'sql';
-  const name = def.name.trim() || (tds ? `${def.database || def.host.split('.')[0]}` : def.socket ? `${def.user}@socket` : `${def.user}@${def.host}`);
-  const setEngine = (engine: Engine) => setDef((d) => (engine === 'mssql'
+  const name = def.name.trim() || (ssas ? def.database || 'Analysis Services' : tds ? `${def.database || def.host.split('.')[0]}` : def.socket ? `${def.user}@socket` : `${def.user}@${def.host}`);
+  const setEngine = (engine: Engine) => setDef((d) => (engine === 'ssas'
+    ? { ...d, engine, auth: 'windows', readOnly: true, host: /^https?:/i.test(d.host) ? d.host : '', user: d.user === 'root' ? '' : d.user, socket: '' }
+    : engine === 'mssql'
     ? { ...d, engine, auth: d.auth ?? 'entra', entra: d.entra ?? { method: 'browser' }, readOnly: d.readOnly ?? true, port: d.port === 3306 ? 1433 : d.port, host: d.host === 'localhost' ? '' : d.host, user: d.user === 'root' ? '' : d.user, socket: '' }
-    : { ...d, engine: undefined, port: d.port === 1433 ? 3306 : d.port, host: d.host || 'localhost' }));
+    : { ...d, engine: undefined, auth: undefined, port: d.port === 1433 ? 3306 : d.port, host: d.host && !/^https?:/i.test(d.host) ? d.host : 'localhost' }));
   const setEntra = (patch: Partial<NonNullable<ConnDef['entra']>>) => setDef((d) => ({ ...d, entra: { method: 'browser', ...d.entra, ...patch } }));
   const close = () => s.set({ connDialog: null });
 
@@ -63,7 +66,7 @@ export function ConnectionDialog() {
       <div className="modal conn-dialog" onMouseDown={(e) => e.stopPropagation()} onKeyDown={(e) => { if (e.key === 'Escape') close(); }}>
         <div className="modal-title">{editing ? tr('Modifica connessione') : tr('Nuova connessione')}</div>
         <div className="tabs-row">
-          {(tds ? ['general', 'advanced'] as const : ['general', 'ssl', 'ssh'] as const).map((t) => (
+          {(ssas ? ['general'] as const : tds ? ['general', 'advanced'] as const : ['general', 'ssl', 'ssh'] as const).map((t) => (
             <button key={t} className={tab === t ? 'active' : ''} onClick={() => setTab(t)}>{{ general: tr('Generale'), ssl: 'SSL', ssh: tr('Tunnel SSH'), advanced: tr('Avanzate') }[t]}</button>
           ))}
         </div>
@@ -72,8 +75,35 @@ export function ConnectionDialog() {
             <select value={def.engine ?? 'mysql'} disabled={editing} onChange={(e) => { setEngine(e.target.value as Engine); setStatus(null); }}>
               <option value="mysql">MariaDB / MySQL</option>
               <option value="mssql">{tr('Microsoft Fabric Warehouse / SQL Server')}</option>
+              <option value="ssas">{tr('SQL Server Analysis Services (cubo, XMLA via HTTP)')}</option>
             </select>
           </label>}
+          {tab === 'general' && ssas && <>
+            <label>{tr('Nome')}<input autoFocus value={def.name} placeholder={name} onChange={(e) => set({ name: e.target.value })} /></label>
+            <label>{tr('Indirizzo XMLA (HTTP)')}<input value={def.host} placeholder="https://server/olap/msmdpump.dll" onChange={(e) => set({ host: e.target.value.trim() })} /></label>
+            <label>{tr('Catalogo (database)')}<input value={def.database} placeholder="cockpit_rel_o" onChange={(e) => set({ database: e.target.value })} /></label>
+            <label>{tr('Autenticazione')}
+              <select value={def.auth === 'basic' ? 'basic' : 'windows'} onChange={(e) => set({ auth: e.target.value as 'windows' | 'basic' })}>
+                <option value="windows">{tr('Windows (NTLM): utente di dominio')}</option>
+                <option value="basic">{tr('Basic (solo HTTPS)')}</option>
+              </select>
+            </label>
+            <div className="row">
+              <label className="grow">{tr('Utente')}<input value={def.user} placeholder={def.auth === 'basic' ? '' : 'DOMINIO\\utente'} onChange={(e) => set({ user: e.target.value.trim() })} /></label>
+              <label className="grow">{tr('Password')}<input type="password" placeholder={editing ? '(invariata)' : ''} value={secrets.password ?? ''} onChange={(e) => setSecrets((x) => ({ ...x, password: e.target.value }))} /></label>
+            </div>
+            <label className="check">
+              <input type="checkbox" checked={def.savePassword && keyring} disabled={!keyring} onChange={(e) => set({ savePassword: e.target.checked })} />
+              {tr('Salva password nel portachiavi di sistema')}{!keyring && tr(' (non disponibile: verrà chiesta a ogni avvio)')}
+            </label>
+            <label className="check"><input type="checkbox" checked={!!def.trustCert} onChange={(e) => set({ trustCert: e.target.checked })} />{' '}{tr('Accetta il certificato HTTPS del server senza verificarlo')}</label>
+            <label>{tr('Colore ambiente')}
+              <select value={def.color} onChange={(e) => set({ color: e.target.value })}>
+                {COLORS.map((c) => <option key={c.value} value={c.value}>{c.label}</option>)}
+              </select>
+            </label>
+            <p className="note">{tr('Il cubo si raggiunge tramite l\'endpoint HTTP msmdpump.dll pubblicato su IIS (chiedilo all\'IT): il collegamento TCP diretto usato da SSMS non è disponibile su Linux. Serve la VPN aziendale attiva.')}</p>
+          </>}
           {tab === 'general' && tds && <>
             <label>{tr('Nome')}<input autoFocus value={def.name} placeholder={name} onChange={(e) => set({ name: e.target.value })} /></label>
             <div className="row">
@@ -115,7 +145,7 @@ export function ConnectionDialog() {
             <p className="note">{tr('Servono solo se l\'azienda richiede un\'app registrata: client pubblico con URI di reindirizzamento http://localhost e permesso Azure SQL Database (user_impersonation).')}</p>
             <label className="check"><input type="checkbox" checked={!!def.trustCert} onChange={(e) => set({ trustCert: e.target.checked })} />{' '}{tr('Accetta il certificato del server senza verificarlo (solo SQL Server locale)')}</label>
           </>}
-          {tab === 'general' && !tds && <>
+          {tab === 'general' && !tds && !ssas && <>
             <label>{tr('Nome')}<input autoFocus value={def.name} placeholder={name} onChange={(e) => set({ name: e.target.value })} /></label>
             <div className="row">
               <label className="grow">{tr('Host')}<input value={def.host} disabled={!!def.socket} onChange={(e) => set({ host: e.target.value })} /></label>

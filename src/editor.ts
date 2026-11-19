@@ -77,7 +77,7 @@ const NOT_ALIAS = new Set(['WHERE', 'ON', 'USING', 'JOIN', 'LEFT', 'RIGHT', 'INN
 const unquote = (s: string) => (s.startsWith('`') ? s.slice(1, -1).replace(/``/g, '`') : s.startsWith('[') ? s.slice(1, -1).replace(/]]/g, ']') : s);
 // identifiers inserted by completion: [x] on Microsoft Fabric / SQL Server documents, `x` otherwise
 let brackets = false;
-const quote = (s: string) => (/^[A-Za-z_][\w$]*$/.test(s) && !RESERVED.has(s.toUpperCase()) ? s : brackets ? `[${s.replace(/]/g, ']]')}]` : '`' + s.replace(/`/g, '``') + '`');
+const quote = (s: string) => (brackets && /^\[.*\]$/.test(s) ? s : /^[A-Za-z_][\w$]*$/.test(s) && !RESERVED.has(s.toUpperCase()) ? s : brackets ? `[${s.replace(/]/g, ']]')}]` : '`' + s.replace(/`/g, '``') + '`');
 
 const NAME = '(`(?:[^`]|``)+`|\\[(?:[^\\]]|\\]\\])+\\]|[\\w$]+)';
 

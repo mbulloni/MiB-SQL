@@ -11,6 +11,8 @@ Tu non esegui nulla: l'utente decide se inserire ed eseguire il codice. Per istr
 /** Added to the system prompt for Microsoft Fabric Warehouse / SQL Server documents. */
 export const TSQL_PROMPT = `Questo database è Microsoft Fabric Warehouse o SQL Server: scrivi T-SQL, non MySQL. Nomi tra parentesi quadre ([schema].[tabella]), TOP (n) invece di LIMIT, OFFSET … FETCH per la paginazione, GETDATE()/SYSDATETIME(), CONVERT/FORMAT per le date, STRING_AGG per concatenare. Le tabelle sono indicate come schema.tabella. La connessione è di sola lettura salvo diversa indicazione: preferisci SELECT. In Fabric le chiavi primarie ed esterne non sono applicate e non ci sono indici.`;
 
+export const MDX_PROMPT = `Questa connessione è un cubo SQL Server Analysis Services: scrivi MDX (SELECT … ON COLUMNS, … ON ROWS FROM [Cubo]) o DAX (EVALUATE …) per i modelli Tabular, non SQL. Misure come [Measures].[Nome], membri come [Dimensione].[Gerarchia].[Livello].MEMBERS, NON EMPTY per togliere le righe vuote, CROSSJOIN o * per combinare gerarchie, TOPCOUNT/FILTER/ORDER per classifiche e filtri, WITH MEMBER per misure calcolate. Lo schema elenca per ogni cubo le misure (MEASURE) e le gerarchie (HIERARCHY) con il nome univoco da usare. La connessione è di sola lettura.`;
+
 /** Compact schema description: one line per table with columns, keys and estimated rows; then relations. */
 export function schemaText(model: ErModel, db: string, server: string) {
   const lines = [tr('Server: {0}', server), tr('Database: {0}', db), ''];

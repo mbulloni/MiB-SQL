@@ -4,6 +4,7 @@ const fs = require('fs');
 const connections = require('./connections.cjs');
 const server = require('./server.cjs');
 const tds = require('./tds.cjs');
+const xmla = require('./xmla.cjs');
 const entra = require('./entra.cjs');
 const explorer = require('./explorer.cjs');
 const exporter = require('./export.cjs');
@@ -105,28 +106,32 @@ handle('conn:list', async () => ({ list: connections.list(), keyring: await conn
 handle('conn:save', (def, secrets) => connections.save(def, secrets));
 // Microsoft Fabric / SQL Server profiles (engine 'mssql') go to tds.cjs, every other one to the MariaDB driver.
 const isTds = (connId) => { try { return tds.isTds(connections.get(connId)); } catch { return false; } };
+// Analysis Services profiles (engine 'ssas') go to xmla.cjs: drv() picks the driver of a connection, null = MariaDB
+const isSsas = (connId) => { try { return xmla.isSsas(connections.get(connId)); } catch { return false; } };
+const drv = (connId) => (isSsas(connId) ? xmla : isTds(connId) ? tds : null);
 
-handle('conn:delete', async (id) => { await (isTds(id) ? tds : server).close(id); await connections.remove(id); });
-handle('conn:test', (def, secrets) => (tds.isTds(def) ? tds : server).test(def, secrets));
-handle('conn:open', (id, secrets) => (isTds(id) ? tds : server).open(id, secrets));
-handle('conn:close', (id) => (isTds(id) ? tds : server).close(id));
+handle('conn:delete', async (id) => { await (drv(id) ?? server).close(id); await connections.remove(id); });
+handle('conn:test', (def, secrets) => (xmla.isSsas(def) ? xmla : tds.isTds(def) ? tds : server).test(def, secrets));
+handle('conn:open', (id, secrets) => (drv(id) ?? server).open(id, secrets));
+handle('conn:close', (id) => (drv(id) ?? server).close(id));
 handle('entra:account', (id) => entra.account(connections.get(id)));
 handle('entra:signOut', async (id) => { await tds.close(id); return entra.signOut(connections.get(id)); });
 entra.onPrompt((p) => win?.webContents.send('entra:prompt', p));
 // device code page: only Microsoft sign-in addresses open in the browser
 handle('entra:openUrl', (url) => (/^https:\/\/([a-z.]+\.)?(microsoft\.com|microsoftonline\.com)\//i.test(url) ? shell.openExternal(url) : null));
 
-handle('meta:databases', (id) => (isTds(id) ? tds : explorer).databases(id));
-handle('meta:objects', (id, db) => (isTds(id) ? tds : explorer).objects(id, db));
-handle('meta:columns', (id, db, t) => (isTds(id) ? tds : explorer).columns(id, db, t));
-handle('meta:indexes', (id, db, t) => (isTds(id) ? tds : explorer).indexes(id, db, t));
-handle('meta:foreignKeys', (id, db, t) => (isTds(id) ? [] : explorer.foreignKeys(id, db, t)));
-handle('meta:ddl', (id, db, kind, name) => (isTds(id) ? tds : explorer).ddl(id, db, kind, name));
-handle('meta:schema', (id, db) => (isTds(id) ? tds : explorer).schema(id, db));
+handle('meta:databases', (id) => (drv(id) ?? explorer).databases(id));
+handle('meta:objects', (id, db) => (drv(id) ?? explorer).objects(id, db));
+handle('meta:columns', (id, db, t) => (drv(id) ?? explorer).columns(id, db, t));
+handle('meta:indexes', (id, db, t) => (drv(id) ?? explorer).indexes(id, db, t));
+handle('meta:foreignKeys', (id, db, t) => (drv(id) ? [] : explorer.foreignKeys(id, db, t)));
+handle('ssas:cube', (id, db, cube) => xmla.cube(id, db, cube));
+handle('meta:ddl', (id, db, kind, name) => (drv(id) ?? explorer).ddl(id, db, kind, name));
+handle('meta:schema', (id, db) => (drv(id) ?? explorer).schema(id, db));
 handle('meta:tableDefinition', (id, db, t) => explorer.tableDefinition(id, db, t));
 handle('meta:serverOptions', (id, db) => explorer.serverOptions(id, db));
-handle('meta:erModel', (id, db) => (isTds(id) ? tds : explorer).erModel(id, db));
-handle('meta:properties', (id, db, kind, name) => (isTds(id) ? tds : explorer).properties(id, db, kind, name));
+handle('meta:erModel', (id, db) => (drv(id) ?? explorer).erModel(id, db));
+handle('meta:properties', (id, db, kind, name) => (drv(id) ?? explorer).properties(id, db, kind, name));
 handle('meta:schemaSnapshot', (id, db) => explorer.schemaSnapshot(id, db));
 handle('meta:users', (id) => explorer.users(id));
 handle('meta:grants', (id, user, host) => explorer.grants(id, user, host));
@@ -145,14 +150,14 @@ handle('file:saveData', async (data, base64, suggested, filters) => {
 });
 handle('ddl:run', (connId, sqls) => server.runStatements(connId, sqls));
 
-const sess = (sid) => (tds.hasSession(sid) ? tds : server);
-handle('sess:open', (connId, db) => (isTds(connId) ? tds : server).openSession(connId, db));
+const sess = (sid) => (xmla.hasSession(sid) ? xmla : tds.hasSession(sid) ? tds : server);
+handle('sess:open', (connId, db) => (drv(connId) ?? server).openSession(connId, db));
 handle('sess:close', (sid) => sess(sid).closeSession(sid));
 handle('sess:use', (sid, db) => sess(sid).useDb(sid, db));
 handle('sess:exec', (sid, text, opts) => sess(sid).exec(sid, text, opts));
 handle('sess:cancel', (sid) => sess(sid).cancel(sid));
 handle('sess:profile', (sid, text, cursor) => {
-  if (tds.hasSession(sid)) throw new Error(t('Il profilo non è disponibile per Microsoft Fabric.'));
+  if (tds.hasSession(sid) || xmla.hasSession(sid)) throw new Error(t('Il profilo è disponibile solo per MariaDB/MySQL.'));
   return server.profile(sid, text, cursor);
 });
 handle('sql:split', (text) => server.split(text));
@@ -180,7 +185,7 @@ handle('export:query', async (connId, db, sql, format, opts, suggested) => {
   if (!file) return null;
   let w = null;
   try {
-    const rows = await (isTds(connId) ? tds : server).streamQuery(connId, db, sql, (cols) => { w = exporter.writer(format, file, opts, cols); }, async (row, n) => {
+    const rows = await (drv(connId) ?? server).streamQuery(connId, db, sql, (cols) => { w = exporter.writer(format, file, opts, cols); }, async (row, n) => {
       await w.row(row);
       if (n % 5000 === 0) win.webContents.send('export:progress', { file, rows: n });
     });
@@ -327,5 +332,5 @@ handle('app:confirm', async (message, detail, buttons) => {
 ipcMain.on('win:title', (_e, title) => win.setTitle(title));
 
 app.whenReady().then(createWindow);
-app.on('before-quit', () => { server.shutdown(); tds.shutdown(); });
+app.on('before-quit', () => { server.shutdown(); tds.shutdown(); xmla.shutdown(); });
 app.on('window-all-closed', () => app.quit());

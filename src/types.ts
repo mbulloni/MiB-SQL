@@ -1,11 +1,11 @@
 export type SshAuth = 'password' | 'key' | 'agent';
 
-export type Engine = 'mysql' | 'mssql';
+export type Engine = 'mysql' | 'mssql' | 'ssas';
 
 export interface ConnDef {
   id: string;
-  engine?: Engine; // undefined = MariaDB/MySQL; 'mssql' = Microsoft Fabric Warehouse, SQL Server, Azure SQL
-  auth?: 'entra' | 'sql'; // mssql: Microsoft Entra ID (default) or SQL login
+  engine?: Engine; // undefined = MariaDB/MySQL; 'mssql' = Microsoft Fabric Warehouse, SQL Server, Azure SQL; 'ssas' = Analysis Services (host = XMLA URL, database = catalog)
+  auth?: 'entra' | 'sql' | 'windows' | 'basic'; // mssql: Microsoft Entra ID (default) or SQL login; ssas: Windows (NTLM, default) or Basic
   entra?: { method: 'browser' | 'device'; tenant?: string; clientId?: string };
   trustCert?: boolean; // mssql: accept a self-signed server certificate (local SQL Server)
   readOnly?: boolean; // mssql: refuse statements that write (default true)
@@ -218,4 +218,10 @@ export interface ApplyStmt {
   sql: string;
   params: Cell[];
   expectOne?: boolean;
+}
+
+/** Structure of an Analysis Services cube for the Explorer (xmla.cube). */
+export interface CubeModel {
+  measures: { name: string; unique: string; group: string; format: string; expression: string }[];
+  dimensions: { name: string; unique: string; hierarchies: { name: string; unique: string; user: boolean; levels: { name: string; unique: string }[] }[] }[];
 }

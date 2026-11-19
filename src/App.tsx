@@ -175,8 +175,8 @@ function Toolbar() {
   const obj = !!doc?.obj;
   const assistantOpen = useStore((s) => s.assistantOpen);
   const runnable = sql || doc?.kind === 'query';
-  // Fabric / SQL Server documents: no execution plan or profile (MariaDB/MySQL tools)
-  const tds = useStore((s) => !!doc?.connId && s.conns.find((c) => c.id === doc.connId)?.engine === 'mssql');
+  // Fabric / SQL Server / Analysis Services documents: no execution plan or profile (MariaDB/MySQL tools)
+  const tds = useStore((s) => !!doc?.connId && ['mssql', 'ssas'].includes(s.conns.find((c) => c.id === doc.connId)?.engine ?? ''));
   const bar = useRef<HTMLDivElement>(null);
   // Labels give way to the space actually free (the Explorer width and the connection pickers
   // count, not only the window): all labels, then only the visual tools', then icons only.

@@ -1,9 +1,9 @@
-import { createContext, useContext, useState, useSyncExternalStore, type ReactNode } from 'react';
+import { createContext, useContext, useEffect, useState, useSyncExternalStore, type ReactNode } from 'react';
 import { api } from '../api';
 import { t as tr, locale } from '../i18n';
 import { openDbTool, closeDoc, dropObject, insertText, newDoc, openCompare, openMaint, openNewObject, openObject, openServerTool, openDesigner, openEr, openQueryBuilder, qi, qid, qtable, refreshExplorer, runDoc, selectTop, showDdl } from '../actions';
-import { isTds, loadDatabases, metaKey, useStore, type DepsTarget, type MetaEntry } from '../store';
-import type { ColumnInfo, ConnDef, DbObjects, EditableKind, ForeignKeyInfo, IndexInfo, ObjectKind } from '../types';
+import { isSsas, isTds, loadDatabases, metaKey, useStore, type DepsTarget, type MetaEntry } from '../store';
+import type { ColumnInfo, ConnDef, CubeModel, DbObjects, EditableKind, ForeignKeyInfo, IndexInfo, ObjectKind } from '../types';
 import { openMenu, type MenuItem } from './ContextMenu';
 import Icon from './Icon';
 
@@ -211,12 +211,75 @@ function TdsFolder({ c, db, depth, F, items, entry }: { c: string; db: string; d
   );
 }
 
+const bracket = (s: string) => `[${s.replace(/]/g, ']]')}]`;
+const cubeQuery = (c: string, db: string, cube: string) => newDoc({ connId: c, db, sql: `SELECT\n  [Measures].DefaultMember ON COLUMNS\nFROM ${bracket(cube)}\n` });
+
+/** One name of a cube (measure, hierarchy, level): double click or drag puts its unique name in the editor. */
+function CubeLeaf({ id, label, icon, depth, unique, children }: { id: string; label: string; icon: string; depth: number; unique: string; children?: () => ReactNode }) {
+  return <Node id={id} leaf={!children} label={label} icon={icon} depth={depth} drag={unique} title={unique} onDouble={children ? undefined : () => insertText(unique)}
+    menu={[{ label: tr('Inserisci nell\'editor'), action: () => insertText(unique) }, { label: tr('Copia nome'), action: () => copy(unique) }]}>{children}</Node>;
+}
+
+/** Measures by measure group, dimensions → hierarchies (user hierarchies first) → levels, loaded on first expand. */
+function CubeChildren({ c, db, cube, depth }: { c: string; db: string; cube: string; depth: number }) {
+  const key = `${c}/${db}/cube/${cube}`;
+  const entry = useStore((s) => s.meta[key]) as MetaEntry<CubeModel> | undefined;
+  useEffect(() => { useStore.getState().loadMeta(key, () => api.ssas.cube(c, db, cube)); }, [key]);
+  if (!entry?.data) return <Status entry={entry} depth={depth} />;
+  const { measures, dimensions } = entry.data;
+  const groups = new Map<string, CubeModel['measures']>();
+  for (const m of measures) groups.set(m.group, [...(groups.get(m.group) ?? []), m]);
+  const measure = (m: CubeModel['measures'][number], d: number) => <CubeLeaf key={m.unique} id={`${key}/m/${m.unique}`} label={m.name} icon="chart" depth={d} unique={m.unique} />;
+  return (
+    <>
+      <Node id={`${key}/m`} label={tr('Misure')} icon="folder" depth={depth} hint={String(measures.length)}>
+        {() => [...groups].map(([g, list]) => (g
+          ? <Node key={g} id={`${key}/m/${g}`} label={g} icon="folder" depth={depth + 1} hint={String(list.length)}>{() => list.map((m) => measure(m, depth + 2))}</Node>
+          : list.map((m) => measure(m, depth + 1))))}
+      </Node>
+      <Node id={`${key}/d`} label={tr('Dimensioni')} icon="folder" depth={depth} hint={String(dimensions.length)}>
+        {() => dimensions.map((d) => (
+          <CubeLeaf key={d.unique} id={`${key}/d/${d.unique}`} label={d.name} icon="folder" depth={depth + 1} unique={d.unique}>
+            {() => d.hierarchies.map((h) => (
+              <CubeLeaf key={h.unique} id={`${key}/h/${h.unique}`} label={h.name} icon={h.user ? 'er' : 'column'} depth={depth + 2} unique={h.unique}>
+                {() => h.levels.map((l) => <CubeLeaf key={l.unique} id={`${key}/l/${l.unique}`} label={l.name} icon="grid" depth={depth + 3} unique={`${l.unique}.MEMBERS`} />)}
+              </CubeLeaf>
+            ))}
+          </CubeLeaf>
+        ))}
+      </Node>
+    </>
+  );
+}
+
+/** Analysis Services catalog: its cubes, each one opening into measures and dimensions. */
+function CubeList({ c, db, depth, items, entry }: { c: string; db: string; depth: number; items: DbObjects['tables']; entry: MetaEntry<DbObjects> }) {
+  return (
+    <Node id={`${c}/${db}/cubes`} label={tr('Cubi')} icon="folder" depth={depth} hint={String(items.length)}>
+      {() => items.length ? items.map((o) => (
+        <Node key={o.name} id={`${c}/${db}/cubes/${o.name}`} label={o.name} icon="pivot" depth={depth + 1} title={o.comment || undefined} drag={bracket(o.name)}
+          onDouble={() => cubeQuery(c, db, o.name)}
+          menu={[
+            { label: tr('Nuova query MDX'), action: () => cubeQuery(c, db, o.name) },
+            { label: tr('Inserisci nell\'editor'), action: () => insertText(bracket(o.name)) },
+            { label: tr('Copia nome'), action: () => copy(o.name) },
+            'sep',
+            { label: tr('Proprietà…'), action: () => props(c, db, 'table', o.name) },
+          ]}>
+          {() => <CubeChildren c={c} db={db} cube={o.name} depth={depth + 2} />}
+        </Node>
+      )) : <Status entry={entry} depth={depth + 1} empty />}
+    </Node>
+  );
+}
+
 function DbChildren({ c, db, depth }: { c: string; db: string; depth: number }) {
   const entry = useStore((s) => s.meta[metaKey.objects(c, db)]) as MetaEntry<DbObjects> | undefined;
   const { filter } = useContext(Tree);
   if (!entry?.data) return <Status entry={entry} depth={depth} />;
   const f = filter.toLowerCase();
   const tds = isTds(c);
+  if (isSsas(c)) return <CubeList c={c} db={db} depth={depth} items={entry.data.tables.filter((o) => !f || o.name.toLowerCase().includes(f))} entry={entry} />;
   return (
     <>
       {FOLDERS.filter((F) => !tds || !['triggers', 'events'].includes(F.key)).map((F) => {
@@ -314,7 +377,7 @@ function ConnNode({ conn }: { conn: ConnDef }) {
     await api.conn.remove(conn.id);
     await s.loadConns();
   };
-  const tds = conn.engine === 'mssql';
+  const tds = conn.engine === 'mssql' || conn.engine === 'ssas';
   const menu: MenuItem[] = tds ? [
     state === 'open' ? { label: tr('Disconnetti'), action: disconnect } : { label: tr('Connetti'), action: () => { connect().then((ok) => ok && toggle(conn.id, true)); } },
     { label: tr('Nuovo SQL'), action: () => newDoc({ connId: conn.id, db: conn.database || null }) },
@@ -322,7 +385,7 @@ function ConnNode({ conn }: { conn: ConnDef }) {
     'sep',
     { label: tr('Modifica connessione…'), action: () => s.set({ connDialog: { def: conn } }) },
     { label: tr('Duplica'), action: () => s.set({ connDialog: { def: { ...conn, id: undefined, name: `${conn.name} (copia)` } } }) },
-    ...(conn.auth !== 'sql' ? [{ label: tr('Esci dall\'account Microsoft'), action: async () => { await api.entra.signOut(conn.id); await s.closeConn(conn.id); toggle(conn.id, false); } }] : []),
+    ...(conn.engine === 'mssql' && conn.auth !== 'sql' ? [{ label: tr('Esci dall\'account Microsoft'), action: async () => { await api.entra.signOut(conn.id); await s.closeConn(conn.id); toggle(conn.id, false); } }] : []),
     { label: tr('Elimina'), danger: true, action: remove },
   ] : [
     state === 'open' ? { label: tr('Disconnetti'), action: disconnect } : { label: tr('Connetti'), action: () => { connect().then((ok) => ok && toggle(conn.id, true)); } },

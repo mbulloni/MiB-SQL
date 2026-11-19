@@ -10,6 +10,7 @@ import type { IndexTrial, PlanRow, SlowRow, TopRow } from './queryadvisor';
 import type { DataHit, ObjectHit } from './search';
 import type { ErrorEntry } from './logs';
 import type {
+  CubeModel,
   EditableKind, HistoryEntry, MaintOp, MaintResult, Snippet, TableStat, ServerOptions, ApplyStmt, Cell, Column, ExportFormat, ExportOptions, ColumnInfo, ConnDef, DbObjects, ExecMode, ExecResult, ForeignKeyInfo, IndexInfo, ObjectKind, Schema, Secrets, ServerInfo,
 } from './types';
 
@@ -154,6 +155,9 @@ interface Api {
     query(connId: string, which: 'slow' | 'general'): Promise<{ status: LogStatus; on: boolean; source: 'table' | 'file' | 'load_file' | null; path?: string | null; text?: string; rows?: Record<string, unknown>[]; truncated?: boolean; reason?: string }>;
     set(connId: string, which: 'slow' | 'general', on: boolean, toTable: boolean): Promise<LogStatus>;
     clear(connId: string, which: 'slow' | 'general'): Promise<void>;
+  };
+  ssas: {
+    cube(connId: string, db: string, cube: string): Promise<CubeModel>;
   };
   copy: {
     target(connId: string, db: string): Promise<{ exists: boolean; tables: number }>;

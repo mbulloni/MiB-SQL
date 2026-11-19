@@ -83,8 +83,11 @@ export const setUntitled = (n: number) => { untitled = Math.max(untitled, n); };
 
 const ACCESS_DENIED = /ER_ACCESS_DENIED|authentication|Access denied/i;
 
-/** Microsoft Fabric / SQL Server profile (T-SQL over TDS) rather than MariaDB/MySQL. */
-export const isTds = (connId: string | null | undefined) => !!connId && useStore.getState().conns.find((c) => c.id === connId)?.engine === 'mssql';
+/** Microsoft profile with its own read-only driver (Fabric / SQL Server over TDS, Analysis Services over XMLA) rather than MariaDB/MySQL. */
+export const isTds = (connId: string | null | undefined) => { const e = engineOf(connId); return e === 'mssql' || e === 'ssas'; };
+/** Analysis Services (cubes, MDX/DAX). */
+export const isSsas = (connId: string | null | undefined) => engineOf(connId) === 'ssas';
+const engineOf = (connId: string | null | undefined) => (connId ? useStore.getState().conns.find((c) => c.id === connId)?.engine : undefined);
 
 export const useStore = create<State>((set, get) => ({
   conns: [],

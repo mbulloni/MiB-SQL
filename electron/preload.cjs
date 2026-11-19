@@ -136,6 +136,9 @@ contextBridge.exposeInMainWorld('api', {
     set: (connId, which, on, toTable) => call('logs:set', connId, which, on, toTable),
     clear: (connId, which) => call('logs:clear', connId, which),
   },
+  ssas: {
+    cube: (connId, db, cube) => call('ssas:cube', connId, db, cube),
+  },
   copy: {
     target: (connId, db) => call('copy:target', connId, db),
     run: (id, src, tgt, opts) => call('copy:run', id, src, tgt, opts),

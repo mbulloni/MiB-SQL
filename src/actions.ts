@@ -3,7 +3,7 @@ import { api, type SqlFile } from './api';
 import { clearMarkers, disposeModel, formatText, markErrors, markSaved, modelOf, monaco } from './editor';
 import { editCount } from './edits';
 import { emptyQuery, toSql } from './qb';
-import { designByDoc, editsBySet, isTds, metaKey, SERVER_KINDS, setUntitled, useStore } from './store';
+import { designByDoc, editsBySet, isSsas, isTds, metaKey, SERVER_KINDS, setUntitled, useStore } from './store';
 import { maskPasswords } from './users';
 import { setLang, t, locale } from './i18n';
 import type { Doc, EditableKind, ExecMode, Message, ObjectKind, StmtResult } from './types';
@@ -34,6 +34,10 @@ export function qtable(connId: string | null, db: string, name: string) {
 /** Tools written for MariaDB/MySQL refuse Fabric connections with a message instead of failing on its SQL. */
 export function mysqlOnly(connId: string | null | undefined) {
   if (!isTds(connId)) return true;
+  if (isSsas(connId)) {
+    api.confirm(t('Funzione non disponibile per Analysis Services'), t('Con le connessioni Analysis Services MiB-SQL offre Database Explorer dei cubi, editor MDX/DAX, risultati, export, cronologia e snippet.'), ['OK']);
+    return false;
+  }
   api.confirm(t('Funzione non disponibile per Microsoft Fabric'), t('Con le connessioni Microsoft Fabric / SQL Server MiB-SQL offre Database Explorer, editor SQL, risultati, export, cronologia, snippet e assistente AI.'), ['OK']);
   return false;
 }

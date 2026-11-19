@@ -10,6 +10,10 @@ Educational IDE for **MariaDB and MySQL** (and, read only, **Microsoft Fabric Wa
 
 ![Performance advice in English](docs/screenshot-33.png)
 
+## What's new in 1.9.0
+
+- **SQL Server Analysis Services cubes** (read-only): new connection type through the XMLA HTTP endpoint (`…/msmdpump.dll` published on IIS), Windows (NTLM, `DOMAIN\user`) or Basic authentication over HTTPS. Database Explorer with catalogs, cubes, measures by measure group, dimensions → hierarchies → levels (double click: unique name into the editor; on a cube: new MDX query); **MDX** and **DAX** queries with grid, chart, pivot and export; the AI assistant writes MDX/DAX. The direct TCP connection used by SSMS is not available on Linux
+
 ## What's new in 1.8.2
 
 - **Copy database with limited rows**: in the *Copy database* dialog, **Only the first rows of each table** (100 by default) copies the full structure, views and routines but only the first N rows of each table. Handy for a lightweight local development copy of a production database; foreign keys may point to rows that were not copied

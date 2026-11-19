@@ -10,6 +10,10 @@ IDE educativo per **MariaDB e MySQL** (e, in sola lettura, **Microsoft Fabric Wa
 
 ![Database Explorer ed editor SQL](docs/screenshot-1.png)
 
+## Novità della v1.9.0
+
+- **Cubi SQL Server Analysis Services** (sola lettura): nuovo tipo di connessione tramite l'endpoint XMLA via HTTP (`…/msmdpump.dll` pubblicato su IIS), accesso Windows (NTLM, utente `DOMINIO\utente`) o Basic su HTTPS. Database Explorer con cataloghi, cubi, misure per gruppo, dimensioni → gerarchie → livelli (doppio clic: nome univoco nell'editor; sul cubo: nuova query MDX); query **MDX** e **DAX** con risultati in griglia, grafico, pivot ed export; l'assistente AI scrive MDX/DAX. Il collegamento TCP diretto usato da SSMS non è disponibile su Linux
+
 ## Novità della v1.8.2
 
 - **Copia database con righe limitate**: nella finestra *Copia database* l'opzione **Solo le prime righe di ogni tabella** (100 di partenza) copia struttura, viste e routine complete ma solo i primi N record per tabella. Utile per avere in locale una copia leggera di un database di produzione su cui sviluppare; le chiavi esterne possono puntare a righe non copiate
