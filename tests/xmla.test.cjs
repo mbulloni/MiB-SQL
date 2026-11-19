@@ -101,3 +101,9 @@ test('export stream gets every row', async () => {
 test('unreachable server: network error', async () => {
   await assert.rejects(xmla.test({ id: 'x', engine: 'ssas', host: 'http://127.0.0.1:9/olap/msmdpump.dll', user: 'RETE\\a' }), /irraggiungibile|unreachable/i);
 });
+
+test('a server name instead of the XMLA URL fails the connection (it must not look open)', async () => {
+  profiles.set('name', { id: 'name', engine: 'ssas', host: 'DCPTHYPHPS', user: 'RETE\\test', pw: 'test' });
+  await assert.rejects(xmla.open('name'), /msmdpump\.dll/);
+  await assert.rejects(xmla.databases('name'), /non aperta|not open/i);
+});

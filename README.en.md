@@ -10,6 +10,10 @@ Educational IDE for **MariaDB and MySQL** (and, read only, **Microsoft Fabric Wa
 
 ![Performance advice in English](docs/screenshot-33.png)
 
+## What's new in 1.9.1
+
+- **Analysis Services**: a server name instead of the XMLA address (`https://…/msmdpump.dll`) now fails the connection right away with the error message, instead of showing it open without contacting the server
+
 ## What's new in 1.9.0
 
 - **SQL Server Analysis Services cubes** (read-only): new connection type through the XMLA HTTP endpoint (`…/msmdpump.dll` published on IIS), Windows (NTLM, `DOMAIN\user`) or Basic authentication over HTTPS. Database Explorer with catalogs, cubes, measures by measure group, dimensions → hierarchies → levels (double click: unique name into the editor; on a cube: new MDX query); **MDX** and **DAX** queries with grid, chart, pivot and export; the AI assistant writes MDX/DAX. The direct TCP connection used by SSMS is not available on Linux

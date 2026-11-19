@@ -10,6 +10,10 @@ IDE educativo per **MariaDB e MySQL** (e, in sola lettura, **Microsoft Fabric Wa
 
 ![Database Explorer ed editor SQL](docs/screenshot-1.png)
 
+## Novità della v1.9.1
+
+- **Analysis Services**: con un nome di server al posto dell'indirizzo XMLA (`https://…/msmdpump.dll`) la connessione ora fallisce subito con il messaggio d'errore, invece di risultare aperta senza aver contattato il server
+
 ## Novità della v1.9.0
 
 - **Cubi SQL Server Analysis Services** (sola lettura): nuovo tipo di connessione tramite l'endpoint XMLA via HTTP (`…/msmdpump.dll` pubblicato su IIS), accesso Windows (NTLM, utente `DOMINIO\utente`) o Basic su HTTPS. Database Explorer con cataloghi, cubi, misure per gruppo, dimensioni → gerarchie → livelli (doppio clic: nome univoco nell'editor; sul cubo: nuova query MDX); query **MDX** e **DAX** con risultati in griglia, grafico, pivot ed export; l'assistente AI scrive MDX/DAX. Il collegamento TCP diretto usato da SSMS non è disponibile su Linux

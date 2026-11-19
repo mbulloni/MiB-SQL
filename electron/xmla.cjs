@@ -104,7 +104,7 @@ const challengeHeader = (res, scheme) => [].concat(res.headers['www-authenticate
 /** POST of a SOAP body; Windows authentication answers the 401 with the NTLM handshake on the same socket. */
 async function post(c, action, body, signal) {
   const { def, sec } = c;
-  if (!/^https?:\/\//i.test(def.host ?? '')) throw new XmlaError(t('Indirizzo XMLA non valido: serve http(s)://…/msmdpump.dll'));
+  if (!/^https?:\/\//i.test(def.host ?? '')) throw new XmlaError(t('Indirizzo XMLA non valido: serve http(s)://…/msmdpump.dll'), 'EURL');
   const lib = /^https:/i.test(def.host) ? https : http;
   const agent = new lib.Agent({ keepAlive: true, maxSockets: 1 });
   const h = { 'Content-Type': 'text/xml; charset=utf-8', SOAPAction: `"urn:schemas-microsoft-com:xml-analysis:${action}"`, 'Accept-Encoding': 'identity' };
