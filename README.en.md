@@ -10,6 +10,10 @@ Educational IDE for **MariaDB and MySQL** (and, read only, **Microsoft Fabric Wa
 
 ![Performance advice in English](docs/screenshot-33.png)
 
+## What's new in 1.12.2
+
+- **Analysis Services**: verified against a real cube (SSAS 2012 through msmdpump.dll); the profile's catalog spelled in another case is no longer listed twice in the Explorer
+
 ## What's new in 1.12.1
 
 - **Copy database with rows over max_allowed_packet**: during the copy the target server's `max_allowed_packet` is raised to 1 GB (when the account may) and then put back; before, a row bigger than the limit stopped the copy with ECONNRESET

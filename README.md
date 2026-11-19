@@ -10,6 +10,10 @@ IDE educativo per **MariaDB e MySQL** (e, in sola lettura, **Microsoft Fabric Wa
 
 ![Database Explorer ed editor SQL](docs/screenshot-1.png)
 
+## Novità della v1.12.2
+
+- **Analysis Services**: verificato con un cubo reale (SSAS 2012 via msmdpump.dll); il catalogo del profilo scritto con maiuscole diverse non compare più due volte nell'Explorer
+
 ## Novità della v1.12.1
 
 - **Copia database con righe oltre max_allowed_packet**: durante la copia il `max_allowed_packet` del server di destinazione viene portato a 1 GB (se l'utente ha i privilegi) e poi rimesso com'era; prima una riga più grande del limite interrompeva la copia con ECONNRESET

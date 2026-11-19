@@ -194,7 +194,8 @@ async function close(connId) {
 async function databases(connId) {
   const c = entry(connId);
   const names = (await discover(c, 'DBSCHEMA_CATALOGS')).map((r) => String(r.CATALOG_NAME));
-  if (c.def.database && !names.includes(c.def.database)) names.unshift(c.def.database);
+  // catalog names are case-insensitive on the server: the profile's spelling must not add a duplicate
+  if (c.def.database && !names.some((x) => x.toLowerCase() === c.def.database.toLowerCase())) names.unshift(c.def.database);
   return names;
 }
 
