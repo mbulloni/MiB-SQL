@@ -10,6 +10,10 @@ IDE educativo per **MariaDB e MySQL** (e, in sola lettura, **Microsoft Fabric Wa
 
 ![Database Explorer ed editor SQL](docs/screenshot-1.png)
 
+## Novità della v1.12.1
+
+- **Copia database con righe oltre max_allowed_packet**: durante la copia il `max_allowed_packet` del server di destinazione viene portato a 1 GB (se l'utente ha i privilegi) e poi rimesso com'era; prima una riga più grande del limite interrompeva la copia con ECONNRESET
+
 ## Novità della v1.12.0
 
 - **Elimina database…**: tasto destro su un database (già selezionato) o sulla connessione (per eliminarne più di uno, *Tutti*/*Nessuno*); conferma scrivendo ELIMINA, nome e host del server in evidenza, esito per database

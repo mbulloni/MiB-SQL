@@ -10,6 +10,10 @@ Educational IDE for **MariaDB and MySQL** (and, read only, **Microsoft Fabric Wa
 
 ![Performance advice in English](docs/screenshot-33.png)
 
+## What's new in 1.12.1
+
+- **Copy database with rows over max_allowed_packet**: during the copy the target server's `max_allowed_packet` is raised to 1 GB (when the account may) and then put back; before, a row bigger than the limit stopped the copy with ECONNRESET
+
 ## What's new in 1.12.0
 
 - **Drop database…**: right-click a database (preselected) or the connection (to drop several, *All*/*None*); confirm by typing DROP, server name and host highlighted, outcome per database

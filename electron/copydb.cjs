@@ -25,15 +25,31 @@ const validName = (db) => /^[^/\\.]{1,64}$/.test(db) && !/\s$/.test(db);
 /** INSERT size for the target: well under its max_allowed_packet. */
 async function packetBudget(connId) {
   try {
-    const [r] = await server.meta(connId, 'SELECT @@max_allowed_packet AS p');
+    const [r] = await server.meta(connId, 'SELECT @@GLOBAL.max_allowed_packet AS p');
     return Math.min(4 * 1024 * 1024, Math.max(64 * 1024, Math.floor(Number(r.p) / 2)));
   } catch { return 1024 * 1024; }
+}
+
+const BIG_PACKET = 1024 * 1024 * 1024; // the server maximum
+
+/**
+ * A single row cannot be split: raise the target's max_allowed_packet to 1 GB for the copy when the account may
+ * (SUPER / SYSTEM_VARIABLES_ADMIN); new connections, the restore's included, get it. Returns the undo.
+ */
+async function raisePacket(connId) {
+  try {
+    const [r] = await server.meta(connId, 'SELECT @@GLOBAL.max_allowed_packet AS p');
+    const before = Number(r.p);
+    if (!(before < BIG_PACKET)) return async () => {};
+    await server.runStatements(connId, [`SET GLOBAL max_allowed_packet = ${BIG_PACKET}`]);
+    return async () => { await server.runStatements(connId, [`SET GLOBAL max_allowed_packet = ${before}`]).catch(() => {}); };
+  } catch { return async () => {}; }
 }
 
 /** Server errors made actionable: a row bigger than the target's packet limit. */
 function explain(message) {
   if (/max_allowed_packet|ECONNRESET|EPIPE|Connection.*(closed|reset)/i.test(message)) {
-    return `${message} — ${t('una riga supera max_allowed_packet del server di destinazione: aumentalo (SET GLOBAL max_allowed_packet = 1073741824) e riprova.')}`;
+    return `${message} — ${t('una riga supera max_allowed_packet del server di destinazione e non è stato possibile aumentarlo da qui (servono i privilegi SUPER): fallo impostare a 1G (SET GLOBAL max_allowed_packet = 1073741824) e riprova.')}`;
   }
   return message;
 }
@@ -51,6 +67,7 @@ async function copyMany(srcConn, items, tgtConn, opts, onProgress = () => {}) {
   const o = { structure: true, data: true, routines: true, stripDefiner: true, ifExists: 'fail', ...opts };
   const n = items.length;
   const renameDbs = Object.fromEntries(items.map((x) => [x.src, x.tgt]));
+  const undoPacket = await raisePacket(tgtConn);
   const maxBytes = await packetBudget(tgtConn);
   const tmp = (kind, i) => path.join(os.tmpdir(), `mibsql-copy-${process.pid}-${Date.now()}-${i}-${kind}.sql.gz`);
   const out = items.map((x) => ({ src: x.src, tgt: x.tgt, statements: 0, ms: 0, created: false, skipped: [] }));
@@ -130,6 +147,7 @@ async function copyMany(srcConn, items, tgtConn, opts, onProgress = () => {}) {
       out[i].skipped = errs.map((e) => { const m = objectOf(e.sql); return { kind: m[1].toUpperCase(), name: m[2].replace(/^`|`$/g, '').replace(/``/g, '`'), message: e.message }; });
     }
   } finally {
+    await undoPacket();
     for (const f of fs.readdirSync(os.tmpdir()).filter((f) => f.startsWith(`mibsql-copy-${process.pid}-`))) fs.rmSync(path.join(os.tmpdir(), f), { force: true });
   }
   return out;
