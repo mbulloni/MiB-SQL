@@ -264,6 +264,7 @@ handle('logs:set', (connId, which, on, toTable) => logs.setLog(connId, which, on
 handle('logs:clear', (connId, which) => logs.clear(connId, which));
 handle('copy:target', (connId, db) => copydb.targetInfo(connId, db));
 handle('copy:run', (id, src, tgt, opts) => copydb.copy(src, tgt, opts, progress(id)));
+handle('copy:runMany', (id, srcConn, items, tgtConn, opts) => copydb.copyMany(srcConn, items, tgtConn, opts, progress(id)));
 handle('update:check', () => updates.check());
 handle('update:install', () => updates.install(progress('update')));
 handle('update:restart', () => updates.restart());

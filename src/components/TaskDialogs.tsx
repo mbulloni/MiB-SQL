@@ -1,11 +1,11 @@
 import { useEffect, useMemo, useState } from 'react';
-import { api } from '../api';
+import { api, type CopyResult } from '../api';
 import { selectTop } from '../actions';
 import { createSql, newId, type TableDef } from '../design';
 import { loadDatabases, metaKey, useStore, type MetaEntry } from '../store';
 import type { Cell, Column, ColumnInfo, DbObjects } from '../types';
 import ResultGrid from './ResultGrid';
-import { t, locale } from '../i18n';
+import { t, tn, locale } from '../i18n';
 
 const n = (x: number) => x.toLocaleString(locale());
 const size = (b: number) => (b > 1e6 ? `${(b / 1e6).toFixed(1)} MB` : `${Math.max(1, Math.round(b / 1e3))} kB`);
@@ -281,7 +281,6 @@ export function ImportWizard({ connId, db, table }: { connId: string; db: string
 
 const SYSTEM_DBS = new Set(['information_schema', 'mysql', 'performance_schema', 'sys']);
 const NEW_CONN = '\u0000new';
-type CopyOutcome = { src: string; tgt: string; statements?: number; ms?: number; error?: string };
 
 /**
  * Copy of one or more databases to other databases, on this server or another connection (dump + restore, one
@@ -333,7 +332,7 @@ export function CopyDialog({ connId, db, tables: only }: { connId: string; db: s
   const targets = one ? [{ src: one, tgt: tgtDb.trim() }] : srcs.map((x) => ({ src: x, tgt: `${x}${suffix.trim()}` }));
   const targetKey = targets.map((x) => x.tgt).join('\n');
   const [infos, setInfos] = useState<Record<string, { exists: boolean; tables: number }>>({});
-  const [state, setState] = useState<{ busy?: boolean; step?: { i: number; n: number; db: string; tgt: string }; done?: CopyOutcome[] }>({});
+  const [state, setState] = useState<{ busy?: boolean; done?: CopyResult[] }>({});
   const tgtOpen = useStore((s) => s.connState[tgtConn]?.status === 'open');
   useEffect(() => { if (!tgtOpen) useStore.getState().openConn(tgtConn); }, [tgtConn]);
   useEffect(() => {
@@ -355,24 +354,23 @@ export function CopyDialog({ connId, db, tables: only }: { connId: string; db: s
         : api.confirm(t('Sostituire {0} database su {1}?', existing.length, connName), t('Questi database verranno eliminati e ricreati, i loro dati andranno persi: {0}', existing.map((x) => x.tgt).join(', ')), [t('Sostituisci'), t('Annulla')]);
       if ((await ask) !== 0) return;
     }
-    const done: CopyOutcome[] = [];
-    for (const [i, x] of targets.entries()) {
-      setState({ busy: true, step: { i: i + 1, n: targets.length, db: x.src, tgt: x.tgt } });
-      try {
-        const r = await api.copy.run(id, { connId, db: x.src }, { connId: tgtConn, db: x.tgt }, {
-          ...o, limit: o.data && limit ? limit : undefined, tables: one && skip.size ? tables.filter((k) => !skip.has(k)) : undefined,
-        });
-        done.push({ ...x, statements: r.statements, ms: r.ms });
-      } catch (err) { done.push({ ...x, error: (err as Error).message }); }
-    }
+    setState({ busy: true });
+    let done: CopyResult[];
+    try {
+      done = await api.copy.runMany(id, connId, targets, tgtConn, {
+        ...o, limit: o.data && limit ? limit : undefined, tables: one && skip.size ? tables.filter((k) => !skip.has(k)) : undefined,
+      });
+    } catch (err) { done = targets.map((x) => ({ ...x, statements: 0, ms: 0, created: false, skipped: [], error: (err as Error).message })); }
     setState({ done });
     useStore.getState().dropMeta(`${tgtConn}/`);
     loadDatabases(tgtConn, true);
   };
-  const phase = p.phase === 'dump' ? t('Lettura di {0}: tabella {1}/{2}{3}', state.step?.db ?? '', p.done ?? 0, p.total ?? '?', p.table ? ` (${p.table})` : '')
-    : p.phase === 'restore' ? t('Scrittura in {0}: {1}%', state.step?.tgt ?? '', p.total ? Math.round((Number(p.bytes) / Number(p.total)) * 100) : 0) : '';
+  const phase = p.phase === 'dump' ? t('Lettura di {0}: tabella {1}/{2}{3}', p.db ?? '', p.done ?? 0, p.total ?? '?', p.table ? ` (${p.table})` : '')
+    : p.phase === 'restore' ? t('Scrittura in {0}: {1}%', p.tgt ?? '', p.total ? Math.round((Number(p.bytes) / Number(p.total)) * 100) : 0)
+    : p.phase === 'code' ? t('Viste e routine di {0}', p.tgt ?? '') + (Number(p.round) > 1 ? ` (${t('tentativo {0}', p.round)})` : '') : '';
   const failed = state.done?.filter((x) => x.error) ?? [];
-  const secs = (ms = 0) => (ms / 1000).toLocaleString(locale(), { maximumFractionDigits: 1 });
+  const skipped = state.done?.reduce((k, x) => k + x.skipped.length, 0) ?? 0;
+  const secs = (ms: number) => (ms / 1000).toLocaleString(locale(), { maximumFractionDigits: 1 });
   return (
     <Modal title={only && one ? t('Copia tabelle da {0}', one) : one ? t('Copia il database {0}', one) : t('Copia database')} busy={state.busy} medium buttons={<>
       <div className="spacer" />
@@ -438,16 +436,24 @@ export function CopyDialog({ connId, db, tables: only }: { connId: string; db: s
         </details>
       )}
       <p className="note">{t('La copia passa da un file temporaneo compresso (eliminato alla fine): struttura e dati vengono letti dall\'origine e scritti sulla destinazione, anche su un altro server.')}</p>
-      {state.busy && <div className="status">{state.step && state.step.n > 1 ? `${t('Database {0} di {1}', state.step.i, state.step.n)} · ` : ''}{phase || t('Avvio…')}</div>}
+      {state.busy && <div className="status">{Number(p.n) > 1 ? `${t('Database {0} di {1}', p.i, p.n)} · ` : ''}{phase || t('Avvio…')}</div>}
       {state.done && state.done.length === 1 && (failed.length
         ? <div className="status error">{failed[0].error}</div>
-        : <div className="status ok">{t('Copia completata: {0} istruzioni in {1} s.', n(state.done[0].statements ?? 0), secs(state.done[0].ms))}</div>)}
-      {state.done && state.done.length > 1 && <>
-        <div className={`status ${failed.length ? 'error' : 'ok'}`}>{t('Copiati {0} database su {1}.', state.done.length - failed.length, state.done.length)}</div>
+        : <div className="status ok">{t('Copia completata: {0} istruzioni in {1} s.', n(state.done[0].statements), secs(state.done[0].ms))}</div>)}
+      {state.done && state.done.length > 1 && <div className={`status ${failed.length ? 'error' : 'ok'}`}>{t('Copiati {0} database su {1}.', state.done.length - failed.length, state.done.length)}</div>}
+      {state.done && (state.done.length > 1 || skipped > 0) && (
         <ul className="copy-report">
-          {state.done.map((x) => <li key={x.src} className={x.error ? 'error' : ''}>{x.src} → {x.tgt}: {x.error ?? t('{0} istruzioni in {1} s', n(x.statements ?? 0), secs(x.ms))}</li>)}
+          {state.done.map((x) => (
+            <li key={x.src} className={x.error ? 'error' : ''}>
+              {x.src} → {x.tgt}: {x.error ?? t('{0} istruzioni in {1} s', n(x.statements), secs(x.ms))}
+              {x.skipped.length > 0 && <details><summary className="warn-text">{tn(x.skipped.length, '{0} vista o routine non creata', '{0} viste o routine non create')}</summary>
+                <ul>{x.skipped.map((k) => <li key={k.kind + k.name}><b>{k.kind} {k.name}</b>: {k.message}</li>)}</ul>
+              </details>}
+            </li>
+          ))}
         </ul>
-      </>}
+      )}
+      {skipped > 0 && <p className="note">{t('Le viste e le routine non create leggono di solito database non copiati o non presenti sulla destinazione: copiali insieme e riprova con «copia dentro».')}</p>}
     </Modal>
   );
 }

@@ -10,6 +10,11 @@ IDE educativo per **MariaDB e MySQL** (e, in sola lettura, **Microsoft Fabric Wa
 
 ![Database Explorer ed editor SQL](docs/screenshot-1.png)
 
+## Novità della v1.11.0
+
+- **Copia di più database con viste tra database**: prima tabelle e dati di tutti i database scelti, poi viste, routine, trigger ed eventi di tutti, con nuovi tentativi per le viste che leggono viste di altri database; copiando con un altro nome i riferimenti puntano alle copie. Le viste che leggono database non copiati non bloccano più la copia: sono elencate nell'esito con il motivo
+- **Righe grandi**: gli INSERT si adattano al `max_allowed_packet` del server di destinazione (niente più «Got a packet bigger than…» o ECONNRESET con testi e blob grandi)
+
 ## Novità della v1.10.2
 
 - **Copia database**: nella tendina *Connessione di destinazione* la voce **+ Nuova connessione…** crea il server di destinazione senza chiudere la finestra; la connessione salvata diventa subito la destinazione

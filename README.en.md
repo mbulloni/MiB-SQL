@@ -10,6 +10,11 @@ Educational IDE for **MariaDB and MySQL** (and, read only, **Microsoft Fabric Wa
 
 ![Performance advice in English](docs/screenshot-33.png)
 
+## What's new in 1.11.0
+
+- **Copying several databases with cross-database views**: tables and data of every chosen database first, then views, routines, triggers and events of all of them, retried for views reading views of other databases; copied under another name, references point to the copies. Views reading databases that were not copied no longer stop the copy: they are listed in the outcome with the reason
+- **Big rows**: INSERTs adapt to the target server's `max_allowed_packet` (no more "Got a packet bigger than…" or ECONNRESET with large text and blobs)
+
 ## What's new in 1.10.2
 
 - **Copy database**: **+ New connection…** in the *Target connection* list creates the target server without closing the dialog; the saved connection becomes the target right away

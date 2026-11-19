@@ -1839,5 +1839,11 @@
  "Copiati {0} database su {1}.": "Copied {0} of {1} databases.",
  "{0} istruzioni in {1} s": "{0} statements in {1} s",
  "Copia tabelle da {0}": "Copy tables from {0}",
- "+ Nuova connessione…": "+ New connection…"
+ "+ Nuova connessione…": "+ New connection…",
+ "Viste e routine di {0}": "Views and routines of {0}",
+ "tentativo {0}": "attempt {0}",
+ "{0} vista o routine non creata": "{0} view or routine not created",
+ "{0} viste o routine non create": "{0} views or routines not created",
+ "Le viste e le routine non create leggono di solito database non copiati o non presenti sulla destinazione: copiali insieme e riprova con «copia dentro».": "Views and routines not created usually read databases that were not copied or do not exist on the target: copy them together and retry with “copy into it”.",
+ "una riga supera max_allowed_packet del server di destinazione: aumentalo (SET GLOBAL max_allowed_packet = 1073741824) e riprova.": "a row exceeds the target server's max_allowed_packet: raise it (SET GLOBAL max_allowed_packet = 1073741824) and retry."
 }

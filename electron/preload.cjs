@@ -142,6 +142,7 @@ contextBridge.exposeInMainWorld('api', {
   copy: {
     target: (connId, db) => call('copy:target', connId, db),
     run: (id, src, tgt, opts) => call('copy:run', id, src, tgt, opts),
+    runMany: (id, srcConn, items, tgtConn, opts) => call('copy:runMany', id, srcConn, items, tgtConn, opts),
   },
   openRelease: (url) => call('shell:openRelease', url),
   update: {

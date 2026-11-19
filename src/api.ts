@@ -29,6 +29,9 @@ export interface SqlFile {
   content: string;
 }
 
+/** Outcome of the copy of one database: views/routines left out in `skipped` (e.g. reading a database not copied). */
+export interface CopyResult { src: string; tgt: string; statements: number; ms: number; created: boolean; skipped: { kind: string; name: string; message: string }[]; error?: string }
+
 interface Api {
   conn: {
     list(): Promise<{ list: ConnDef[]; keyring: boolean }>;
@@ -161,7 +164,8 @@ interface Api {
   };
   copy: {
     target(connId: string, db: string): Promise<{ exists: boolean; tables: number }>;
-    run(id: string, src: { connId: string; db: string }, tgt: { connId: string; db: string }, opts: { structure: boolean; data: boolean; routines: boolean; stripDefiner: boolean; tables?: string[]; limit?: number; ifExists: 'fail' | 'replace' | 'merge' }): Promise<{ statements: number; ms: number; created: boolean }>;
+    run(id: string, src: { connId: string; db: string }, tgt: { connId: string; db: string }, opts: { structure: boolean; data: boolean; routines: boolean; stripDefiner: boolean; tables?: string[]; limit?: number; ifExists: 'fail' | 'replace' | 'merge' }): Promise<CopyResult>;
+    runMany(id: string, srcConn: string, items: { src: string; tgt: string }[], tgtConn: string, opts: { structure: boolean; data: boolean; routines: boolean; stripDefiner: boolean; tables?: string[]; limit?: number; ifExists: 'fail' | 'replace' | 'merge' }): Promise<CopyResult[]>;
   };
   openRelease(url: string): Promise<void>;
   update: {

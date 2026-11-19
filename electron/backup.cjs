@@ -47,14 +47,24 @@ function orderViews(views) {
 }
 
 /**
- * Dumps a database. opts: { structure, data, routines, dropTables, createDatabase, stripDefiner, batch, tables?, limit? }
- * limit > 0 keeps only the first rows of each table (development copies).
+ * Dumps a database. opts: { structure, data, routines, dropTables, createDatabase, stripDefiner, batch, maxBytes, tables?, limit?, part?, renameDbs? }
+ * limit > 0 keeps only the first rows of each table (development copies). INSERTs hold at most `batch` rows and
+ * about `maxBytes` bytes (the target's max_allowed_packet). part: 'tables' = tables and data only, 'code' = views,
+ * routines, triggers and events only (copies of several databases: code that reads other databases goes last).
+ * renameDbs { from: to } rewrites `from`. qualifiers in views and routines (databases copied under another name).
  * onProgress({ table, rows, done, total }).
  */
 async function dump(connId, db, file, opts, onProgress = () => {}) {
-  const o = { structure: true, data: true, routines: true, dropTables: true, createDatabase: false, stripDefiner: true, batch: 100, ...opts };
+  const o = { structure: true, data: true, routines: true, dropTables: true, createDatabase: false, stripDefiner: true, batch: 100, maxBytes: 1024 * 1024, ...opts };
   const out = output(file);
-  const fix = (sql) => (o.stripDefiner ? stripDefiner(sql) : sql);
+  const renames = Object.entries(o.renameDbs ?? {}).filter(([a, b]) => a !== b);
+  const fix = (sql) => {
+    let s = o.stripDefiner ? stripDefiner(sql) : sql;
+    for (const [a, b] of renames) s = s.split(`${qi(a)}.`).join(`${qi(b)}.`);
+    return s;
+  };
+  const withTables = o.part !== 'code';
+  const withCode = o.part !== 'tables';
   const limit = Math.max(0, Math.floor(Number(o.limit) || 0));
   try {
     await server.withConnection(connId, async (c) => {
@@ -64,8 +74,8 @@ async function dump(connId, db, file, opts, onProgress = () => {}) {
         const tables = Array.from(await c.query({
           sql: "SELECT TABLE_NAME AS name, TABLE_TYPE AS type FROM information_schema.TABLES WHERE TABLE_SCHEMA = ? ORDER BY TABLE_NAME", rowsAsArray: false,
         }, [db]));
-        const base = tables.filter((t) => t.type !== 'VIEW' && (!o.tables || o.tables.includes(t.name)));
-        const views = o.routines ? tables.filter((t) => t.type === 'VIEW' && (!o.tables || o.tables.includes(t.name))) : [];
+        const base = withTables ? tables.filter((t) => t.type !== 'VIEW' && (!o.tables || o.tables.includes(t.name))) : [];
+        const views = o.routines && withCode ? tables.filter((t) => t.type === 'VIEW' && (!o.tables || o.tables.includes(t.name))) : [];
         await out.write([
           t('-- MiB-SQL dump of {0}', db),
           t('-- Server: {0}', ver.v),
@@ -102,6 +112,7 @@ async function dump(connId, db, file, opts, onProgress = () => {}) {
             stream.on('fields', (m) => { meta = m.map(server.column); });
             let batch = [];
             let rows = 0;
+            let bytes = 0;
             for await (const r of stream) {
               const vals = [];
               for (let i = 0, k = 0; i < cols.length; i++, k++) {
@@ -111,9 +122,14 @@ async function dump(connId, db, file, opts, onProgress = () => {}) {
                   vals.push(wkb === null ? 'NULL' : `ST_GeomFromWKB(${server.cell(wkb, Infinity)}, ${Number(srid) || 0})`);
                 } else vals.push(literal(server.cell(r[k], Infinity), meta[k]));
               }
-              batch.push('(' + vals.join(', ') + ')');
+              const tuple = '(' + vals.join(', ') + ')';
+              const size = Buffer.byteLength(tuple);
+              // flush before the statement would exceed the target's packet size (big text/blob rows)
+              if (batch.length && bytes + size > o.maxBytes) { await out.write(head + batch.join(',\n') + ';\n'); batch = []; bytes = 0; }
+              batch.push(tuple);
+              bytes += size + 2;
               rows++;
-              if (batch.length >= o.batch) { await out.write(head + batch.join(',\n') + ';\n'); batch = []; }
+              if (batch.length >= o.batch) { await out.write(head + batch.join(',\n') + ';\n'); batch = []; bytes = 0; }
               if (rows % 5000 === 0) onProgress({ table: t.name, rows, done, total: base.length });
             }
             if (batch.length) await out.write(head + batch.join(',\n') + ';\n');
@@ -127,12 +143,12 @@ async function dump(connId, db, file, opts, onProgress = () => {}) {
           const ddl = [];
           for (const v of views) {
             const [row] = await c.query(`SHOW CREATE VIEW ${qi(db)}.${qi(v.name)}`);
-            ddl.push({ name: v.name, ddl: fix(String(row[1])).split(`${qi(db)}.`).join('') });
+            ddl.push({ name: v.name, ddl: fix(String(row[1]).split(`${qi(db)}.`).join('')) }); // own qualifier off before renaming the others
           }
           for (const v of orderViews(ddl)) await out.write(`--\n-- View ${v.name}\n--\nDROP VIEW IF EXISTS ${qi(v.name)};\n${v.ddl};\n\n`);
         }
 
-        if (o.structure && o.routines) {
+        if (o.structure && o.routines && withCode) {
           const kinds = [
             ['FUNCTION', "SELECT ROUTINE_NAME AS name FROM information_schema.ROUTINES WHERE ROUTINE_SCHEMA = ? AND ROUTINE_TYPE = 'FUNCTION'", 2],
             ['PROCEDURE', "SELECT ROUTINE_NAME AS name FROM information_schema.ROUTINES WHERE ROUTINE_SCHEMA = ? AND ROUTINE_TYPE = 'PROCEDURE'", 2],
