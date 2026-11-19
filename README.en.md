@@ -10,6 +10,10 @@ Educational IDE for **MariaDB and MySQL** (and, read only, **Microsoft Fabric Wa
 
 ![Performance advice in English](docs/screenshot-33.png)
 
+## What's new in 1.10.2
+
+- **Copy database**: **+ New connection…** in the *Target connection* list creates the target server without closing the dialog; the saved connection becomes the target right away
+
 ## What's new in 1.10.1
 
 - **Copy database** from the home page or Tools asks only for the connection and opens the dialog with the list of databases to tick (it used to ask for a single database); the list is always open

@@ -280,6 +280,7 @@ export function ImportWizard({ connId, db, table }: { connId: string; db: string
 }
 
 const SYSTEM_DBS = new Set(['information_schema', 'mysql', 'performance_schema', 'sys']);
+const NEW_CONN = '\u0000new';
 type CopyOutcome = { src: string; tgt: string; statements?: number; ms?: number; error?: string };
 
 /**
@@ -300,6 +301,18 @@ export function CopyDialog({ connId, db, tables: only }: { connId: string; db: s
   useEffect(() => { if (one) useStore.getState().loadMeta(metaKey.objects(connId, one), () => api.meta.objects(connId, one)); }, [one]);
   const [tgtConn, setTgtConn] = useState(connId);
   const sameConn = tgtConn === connId;
+  // «New connection…» in the target list: the connection saved by that dialog becomes the target
+  const [known, setKnown] = useState<Set<string> | null>(null);
+  useEffect(() => {
+    if (!known) return;
+    const added = conns.find((c) => !known.has(c.id) && (!c.engine || c.engine === 'mysql'));
+    if (added) { setTgtConn(added.id); setKnown(null); }
+  }, [conns]);
+  const pickTarget = (value: string) => {
+    if (value !== NEW_CONN) { setTgtConn(value); return; }
+    setKnown(new Set(conns.map((c) => c.id)));
+    useStore.getState().set({ connDialog: { def: {} } });
+  };
   const [tgtDb, setTgtDb] = useState(db ? `${db}_${t('copia')}` : '');
   const [suffix, setSuffix] = useState(`_${t('copia')}`);
   // another server: the same names; this server: a copy beside the original
@@ -380,7 +393,10 @@ export function CopyDialog({ connId, db, tables: only }: { connId: string; db: s
       </details>
       <div className="row">
         <label className="grow">{t('Connessione di destinazione')}
-          <select value={tgtConn} onChange={(e) => setTgtConn(e.target.value)} disabled={state.busy}>{conns.filter((c) => !c.engine || c.engine === 'mysql').map((c) => <option key={c.id} value={c.id}>{c.name}</option>)}</select>
+          <select value={tgtConn} onChange={(e) => pickTarget(e.target.value)} disabled={state.busy}>
+            {conns.filter((c) => !c.engine || c.engine === 'mysql').map((c) => <option key={c.id} value={c.id}>{c.name}</option>)}
+            <option value={NEW_CONN}>{t('+ Nuova connessione…')}</option>
+          </select>
         </label>
         {one
           ? <label className="grow">{t('Database di destinazione')}<input value={tgtDb} onChange={(e) => setTgtDb(e.target.value)} disabled={state.busy} /></label>

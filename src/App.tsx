@@ -465,8 +465,6 @@ export default function App() {
       </div>
       <StatusBar cursor={cursor} />
       <ContextMenu />
-      {connDialog && <ConnectionDialog key={connDialog.def.id ?? 'new'} />}
-      {prompt && <PasswordPrompt key={prompt.conn.id + prompt.error} />}
       {viewer && <ValueViewer key={viewer.title + viewer.value.length} />}
       {exporting && <ExportDialog />}
       {pickTarget && <TargetDialog kind={pickTarget.kind} />}
@@ -480,6 +478,9 @@ export default function App() {
       {task?.kind === 'copy' && <CopyDialog connId={task.connId} db={task.db} tables={task.tables} />}
       {updateDialog && <UpdateDialog />}
       {task?.kind === 'import' && task.db && <ImportWizard connId={task.connId} db={task.db} table={task.table} />}
+      {/* last: they can open over another dialog (a new target connection from Copy database) */}
+      {connDialog && <ConnectionDialog key={connDialog.def.id ?? 'new'} />}
+      {prompt && <PasswordPrompt key={prompt.conn.id + prompt.error} />}
     </div>
   );
 }

@@ -1838,5 +1838,6 @@
  "Database {0} di {1}": "Database {0} of {1}",
  "Copiati {0} database su {1}.": "Copied {0} of {1} databases.",
  "{0} istruzioni in {1} s": "{0} statements in {1} s",
- "Copia tabelle da {0}": "Copy tables from {0}"
+ "Copia tabelle da {0}": "Copy tables from {0}",
+ "+ Nuova connessione…": "+ New connection…"
 }

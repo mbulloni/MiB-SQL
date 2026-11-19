@@ -10,6 +10,10 @@ IDE educativo per **MariaDB e MySQL** (e, in sola lettura, **Microsoft Fabric Wa
 
 ![Database Explorer ed editor SQL](docs/screenshot-1.png)
 
+## Novità della v1.10.2
+
+- **Copia database**: nella tendina *Connessione di destinazione* la voce **+ Nuova connessione…** crea il server di destinazione senza chiudere la finestra; la connessione salvata diventa subito la destinazione
+
 ## Novità della v1.10.1
 
 - **Copia database** dalla pagina iniziale o da Strumenti chiede solo la connessione e apre la finestra con l'elenco dei database da spuntare (prima chiedeva un solo database); l'elenco è sempre aperto
